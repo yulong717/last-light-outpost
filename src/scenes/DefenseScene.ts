@@ -39,6 +39,7 @@ export class DefenseScene extends Phaser.Scene {
   private spawner!: WaveSpawner;
   private barricade!: Barricade;
   private gun!: Phaser.GameObjects.Rectangle;
+  private player!: Phaser.GameObjects.Image;
   private zombies: Zombie[] = [];
   private kills = 0;
   private headshots = 0;
@@ -58,7 +59,9 @@ export class DefenseScene extends Phaser.Scene {
 
     const st = GameState.data;
     this.barricade = new Barricade(this, BARRICADE_X, st.barricadeMaxHp);
-    this.add.image(PLAYER_X, GROUND_Y - 8, 'player').setOrigin(0.5, 1).setDepth(10);
+    this.player = this.add.image(PLAYER_X, GROUND_Y - 8, 'player').setOrigin(0.5, 1).setDepth(10);
+    // 待機呼吸（程式化動態，之後換成影格動畫）
+    this.tweens.add({ targets: this.player, scaleY: 1.03, duration: 900, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
     this.gun = this.add
       .rectangle(PLAYER_X + 6, GROUND_Y - 50, 14, 3, 0x222222)
       .setOrigin(0, 0.5)
@@ -129,6 +132,7 @@ export class DefenseScene extends Phaser.Scene {
     const muzzleY = this.gun.y + Math.sin(angle) * 14;
     const shot = this.weapons.tryFire(muzzleX, muzzleY, inp.aimX, inp.aimY, inp.fireHeld, inp.firePressed, this.zombies);
     if (shot) {
+      this.playShotFeedback(muzzleX, muzzleY);
       this.kills += shot.kills;
       this.headshots += shot.headshots;
     }
@@ -144,6 +148,15 @@ export class DefenseScene extends Phaser.Scene {
     // 勝負
     if (GameState.data.baseHp <= 0) this.finish(false);
     else if (this.spawner.done && this.zombies.length === 0) this.finish(true);
+  }
+
+  /** 開槍回饋：後座力往後頓一下＋槍口火光 */
+  private playShotFeedback(x: number, y: number): void {
+    // 直接位移而不用 tween，避免和待機呼吸的 tween 互相干擾
+    this.player.x = PLAYER_X - 2;
+    this.time.delayedCall(45, () => (this.player.x = PLAYER_X));
+    const flash = this.add.circle(x, y, 4, 0xfff3a0).setDepth(52);
+    this.tweens.add({ targets: flash, scale: 0.2, alpha: 0, duration: 70, onComplete: () => flash.destroy() });
   }
 
   private hud(): HudData {
