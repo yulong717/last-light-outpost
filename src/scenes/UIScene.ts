@@ -22,22 +22,22 @@ export class UIScene extends Phaser.Scene {
   create(): void {
     this.unregister = [];
     pixelText(this, 6, 4, '據點', 8);
-    this.add.rectangle(30, 6, 80, 6, 0x000000).setOrigin(0);
-    this.baseBar = this.add.rectangle(31, 7, 78, 4, 0x4caf50).setOrigin(0);
+    this.add.rectangle(40, 7, 80, 6, 0x000000).setOrigin(0);
+    this.baseBar = this.add.rectangle(41, 8, 78, 4, 0x4caf50).setOrigin(0);
 
-    pixelText(this, 6, 14, '路障', 8);
-    this.add.rectangle(30, 16, 80, 6, 0x000000).setOrigin(0);
-    this.barricadeBar = this.add.rectangle(31, 17, 78, 4, 0xbcaaa4).setOrigin(0);
+    pixelText(this, 6, 20, '路障', 8);
+    this.add.rectangle(40, 23, 80, 6, 0x000000).setOrigin(0);
+    this.barricadeBar = this.add.rectangle(41, 24, 78, 4, 0xbcaaa4).setOrigin(0);
 
     this.waveText = pixelText(this, GAME_WIDTH / 2, 4, '', 10).setOrigin(0.5, 0);
     this.killText = pixelText(this, GAME_WIDTH - 6, 4, '', 8).setOrigin(1, 0);
 
-    this.ammoText = pixelText(this, 6, GAME_HEIGHT - 16, '', 10);
+    this.ammoText = pixelText(this, 6, GAME_HEIGHT - 20, '', 10);
     this.add.rectangle(6, GAME_HEIGHT - 4, 60, 2, 0x000000).setOrigin(0);
     this.reloadBar = this.add.rectangle(6, GAME_HEIGHT - 4, 60, 2, 0xfff176).setOrigin(0);
 
-    this.button(GAME_WIDTH - 32, GAME_HEIGHT - 32, '換彈', () => queueAction('reload'));
-    this.button(GAME_WIDTH - 64, GAME_HEIGHT - 32, '換槍', () => queueAction('next'));
+    this.button(GAME_WIDTH - 38, GAME_HEIGHT - 38, '換彈', () => queueAction('reload'));
+    this.button(GAME_WIDTH - 76, GAME_HEIGHT - 38, '換槍', () => queueAction('next'));
 
     this.buildRotateHint();
     this.scale.on(Phaser.Scale.Events.ORIENTATION_CHANGE, this.checkOrientation, this);
@@ -56,7 +56,7 @@ export class UIScene extends Phaser.Scene {
   }
 
   private button(x: number, y: number, label: string, onPress: () => void): void {
-    const size = 28;
+    const size = 32;
     const bg = this.add
       .rectangle(x, y, size, size, 0x000000, 0.45)
       .setOrigin(0)
@@ -82,7 +82,7 @@ export class UIScene extends Phaser.Scene {
   }
 
   private onWaveStart(wave: number, total: number): void {
-    const t = pixelText(this, GAME_WIDTH / 2, 90, wave === total ? '最後一波！' : `第 ${wave} 波來襲`, 16, '#ff8a80').setOrigin(0.5);
+    const t = pixelText(this, GAME_WIDTH / 2, 120, wave === total ? '最後一波！' : `第 ${wave} 波來襲`, 16, '#ff8a80').setOrigin(0.5);
     this.tweens.add({ targets: t, alpha: 0, delay: 900, duration: 600, onComplete: () => t.destroy() });
   }
 

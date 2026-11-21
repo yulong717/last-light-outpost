@@ -16,9 +16,18 @@ export class Zombie extends Phaser.GameObjects.Image {
     this.def = def;
     this.hp = def.hp;
     this.setOrigin(0.5, 1);
+    // 美術素材朝右繪製，霧屍往左走所以水平翻轉
+    this.setFlipX(true);
+    if (def.scale) this.setScale(def.scale);
+    this.restoreTint();
     // 一點點速度差，讓屍群不會疊成一直線
     this.speedJitter = Phaser.Math.FloatBetween(0.85, 1.15);
     scene.add.existing(this);
+  }
+
+  private restoreTint(): void {
+    if (this.def.tint) this.setTint(this.def.tint);
+    else this.clearTint();
   }
 
   /** 頭部區域：上方 30% */
@@ -49,7 +58,7 @@ export class Zombie extends Phaser.GameObjects.Image {
     this.hp -= amount;
     this.x += knockback;
     this.setTintFill(0xffffff);
-    this.scene.time.delayedCall(50, () => this.clearTint());
+    this.scene.time.delayedCall(50, () => this.restoreTint());
     if (this.hp <= 0) {
       this.dead = true;
       this.scene.tweens.add({

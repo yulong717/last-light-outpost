@@ -27,9 +27,9 @@ export interface HudData {
   kills: number;
 }
 
-const BASE_X = 34;
-const PLAYER_X = 58;
-const BARRICADE_X = 104;
+const BASE_X = 44;
+const PLAYER_X = 74;
+const BARRICADE_X = 148;
 const SPAWN_X = GAME_WIDTH + 20;
 
 /** 夜晚防守：固定鏡頭，守住路障與據點直到天亮。 */
@@ -59,7 +59,12 @@ export class DefenseScene extends Phaser.Scene {
     const st = GameState.data;
     this.barricade = new Barricade(this, BARRICADE_X, st.barricadeMaxHp);
     this.add.image(PLAYER_X, GROUND_Y - 8, 'player').setOrigin(0.5, 1).setDepth(10);
-    this.gun = this.add.rectangle(PLAYER_X, GROUND_Y - 24, 10, 2, 0x222222).setOrigin(0, 0.5).setDepth(11);
+    this.gun = this.add
+      .rectangle(PLAYER_X + 6, GROUND_Y - 50, 14, 3, 0x222222)
+      .setOrigin(0, 0.5)
+      .setDepth(11)
+      // 槍已經畫在角色圖上；這條線只用來計算瞄準角度與槍口位置
+      .setVisible(false);
 
     this.input2 = new InputManager(this);
     this.weapons = new WeaponSystem(this, WEAPONS);
@@ -80,8 +85,8 @@ export class DefenseScene extends Phaser.Scene {
     }
     this.add.rectangle(0, GROUND_Y, GAME_WIDTH, GAME_HEIGHT - GROUND_Y, PLACEHOLDER_COLORS.ground).setOrigin(0);
     // 據點外牆與射擊平台
-    this.add.rectangle(0, GROUND_Y - 60, BASE_X, 60, 0x3d4450).setOrigin(0);
-    this.add.rectangle(BASE_X, GROUND_Y - 8, 40, 8, 0x555d6b).setOrigin(0);
+    this.add.rectangle(0, GROUND_Y - 84, BASE_X, 84, 0x3d4450).setOrigin(0);
+    this.add.rectangle(BASE_X, GROUND_Y - 8, 52, 8, 0x555d6b).setOrigin(0);
   }
 
   private spawnZombie(id: string): void {
@@ -120,8 +125,8 @@ export class DefenseScene extends Phaser.Scene {
 
     const angle = Phaser.Math.Angle.Between(this.gun.x, this.gun.y, inp.aimX, inp.aimY);
     this.gun.setRotation(angle);
-    const muzzleX = this.gun.x + Math.cos(angle) * 10;
-    const muzzleY = this.gun.y + Math.sin(angle) * 10;
+    const muzzleX = this.gun.x + Math.cos(angle) * 14;
+    const muzzleY = this.gun.y + Math.sin(angle) * 14;
     const shot = this.weapons.tryFire(muzzleX, muzzleY, inp.aimX, inp.aimY, inp.fireHeld, inp.firePressed, this.zombies);
     if (shot) {
       this.kills += shot.kills;

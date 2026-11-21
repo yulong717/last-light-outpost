@@ -13,12 +13,14 @@ export class BootScene extends Phaser.Scene {
   }
 
   preload(): void {
-    // 範例：this.load.aseprite('player', 'assets/sprites/player.png', 'assets/sprites/player.json');
+    // PixelLab 產生的像素圖；之後有動畫時改用 this.load.aseprite(...)
+    this.load.image('player', 'assets/sprites/player.png');
+    this.load.image('zombie_basic', 'assets/sprites/zombie_basic.png');
   }
 
   create(): void {
-    this.placeholder('player', 12, 24, PLACEHOLDER_COLORS.player, true);
-    this.placeholder('barricade', 12, 40, PLACEHOLDER_COLORS.barricade);
+    this.placeholder('player', 20, 44, PLACEHOLDER_COLORS.player, true);
+    this.placeholder('barricade', 16, 56, PLACEHOLDER_COLORS.barricade);
     for (const e of Object.values(ENEMIES)) {
       this.placeholder(e.texture, e.width, e.height, e.color, true);
     }
