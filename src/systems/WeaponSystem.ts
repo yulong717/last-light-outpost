@@ -119,7 +119,7 @@ export class WeaponSystem {
     const hits: { z: Zombie; x: number; y: number; dist: number }[] = [];
     for (const z of zombies) {
       if (z.dead) continue;
-      const pts = Phaser.Geom.Intersects.GetLineToRectangle(ray, z.getBounds());
+      const pts = Phaser.Geom.Intersects.GetLineToRectangle(ray, z.getHitRect());
       if (pts.length === 0) continue;
       const p = pts.reduce((a, b) =>
         Phaser.Math.Distance.Between(fromX, fromY, a.x, a.y) <= Phaser.Math.Distance.Between(fromX, fromY, b.x, b.y) ? a : b,

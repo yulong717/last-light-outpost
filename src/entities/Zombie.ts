@@ -4,7 +4,7 @@ import type { EnemyDef } from '../data/enemies';
 
 export type ZombieTarget = { frontX: number; hit: (damage: number) => void };
 
-export class Zombie extends Phaser.GameObjects.Image {
+export class Zombie extends Phaser.GameObjects.Sprite {
   readonly def: EnemyDef;
   hp: number;
   private attackTimer = 0;
@@ -17,11 +17,17 @@ export class Zombie extends Phaser.GameObjects.Image {
     super(scene, x, GROUND_Y, def.texture);
     this.def = def;
     this.hp = def.hp;
-    this.setOrigin(0.5, 1);
+    // 走路圖的腳底在 64 格中的第 62 列
+    this.setOrigin(0.5, this.scene.anims.exists('zombie_walk') ? 62 / 64 : 1);
     // 美術素材朝右繪製，霧屍往左走所以水平翻轉
     this.setFlipX(true);
     if (def.scale) this.setScale(def.scale);
     this.restoreTint();
+    if (scene.anims.exists('zombie_walk')) {
+      this.play({ key: 'zombie_walk', startFrame: Phaser.Math.Between(0, 3) });
+      // 跑得快的步伐也快
+      this.anims.timeScale = Phaser.Math.Clamp(def.speed / 18, 0.6, 2);
+    }
     // 一點點速度差，讓屍群不會疊成一直線
     this.speedJitter = Phaser.Math.FloatBetween(0.85, 1.15);
     scene.add.existing(this);
@@ -32,15 +38,26 @@ export class Zombie extends Phaser.GameObjects.Image {
     else this.clearTint();
   }
 
-  /** 頭部區域：上方 30% */
+  /**
+   * 命中判定框：走路圖的影格四周有透明邊，所以不用整張圖的外框，
+   * 只取身體所在的中間區域。
+   */
+  getHitRect(): Phaser.Geom.Rectangle {
+    const s = this.def.scale ?? 1;
+    const w = 30 * s;
+    const h = 56 * s;
+    return new Phaser.Geom.Rectangle(this.x - w / 2, this.y - h, w, h);
+  }
+
+  /** 頭部區域：判定框上方 25% */
   isHeadshot(hitY: number): boolean {
-    const top = this.y - this.displayHeight;
-    return hitY <= top + this.displayHeight * 0.3;
+    const r = this.getHitRect();
+    return hitY <= r.y + r.height * 0.25;
   }
 
   update(dt: number, target: ZombieTarget): void {
     if (this.dead) return;
-    const stopX = target.frontX + this.displayWidth / 2;
+    const stopX = target.frontX + 18 * (this.def.scale ?? 1);
     if (this.x > stopX) {
       this.x = Math.max(stopX, this.x - this.def.speed * this.speedJitter * dt);
       this.attackTimer = 0;
@@ -63,8 +80,9 @@ export class Zombie extends Phaser.GameObjects.Image {
   private animateWalk(dt: number): void {
     this.walkPhase += dt * (4 + this.def.speed * 0.12);
     const s = this.def.scale ?? 1;
-    this.y = GROUND_Y - Math.abs(Math.sin(this.walkPhase)) * 2 * s;
-    this.angle = Math.sin(this.walkPhase) * 4;
+    this.y = GROUND_Y - Math.abs(Math.sin(this.walkPhase)) * 1 * s;
+    // 有影格動畫時只留很小的搖晃，避免和步伐打架
+    this.angle = Math.sin(this.walkPhase) * (this.anims.isPlaying ? 1.5 : 4);
   }
 
   takeDamage(amount: number, knockback: number): boolean {
