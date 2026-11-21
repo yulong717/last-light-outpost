@@ -17,8 +17,8 @@ export class BootScene extends Phaser.Scene {
   }
 
   create(): void {
-    this.placeholder('player', 12, 24, PLACEHOLDER_COLORS.player, true);
-    this.placeholder('barricade', 12, 40, PLACEHOLDER_COLORS.barricade);
+    this.placeholder('player', 20, 44, PLACEHOLDER_COLORS.player, true);
+    this.placeholder('barricade', 16, 56, PLACEHOLDER_COLORS.barricade);
     for (const e of Object.values(ENEMIES)) {
       this.placeholder(e.texture, e.width, e.height, e.color, true);
     }
