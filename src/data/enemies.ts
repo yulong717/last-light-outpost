@@ -16,6 +16,9 @@ export interface EnemyDef {
   color: number;
   /** 貼圖 key，換成像素圖時沿用同一個名字 */
   texture: string;
+  /** 共用貼圖時用色調與縮放做出差異（暫時做法，之後各自有圖） */
+  tint?: number;
+  scale?: number;
 }
 
 export const ENEMIES: Record<string, EnemyDef> = {
@@ -41,7 +44,9 @@ export const ENEMIES: Record<string, EnemyDef> = {
     width: 18,
     height: 40,
     color: PLACEHOLDER_COLORS.zombieRunner,
-    texture: 'zombie_runner',
+    texture: 'zombie_basic',
+    tint: 0xffc48a,
+    scale: 0.9,
   },
   brute: {
     id: 'brute',
@@ -53,6 +58,8 @@ export const ENEMIES: Record<string, EnemyDef> = {
     width: 32,
     height: 56,
     color: PLACEHOLDER_COLORS.zombieBrute,
-    texture: 'zombie_brute',
+    texture: 'zombie_basic',
+    tint: 0xd2b4ff,
+    scale: 1.3,
   },
 };

@@ -59,7 +59,12 @@ export class DefenseScene extends Phaser.Scene {
     const st = GameState.data;
     this.barricade = new Barricade(this, BARRICADE_X, st.barricadeMaxHp);
     this.add.image(PLAYER_X, GROUND_Y - 8, 'player').setOrigin(0.5, 1).setDepth(10);
-    this.gun = this.add.rectangle(PLAYER_X + 2, GROUND_Y - 38, 16, 3, 0x222222).setOrigin(0, 0.5).setDepth(11);
+    this.gun = this.add
+      .rectangle(PLAYER_X + 6, GROUND_Y - 50, 14, 3, 0x222222)
+      .setOrigin(0, 0.5)
+      .setDepth(11)
+      // 槍已經畫在角色圖上；這條線只用來計算瞄準角度與槍口位置
+      .setVisible(false);
 
     this.input2 = new InputManager(this);
     this.weapons = new WeaponSystem(this, WEAPONS);
@@ -120,8 +125,8 @@ export class DefenseScene extends Phaser.Scene {
 
     const angle = Phaser.Math.Angle.Between(this.gun.x, this.gun.y, inp.aimX, inp.aimY);
     this.gun.setRotation(angle);
-    const muzzleX = this.gun.x + Math.cos(angle) * 16;
-    const muzzleY = this.gun.y + Math.sin(angle) * 16;
+    const muzzleX = this.gun.x + Math.cos(angle) * 14;
+    const muzzleY = this.gun.y + Math.sin(angle) * 14;
     const shot = this.weapons.tryFire(muzzleX, muzzleY, inp.aimX, inp.aimY, inp.fireHeld, inp.firePressed, this.zombies);
     if (shot) {
       this.kills += shot.kills;
