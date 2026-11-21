@@ -13,7 +13,9 @@ export class BootScene extends Phaser.Scene {
   }
 
   preload(): void {
-    // 範例：this.load.aseprite('player', 'assets/sprites/player.png', 'assets/sprites/player.json');
+    // PixelLab 產生的像素圖；之後有動畫時改用 this.load.aseprite(...)
+    this.load.image('player', 'assets/sprites/player.png');
+    this.load.image('zombie_basic', 'assets/sprites/zombie_basic.png');
   }
 
   create(): void {
