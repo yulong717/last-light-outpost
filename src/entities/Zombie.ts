@@ -9,6 +9,8 @@ export class Zombie extends Phaser.GameObjects.Image {
   hp: number;
   private attackTimer = 0;
   private speedJitter: number;
+  /** 走路動態用的相位，讓每隻步伐不同步 */
+  private walkPhase = Math.random() * Math.PI * 2;
   dead = false;
 
   constructor(scene: Phaser.Scene, x: number, def: EnemyDef) {
@@ -42,6 +44,7 @@ export class Zombie extends Phaser.GameObjects.Image {
     if (this.x > stopX) {
       this.x = Math.max(stopX, this.x - this.def.speed * this.speedJitter * dt);
       this.attackTimer = 0;
+      this.animateWalk(dt);
     } else {
       this.attackTimer += dt;
       if (this.attackTimer >= this.def.attackInterval) {
@@ -51,6 +54,17 @@ export class Zombie extends Phaser.GameObjects.Image {
         this.scene.tweens.add({ targets: this, x: this.x - 3, duration: 60, yoyo: true });
       }
     }
+  }
+
+  /**
+   * 程式化走路動態（暫代正式影格動畫）：上下顛簸＋前後搖晃。
+   * 之後換成 PixelLab / Aseprite 的走路影格時，刪掉這段改播動畫即可。
+   */
+  private animateWalk(dt: number): void {
+    this.walkPhase += dt * (4 + this.def.speed * 0.12);
+    const s = this.def.scale ?? 1;
+    this.y = GROUND_Y - Math.abs(Math.sin(this.walkPhase)) * 2 * s;
+    this.angle = Math.sin(this.walkPhase) * 4;
   }
 
   takeDamage(amount: number, knockback: number): boolean {
