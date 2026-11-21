@@ -1,6 +1,9 @@
 import Phaser from 'phaser';
 
-/** 統一的像素風文字樣式；之後換成點陣字型只要改這裡。 */
+/**
+ * 統一的像素風文字樣式；之後換成點陣字型只要改這裡。
+ * size 以 480×270 時的大小撰寫，這裡依 640×360 等比放大。
+ */
 export function pixelText(
   scene: Phaser.Scene,
   x: number,
@@ -12,7 +15,7 @@ export function pixelText(
   return scene.add
     .text(x, y, text, {
       fontFamily: '"Noto Sans TC", "PingFang TC", "Microsoft JhengHei", monospace',
-      fontSize: `${size}px`,
+      fontSize: `${Math.round(size * 4 / 3)}px`,
       color,
       resolution: 4,
     })

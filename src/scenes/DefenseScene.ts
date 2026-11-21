@@ -27,9 +27,9 @@ export interface HudData {
   kills: number;
 }
 
-const BASE_X = 34;
-const PLAYER_X = 58;
-const BARRICADE_X = 104;
+const BASE_X = 44;
+const PLAYER_X = 76;
+const BARRICADE_X = 136;
 const SPAWN_X = GAME_WIDTH + 20;
 
 /** 夜晚防守：固定鏡頭，守住路障與據點直到天亮。 */
