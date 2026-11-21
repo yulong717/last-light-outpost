@@ -14,7 +14,8 @@ export class BootScene extends Phaser.Scene {
 
   preload(): void {
     // PixelLab 產生的像素圖；之後有動畫時改用 this.load.aseprite(...)
-    this.load.image('player', 'assets/sprites/player.png');
+    // 主角：3 格 64×64（0 待機瞄準、1 開火火光、2 後座力上揚）
+    this.load.spritesheet('player', 'assets/sprites/player_shoot.png', { frameWidth: 64, frameHeight: 64 });
     // 霧屍走路：4 格 64×64 橫排精靈圖（PixelLab 以選定角色為參考生成的姿勢）
     this.load.spritesheet('zombie_basic', 'assets/sprites/zombie_walk.png', { frameWidth: 64, frameHeight: 64 });
   }
@@ -24,6 +25,13 @@ export class BootScene extends Phaser.Scene {
     this.placeholder('barricade', 16, 56, PLACEHOLDER_COLORS.barricade);
     for (const e of Object.values(ENEMIES)) {
       this.placeholder(e.texture, e.width, e.height, e.color, true);
+    }
+    if (this.textures.get('player').frameTotal > 2) {
+      this.anims.create({
+        key: 'player_shoot',
+        frames: this.anims.generateFrameNumbers('player', { frames: [1, 2, 0] }),
+        frameRate: 20,
+      });
     }
     if (this.textures.get('zombie_basic').frameTotal > 2) {
       this.anims.create({

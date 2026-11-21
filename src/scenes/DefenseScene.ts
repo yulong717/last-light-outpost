@@ -39,7 +39,7 @@ export class DefenseScene extends Phaser.Scene {
   private spawner!: WaveSpawner;
   private barricade!: Barricade;
   private gun!: Phaser.GameObjects.Rectangle;
-  private player!: Phaser.GameObjects.Image;
+  private player!: Phaser.GameObjects.Sprite;
   private zombies: Zombie[] = [];
   private kills = 0;
   private headshots = 0;
@@ -59,11 +59,13 @@ export class DefenseScene extends Phaser.Scene {
 
     const st = GameState.data;
     this.barricade = new Barricade(this, BARRICADE_X, st.barricadeMaxHp);
-    this.player = this.add.image(PLAYER_X, GROUND_Y - 8, 'player').setOrigin(0.5, 1).setDepth(10);
+    this.player = this.add.sprite(PLAYER_X, GROUND_Y - 8, 'player', 0).setDepth(10);
+    // 影格腳底在 64 格中的第 63 列
+    this.player.setOrigin(0.5, this.anims.exists('player_shoot') ? 63 / 64 : 1);
     // 待機呼吸（程式化動態，之後換成影格動畫）
     this.tweens.add({ targets: this.player, scaleY: 1.03, duration: 900, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
     this.gun = this.add
-      .rectangle(PLAYER_X + 6, GROUND_Y - 50, 14, 3, 0x222222)
+      .rectangle(PLAYER_X + 10, GROUND_Y - 48, 14, 3, 0x222222)
       .setOrigin(0, 0.5)
       .setDepth(11)
       // 槍已經畫在角色圖上；這條線只用來計算瞄準角度與槍口位置
@@ -152,6 +154,11 @@ export class DefenseScene extends Phaser.Scene {
 
   /** 開槍回饋：後座力往後頓一下＋槍口火光 */
   private playShotFeedback(x: number, y: number): void {
+    if (this.anims.exists('player_shoot')) {
+      // 有開火影格時，火光與後座力都由動畫表現
+      this.player.play('player_shoot');
+      return;
+    }
     // 直接位移而不用 tween，避免和待機呼吸的 tween 互相干擾
     this.player.x = PLAYER_X - 2;
     this.time.delayedCall(45, () => (this.player.x = PLAYER_X));
