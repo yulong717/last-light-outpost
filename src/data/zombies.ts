@@ -1,0 +1,416 @@
+/**
+ * 霧屍「職業」與「變異」資料。
+ *
+ * 一隻霧屍 = 職業（外觀制服＋基礎能力）＋隨機外觀（膚色、衣服顏色、頭飾、背包、血跡、體型）
+ *           ＋ 0～2 個變異詞綴（狂暴、巨型、硬皮、爆裂、再生）。
+ * 擲骰在 src/systems/ZombieFactory.ts，圖像合成在 src/art/ZombieComposer.ts。
+ * 這裡只放數字，調平衡改這個檔案就好。
+ */
+
+/** 頭飾：cosmetic 只是外觀；helmet 會擋爆頭，直到被打飛 */
+export type HatId =
+  | 'none'
+  | 'cap'
+  | 'beanie'
+  | 'police_cap'
+  | 'riot_helmet'
+  | 'hard_hat'
+  | 'fire_helmet'
+  | 'army_helmet'
+  | 'nurse_cap'
+  | 'bandana';
+
+/** 上衣圖樣（畫在原圖「上衣」區域上） */
+export type ShirtPattern = 'plain' | 'police' | 'hivis' | 'fire' | 'scrubs' | 'camo' | 'jumpsuit' | 'tank' | 'tie';
+export type PantsPattern = 'plain' | 'camo' | 'fire';
+
+/** HSV 調整：[色相(度), 飽和度倍率, 明度倍率] */
+export type HsvShift = readonly [number, number, number];
+
+/** 頭盔／防彈衣的防護：armor 是減傷比例（0..1），hp 是耐久（吸收掉的傷害扣這裡，歸零就失效） */
+export interface ArmorPiece {
+  armor: number;
+  hp: number;
+}
+
+export type ProfessionAbility =
+  /** 死亡時爆開，波及周圍（主角、夥伴、路障與其他霧屍） */
+  | 'burst'
+  /** 每隔一段時間替附近霧屍回血 */
+  | 'heal_aura'
+  /** 血量低於一半時暴走：更快、出手更頻繁 */
+  | 'enrage';
+
+export interface ProfessionDef {
+  id: string;
+  name: string;
+  /** 一句話介紹，圖鑑與第一次出現時顯示 */
+  blurb: string;
+  hp: number;
+  speed: number;
+  damage: number;
+  attackInterval: number;
+  scale: number;
+  /** 身形加寬（1 = 原圖） */
+  widen: number;
+  /** 對路障、建築的傷害倍率（工人拿鐵鎚、消防員拿斧頭） */
+  structureMul?: number;
+  /** 擊退抵抗（0..1） */
+  knockbackResist?: number;
+  /** 硬直抵抗（0..1），給近戰武器的 stagger 用 */
+  staggerResist?: number;
+  /** 不怕火（之後的火焰武器、燃燒瓶用） */
+  fireproof?: boolean;
+  /** 防彈背心（會壞） */
+  vest?: ArmorPiece;
+  /** 天生的身體減傷（不會壞，例如消防衣） */
+  bodyArmor?: number;
+  ability?: ProfessionAbility;
+  /** 頭飾機率表（權重）；頭盔類會給予頭部防護 */
+  hats: Partial<Record<HatId, number>>;
+  look: {
+    /** 可能的膚色（不填就用全體共用的屍膚表） */
+    skins?: HsvShift[];
+    shirts: number[];
+    pants: number[];
+    shirt: ShirtPattern;
+    pantsPattern?: PantsPattern;
+    /** 背包機率 */
+    backpack?: number;
+    /** 血跡多寡 0..3 */
+    blood?: [number, number];
+  };
+  /** 第幾天開始出現 */
+  unlockDay: number;
+  /** 出現權重（越大越常見） */
+  weight: number;
+  /** 威脅點數：波次預算用，越強越貴 */
+  threat: number;
+  /** 擊殺掉落廢料 */
+  scrap: number;
+}
+
+/** 頭盔類頭飾的防護數值；沒列的頭飾純屬外觀 */
+export const HELMETS: Partial<Record<HatId, ArmorPiece>> = {
+  hard_hat: { armor: 0.55, hp: 30 },
+  riot_helmet: { armor: 0.65, hp: 45 },
+  fire_helmet: { armor: 0.5, hp: 40 },
+  army_helmet: { armor: 0.7, hp: 55 },
+};
+
+/** 一般屍膚：灰綠（原色）、慘白、病黃、青紫、深褐 */
+export const SKINS: HsvShift[] = [
+  [-1, 1, 1],
+  [95, 0.45, 1.12],
+  [58, 2.0, 1.0],
+  [205, 0.9, 0.95],
+  [28, 1.4, 0.72],
+];
+
+const CIVIL_SHIRTS = [0xd8d8d0, 0x9c2f2f, 0x2f5f9c, 0x3f7a3a, 0xc9a227, 0x6b4a8a, 0x8a8a8a, 0x2b2b2b, 0xb86a2b];
+const CIVIL_PANTS = [0x2b3a55, 0x3a3a3a, 0x7a6a4f, 0x4a4a3a, 0x253045];
+
+export const PROFESSIONS: Record<string, ProfessionDef> = {
+  basic: {
+    id: 'basic',
+    name: '平民霧屍',
+    blurb: '最常見的屍群，數量就是牠們的武器。',
+    hp: 30,
+    speed: 18,
+    damage: 5,
+    attackInterval: 1.0,
+    scale: 1,
+    widen: 1,
+    hats: { none: 6, cap: 2, beanie: 2, bandana: 1 },
+    look: { shirts: CIVIL_SHIRTS, pants: CIVIL_PANTS, shirt: 'plain', backpack: 0.2, blood: [0, 2] },
+    unlockDay: 1,
+    weight: 10,
+    threat: 1,
+    scrap: 2,
+  },
+  runner: {
+    id: 'runner',
+    name: '慢跑者',
+    blurb: '跑得飛快但很脆，別讓牠們摸到你身邊。',
+    hp: 18,
+    speed: 44,
+    damage: 3,
+    attackInterval: 0.6,
+    scale: 0.9,
+    widen: 0.92,
+    hats: { none: 5, cap: 2, bandana: 2 },
+    look: {
+      shirts: [0xe8e04a, 0xe0508a, 0x40c8d8, 0xf08a30, 0x70d050],
+      pants: [0x202020, 0x303850],
+      shirt: 'tank',
+      blood: [1, 3],
+    },
+    unlockDay: 1,
+    weight: 4,
+    threat: 1.5,
+    scrap: 3,
+  },
+  brute: {
+    id: 'brute',
+    name: '腫脹霧屍',
+    blurb: '皮厚血多，倒下時會爆出腐液，離牠遠一點再開槍。',
+    hp: 140,
+    speed: 10,
+    damage: 15,
+    attackInterval: 1.6,
+    scale: 1.3,
+    widen: 1.22,
+    structureMul: 1.5,
+    knockbackResist: 0.6,
+    staggerResist: 0.4,
+    ability: 'burst',
+    hats: { none: 1 },
+    look: {
+      skins: [
+        [285, 1.8, 0.92],
+        [300, 1.5, 0.85],
+        [265, 1.6, 0.95],
+      ],
+      shirts: [0xb8a040, 0x9c8a50, 0x8a6a3a],
+      pants: [0x5a4030, 0x4a3a2a],
+      shirt: 'tank',
+      blood: [1, 3],
+    },
+    unlockDay: 1,
+    weight: 1.5,
+    threat: 6,
+    scrap: 8,
+  },
+  worker: {
+    id: 'worker',
+    name: '工地霧屍',
+    blurb: '戴工程帽擋爆頭，手上的鐵鎚拆路障特別快。',
+    hp: 45,
+    speed: 16,
+    damage: 7,
+    attackInterval: 1.2,
+    scale: 1.02,
+    widen: 1.06,
+    structureMul: 2.5,
+    hats: { hard_hat: 7, none: 2, beanie: 1 },
+    look: { shirts: [0xf07a18, 0xe0d020], pants: [0x2f4a78, 0x3a3a3a], shirt: 'hivis', blood: [0, 2] },
+    unlockDay: 2,
+    weight: 4,
+    threat: 2.5,
+    scrap: 4,
+  },
+  police: {
+    id: 'police',
+    name: '警察霧屍',
+    blurb: '防彈背心讓打身體幾乎沒用，瞄頭！鎮暴頭盔要先打飛。',
+    hp: 40,
+    speed: 20,
+    damage: 6,
+    attackInterval: 1.0,
+    scale: 1,
+    widen: 1.04,
+    vest: { armor: 0.45, hp: 60 },
+    hats: { police_cap: 6, riot_helmet: 3, none: 1 },
+    look: { shirts: [0x4a6aa8, 0x5a7ab8], pants: [0x1c2438, 0x242c40], shirt: 'police', blood: [0, 2] },
+    unlockDay: 2,
+    weight: 3,
+    threat: 3,
+    scrap: 5,
+  },
+  nurse: {
+    id: 'nurse',
+    name: '護理師霧屍',
+    blurb: '會替身邊的霧屍「療傷」，優先解決牠。',
+    hp: 28,
+    speed: 22,
+    damage: 4,
+    attackInterval: 0.9,
+    scale: 0.96,
+    widen: 0.96,
+    ability: 'heal_aura',
+    hats: { nurse_cap: 5, none: 3 },
+    look: { shirts: [0x6cc4c0, 0x8ab8e0, 0xe8a0c0], pants: [0x6cc4c0, 0x8ab8e0, 0xe8a0c0], shirt: 'scrubs', blood: [1, 3] },
+    unlockDay: 3,
+    weight: 2,
+    threat: 3,
+    scrap: 5,
+  },
+  firefighter: {
+    id: 'firefighter',
+    name: '消防員霧屍',
+    blurb: '厚重防火衣減傷又不怕火，打不退、推不動。',
+    hp: 90,
+    speed: 14,
+    damage: 8,
+    attackInterval: 1.3,
+    scale: 1.08,
+    widen: 1.12,
+    structureMul: 2,
+    bodyArmor: 0.25,
+    knockbackResist: 0.8,
+    staggerResist: 0.6,
+    fireproof: true,
+    hats: { fire_helmet: 8, none: 1 },
+    look: { shirts: [0xb89a5a, 0x2a2a2a], pants: [0xb89a5a, 0x2a2a2a], shirt: 'fire', pantsPattern: 'fire', blood: [0, 1] },
+    unlockDay: 3,
+    weight: 1.5,
+    threat: 5,
+    scrap: 7,
+  },
+  prisoner: {
+    id: 'prisoner',
+    name: '囚犯霧屍',
+    blurb: '受傷過半就會暴走，衝刺速度與攻速大增。',
+    hp: 50,
+    speed: 20,
+    damage: 8,
+    attackInterval: 0.9,
+    scale: 1.02,
+    widen: 1.04,
+    ability: 'enrage',
+    hats: { none: 6, bandana: 2, beanie: 1 },
+    look: { shirts: [0xe8701c, 0xd86018], pants: [0xe8701c, 0xd86018], shirt: 'jumpsuit', blood: [1, 3] },
+    unlockDay: 4,
+    weight: 2,
+    threat: 3.5,
+    scrap: 5,
+  },
+  soldier: {
+    id: 'soldier',
+    name: '士兵霧屍',
+    blurb: '頭盔加防彈衣的重裝屍。準備穿甲彈或近戰重擊。',
+    hp: 80,
+    speed: 16,
+    damage: 10,
+    attackInterval: 1.1,
+    scale: 1.05,
+    widen: 1.08,
+    vest: { armor: 0.5, hp: 100 },
+    knockbackResist: 0.4,
+    staggerResist: 0.3,
+    hats: { army_helmet: 9, none: 1 },
+    look: { shirts: [0x5a6a3a, 0x6a6040], pants: [0x5a6a3a, 0x6a6040], shirt: 'camo', pantsPattern: 'camo', backpack: 0.5, blood: [0, 2] },
+    unlockDay: 5,
+    weight: 1,
+    threat: 7,
+    scrap: 10,
+  },
+};
+
+// ───────────────────────── 變異 ─────────────────────────
+
+export type MutationId = 'frenzied' | 'hulking' | 'hardened' | 'volatile' | 'regen';
+
+export interface MutationDef {
+  id: MutationId;
+  /** 名稱前綴，例如「狂暴的警察霧屍」 */
+  prefix: string;
+  hpMul?: number;
+  speedMul?: number;
+  damageMul?: number;
+  attackIntervalMul?: number;
+  scaleMul?: number;
+  /** 額外的天生身體減傷（加在職業的 bodyArmor 上） */
+  bodyArmor?: number;
+  knockbackResist?: number;
+  /** 死亡時爆開 */
+  burst?: boolean;
+  /** 每秒回血（脫離受擊 2 秒後） */
+  regen?: number;
+  /** 身上的色調（不會蓋掉受擊閃白） */
+  tint?: number;
+  /** 頭上標記的顏色 */
+  mark: number;
+  /** 第幾天開始可能出現 */
+  unlockDay: number;
+  weight: number;
+  /** 額外威脅點數與廢料 */
+  threat: number;
+  scrap: number;
+}
+
+export const MUTATIONS: Record<MutationId, MutationDef> = {
+  frenzied: {
+    id: 'frenzied',
+    prefix: '狂暴的',
+    speedMul: 1.45,
+    attackIntervalMul: 0.75,
+    tint: 0xffb0a0,
+    mark: 0xff4a3a,
+    unlockDay: 1,
+    weight: 3,
+    threat: 1.5,
+    scrap: 2,
+  },
+  hulking: {
+    id: 'hulking',
+    prefix: '巨型',
+    hpMul: 1.9,
+    damageMul: 1.4,
+    speedMul: 0.85,
+    scaleMul: 1.22,
+    knockbackResist: 0.4,
+    mark: 0xffa030,
+    unlockDay: 2,
+    weight: 2,
+    threat: 2.5,
+    scrap: 3,
+  },
+  hardened: {
+    id: 'hardened',
+    prefix: '硬皮',
+    hpMul: 1.25,
+    bodyArmor: 0.25,
+    tint: 0xb8c8d8,
+    mark: 0x9ab8e0,
+    unlockDay: 3,
+    weight: 2,
+    threat: 2,
+    scrap: 2,
+  },
+  volatile: {
+    id: 'volatile',
+    prefix: '爆裂',
+    burst: true,
+    tint: 0xd8ffa0,
+    mark: 0x9aff4a,
+    unlockDay: 2,
+    weight: 2,
+    threat: 1.5,
+    scrap: 2,
+  },
+  regen: {
+    id: 'regen',
+    prefix: '再生',
+    regen: 4,
+    mark: 0x4affb0,
+    unlockDay: 4,
+    weight: 1.5,
+    threat: 2,
+    scrap: 3,
+  },
+};
+
+/** 爆開的範圍與傷害（腫脹霧屍與「爆裂」變異共用；腫脹的更大） */
+export const BURST = {
+  big: { radius: 48, damage: 16 },
+  small: { radius: 34, damage: 10 },
+  /** 爆炸對其他霧屍的傷害倍率：連鎖引爆很爽，但不要一顆清場 */
+  zombieMul: 2,
+};
+
+/** 護理師的治療光環 */
+export const HEAL_AURA = { interval: 3, radius: 64, amount: 10 };
+
+/** 囚犯暴走 */
+export const ENRAGE = { below: 0.5, speedMul: 1.8, attackIntervalMul: 0.6, tint: 0xff8a7a };
+
+/** 每隻霧屍得到變異的機率：依天數上升 */
+export function mutationChance(day: number): number {
+  return Math.min(0.45, 0.04 + 0.06 * (day - 1));
+}
+
+/** 已有一個變異時，再多一個的機率（第 6 天起） */
+export function secondMutationChance(day: number): number {
+  return day < 6 ? 0 : Math.min(0.3, 0.05 * (day - 5));
+}

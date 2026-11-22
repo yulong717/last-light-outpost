@@ -3,6 +3,7 @@ import { PLACEHOLDER_COLORS } from '../config';
 import { ENEMIES } from '../data/enemies';
 import { createBarricadeTexture, registerHeadFrames } from '../art/ProceduralArt';
 import { createBuildingTextures } from '../art/BuildingArt';
+import { createGearTexture } from '../art/ZombieComposer';
 import { ZOMBIE_NECK_ROW, ZOMBIE_SHEETS } from '../art/sprites';
 import { createFxTextures } from '../fx/FxTextures';
 
@@ -32,6 +33,8 @@ export class BootScene extends Phaser.Scene {
     createFxTextures(this);
     createBarricadeTexture(this);
     createBuildingTextures(this);
+    // 霧屍頭飾與變異標記（身體外觀在出怪時才依職業合成，見 ZombieComposer）
+    createGearTexture(this);
     this.placeholder('player', 20, 44, PLACEHOLDER_COLORS.player, true);
     this.placeholder('barricade', 16, 56, PLACEHOLDER_COLORS.barricade);
     for (const e of Object.values(ENEMIES)) {

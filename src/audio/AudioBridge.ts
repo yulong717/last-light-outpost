@@ -31,7 +31,9 @@ export function attachAudio(scene: Phaser.Scene): void {
     AudioManager.play(name, { pan: s.pan, volume: s.volume * (extra.volume ?? 1), semitones: extra.semitones, delay: extra.delay });
   };
   /** 大型霧屍聲音低一點 */
-  const kindPitch = (kind: string) => (kind === 'brute' ? -5 : kind === 'runner' ? 3 : 0);
+  // 霧屍職業的嗓音高低（職業列表見 src/data/zombies.ts）
+  const KIND_PITCH: Record<string, number> = { brute: -5, runner: 3, nurse: 2, firefighter: -2, soldier: -2, prisoner: -1 };
+  const kindPitch = (kind: string) => KIND_PITCH[kind] ?? 0;
   const shotName = (id: string) => (AudioManager.has(`shot_${id}`) ? `shot_${id}` : (WEAPON_FALLBACK[id] ?? 'shot_pistol'));
 
   const updateIntensity = () => AudioManager.setIntensity(Math.min(1, alive / 8));
@@ -85,6 +87,14 @@ export function attachAudio(scene: Phaser.Scene): void {
       updateIntensity();
       play('zombie_death', e.x, { semitones: kindPitch(e.enemyId) });
     })
+    // 打在頭盔／背心上：金屬「鏘」（沿用路障受擊音，拉高音調）；頭盔飛走時更響
+    .on('enemy:armor', (e) => play('barricade_hit', e.x, { semitones: e.part === 'helmet' ? 12 : 8, volume: e.broke ? 0.9 : 0.45 }))
+    .on('enemy:burst', (e) => {
+      play('barricade_break', e.x, { semitones: -7, volume: 0.9 });
+      play('flesh_hit', e.x, { semitones: -5 });
+    })
+    .on('enemy:enrage', (e) => play('zombie_groan', e.x, { semitones: -4, volume: 1 }))
+    .on('enemy:heal', (e) => play('ui_confirm', e.x, { semitones: -6, volume: 0.25 }))
     .on('barricade:hit', (e) => play('barricade_hit', e.x))
     .on('barricade:break', (e) => play('barricade_break', e.x))
     .on('base:hit', (e) => play('base_hit', e.x))

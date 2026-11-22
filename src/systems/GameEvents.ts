@@ -36,6 +36,14 @@ export interface GameEventMap {
   'enemy:groan': { enemyId: string; x: number; y: number };
   'enemy:attack': { enemyId: string; x: number; y: number };
   'enemy:death': { enemyId: string; x: number; y: number; headshot: boolean };
+  /** 子彈打在頭盔／防彈衣上；broke 代表這一下把它打壞（頭盔飛走） */
+  'enemy:armor': { enemyId: string; x: number; y: number; part: 'helmet' | 'vest'; broke: boolean };
+  /** 腫脹霧屍或「爆裂」變異死亡時爆開；場景負責結算範圍傷害 */
+  'enemy:burst': { enemyId: string; x: number; y: number; radius: number; damage: number };
+  /** 囚犯霧屍血量過半後暴走 */
+  'enemy:enrage': { enemyId: string; x: number; y: number };
+  /** 護理師霧屍替附近同伴回血 */
+  'enemy:heal': { enemyId: string; x: number; y: number; targets: number };
   'wave:start': { wave: number; total: number };
   'game:over': { survived: boolean };
   /** NPC 夥伴開了一槍 */
