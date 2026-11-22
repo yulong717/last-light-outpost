@@ -7,6 +7,7 @@ import { COMPANION_ROLES, type CrewMember } from '../data/companions';
 import { NOISE, type FieldSpec } from '../data/explore';
 import type { FirearmDef } from '../data/weapons';
 import { Player } from '../entities/Player';
+import { WeaponRig } from '../entities/WeaponRig';
 import { Zombie, type ZombieContext, type ZombieTarget } from '../entities/Zombie';
 import { Expedition } from '../explore/Expedition';
 import { throwGrenade, useMedkit } from '../explore/Supplies';
@@ -85,6 +86,8 @@ export class ExploreFieldScene extends Phaser.Scene {
   private player!: Player;
   private weapons!: WeaponSystem;
   private melee!: MeleeSystem;
+  /** 主角手上的武器（和夜晚一樣會換彈、拉栓、揮砍） */
+  private rig!: WeaponRig;
   private input2!: InputManager;
   private fx!: Fx;
   private camFeel!: CameraFeel;
@@ -145,6 +148,8 @@ export class ExploreFieldScene extends Phaser.Scene {
     this.player = new Player(this, 60, (LANE_TOP + LANE_BOTTOM) / 2, 100);
     this.player.hp = Math.max(1, exp.hp);
     this.fx.attachShadow(this.player.sprite, 22);
+    this.rig = new WeaponRig(this);
+    this.rig.setWeapon(GameState.data.armory.loadout[0] ?? 'm1911');
     const cam = this.cameras.main;
     cam.startFollow(this.player.sprite, true, 0.12, 0);
     cam.setDeadzone(140, GAME_HEIGHT);
@@ -158,6 +163,7 @@ export class ExploreFieldScene extends Phaser.Scene {
     this.screenFx = new ScreenFeedback(this);
     attachAudio(this);
     this.wireFeedback();
+    this.wireRig();
 
     this.spawnFollowers();
     const zone = exp.zone;
@@ -553,9 +559,13 @@ export class ExploreFieldScene extends Phaser.Scene {
     if (this.alerted) p.speedMul = this.weapons.active.def.moveMul;
     p.update(dt, inp.moveX, inp.moveY, inp.aimX, { minX: 20, maxX: WORLD_W - 16 });
 
-    const angle = Phaser.Math.Angle.Between(p.gunX, p.gunY, inp.aimX, inp.aimY);
-    const muzzleX = p.gunX + Math.cos(angle) * 14;
-    const muzzleY = p.gunY + Math.sin(angle) * 14;
+    // 手上的武器先擺好姿勢，子彈從真正的槍口射出
+    this.rig.setWeapon(this.weapons.active.def.id);
+    const mp = this.melee.pose;
+    this.rig.setMelee(mp ? { id: this.melee.def.id, ...mp } : null);
+    this.updateRig(dt, inp.aimX, inp.aimY);
+    const muzzleX = this.rig.muzzle.x;
+    const muzzleY = this.rig.muzzle.y;
     this.noGunCooldown = Math.max(0, this.noGunCooldown - realDt);
     if (this.spec.meleeOnly) {
       if (inp.firePressed && this.noGunCooldown <= 0) {
@@ -572,6 +582,7 @@ export class ExploreFieldScene extends Phaser.Scene {
         ? this.weapons.tryFire(muzzleX, muzzleY, inp.aimX, inp.aimY, inp.fireHeld, inp.firePressed, this.zombies, p.moveFactor)
         : null;
       if (shot) {
+        this.rig.fire();
         this.shotFeedback(muzzleX, muzzleY, shot.angle);
         this.kills += shot.kills;
         this.exp.addNoise(NOISE.perShot);
@@ -758,8 +769,44 @@ export class ExploreFieldScene extends Phaser.Scene {
     this.crosshair.fired();
     this.fx.muzzleLight(x, y, def.pellets > 1 ? 1.3 : 1);
     if (def.selfKnockback > 0) this.player.push(-Math.cos(angle) * def.selfKnockback);
+    if (def.cls !== 'revolver' && def.id !== 'coach' && !def.cycleSound) {
+      const ej = this.rig.eject;
+      this.fx.ejectShell(ej.x, ej.y, this.player.footY + 2, this.player.facing, shellKey(def));
+    }
     this.fx.muzzleSmoke(x, y, angle);
-    if (this.anims.exists('player_shoot')) this.player.sprite.play('player_shoot');
-    else this.player.kick();
   }
+
+  /** 主角的武器姿勢：從肩膀指向瞄準點，角度限制在面向的前方 ±70°（同 DefenseScene） */
+  private updateRig(dt: number, aimX: number, aimY: number): void {
+    const p = this.player;
+    const sx = p.footX + 3 * p.facing;
+    const sy = p.footY - 35;
+    let a = Math.atan2(aimY - sy, aimX - sx);
+    const lim = Phaser.Math.DegToRad(70);
+    if (p.facing > 0) a = Phaser.Math.Clamp(a, -lim, lim);
+    else a = Math.PI + Phaser.Math.Clamp(Phaser.Math.Angle.Wrap(a - Math.PI), -lim, lim);
+    this.rig.setVisible(p.alive);
+    this.rig.update(dt, { footX: p.footX, footY: p.footY, facing: p.facing, aim: a, bob: p.bob, depth: p.sprite.depth });
+  }
+
+  /** 換彈、上膛的動作跟著武器系統的事件走 */
+  private wireRig(): void {
+    const bus = GameEvents.of(this);
+    bus.on('player:reload-start', (e) => this.rig.startReload(e.duration, !!e.empty));
+    bus.on('player:reload-round', (e) => this.rig.roundIn(!!e.clip));
+    bus.on('player:reload-cancel', () => this.rig.endReload());
+    bus.on('player:reload-end', () => this.rig.endReload());
+    bus.on('player:rack', () => this.rig.rack());
+    bus.on('player:cycle', (e) => {
+      this.rig.cycle(e.delay);
+      this.time.delayedCall((e.delay + 0.12) * 1000, () => {
+        const ej = this.rig.eject;
+        this.fx.ejectShell(ej.x, ej.y, this.player.footY + 2, this.player.facing, shellKey(this.weapons.active.def));
+      });
+    });
+  }
+}
+
+function shellKey(def: FirearmDef): string {
+  return def.ammo === '12ga' ? 'shell_12ga' : def.ammo === '556' || def.ammo === '762' ? 'shell_rifle' : 'shell_pistol';
 }
