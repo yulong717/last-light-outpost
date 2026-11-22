@@ -32,6 +32,8 @@ export class UIScene extends Phaser.Scene {
     status: Phaser.GameObjects.Text;
   }[] = [];
   private orderLabel?: Phaser.GameObjects.Text;
+  private grenadeLabel!: Phaser.GameObjects.Text;
+  private medkitLabel!: Phaser.GameObjects.Text;
 
   constructor() {
     super('UI');
@@ -77,6 +79,9 @@ export class UIScene extends Phaser.Scene {
     this.button(GAME_WIDTH - 38, GAME_HEIGHT - 38, '換彈', () => queueAction('reload'));
     this.button(GAME_WIDTH - 76, GAME_HEIGHT - 38, '換槍', () => queueAction('next'));
     this.button(GAME_WIDTH - 38, GAME_HEIGHT - 76, '近戰', () => queueAction('melee'));
+    // 探索帶回來的輔助用品（鍵盤 G／H）
+    this.grenadeLabel = this.supplyButton(GAME_WIDTH - 76, GAME_HEIGHT - 76, 'G', 'use-grenade');
+    this.medkitLabel = this.supplyButton(GAME_WIDTH - 114, GAME_HEIGHT - 76, 'H', 'use-medkit');
 
     this.crewRows = [];
     this.orderLabel = undefined;
@@ -109,6 +114,22 @@ export class UIScene extends Phaser.Scene {
     bg.on('pointerdown', () => AudioManager.toggleMute());
     const off = AudioManager.onChange(refresh);
     this.unregister.push(off, registerUIRect({ x, y, w: size, h: size }));
+  }
+
+  /** 手榴彈／醫療包按鈕：數字跟著存量變，用完變灰 */
+  private supplyButton(x: number, y: number, key: string, event: string): Phaser.GameObjects.Text {
+    const size = 32;
+    const bg = this.add.rectangle(x, y, size, size, 0x000000, 0.45).setOrigin(0).setStrokeStyle(1, 0xffd24a, 0.5).setInteractive();
+    const label = pixelText(this, x + size / 2, y + size / 2, '', 7, '#ffd24a').setOrigin(0.5).setLineSpacing(-2).setAlign('center');
+    if (!this.touchUI) pixelText(this, x + size / 2, y - 2, key, 7, '#90a4ae').setOrigin(0.5, 1);
+    bg.on('pointerdown', () => {
+      bg.setFillStyle(0xffffff, 0.3);
+      this.scene.get('Defense').events.emit(event);
+    });
+    bg.on('pointerup', () => bg.setFillStyle(0x000000, 0.45));
+    bg.on('pointerout', () => bg.setFillStyle(0x000000, 0.45));
+    this.unregister.push(registerUIRect({ x, y, w: size, h: size }));
+    return label;
   }
 
   private button(x: number, y: number, label: string, onPress: () => void): void {
@@ -215,6 +236,9 @@ export class UIScene extends Phaser.Scene {
     this.staminaBar.setFillStyle(h.stamina < 0.25 ? (this.staminaFlash % 20 < 10 ? 0xef5350 : 0x4fc3f7) : 0x4fc3f7);
     this.waveText.setText(`第 ${GameState.data.day} 夜　第 ${h.wave} / ${h.totalWaves} 波`);
     this.killText.setText(`廢料 ${GameState.data.scrap}　擊殺 ${h.kills}`);
+    const s = GameState.data.supplies;
+    this.grenadeLabel.setText(`手雷\n${s.grenade}`).setAlpha(s.grenade > 0 ? 1 : 0.4);
+    this.medkitLabel.setText(`醫療\n${s.medkit}`).setAlpha(s.medkit > 0 ? 1 : 0.4);
   }
 
   private onWaveStart(wave: number, total: number): void {
