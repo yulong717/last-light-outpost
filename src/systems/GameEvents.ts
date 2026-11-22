@@ -13,8 +13,23 @@ export interface GameEventMap {
   'player:shoot': { weaponId: string; x: number; y: number; angle: number; pellets: number; ammoLeft: number; magazine: number };
   /** 彈匣空了或換彈中還扣扳機（喀一聲） */
   'player:dryfire': { weaponId: string };
-  'player:reload-start': { weaponId: string; duration: number };
+  /** 開始換彈；style 是裝填方式（magazine / single / whole），empty 代表打空才換（要多拉一次槍機） */
+  'player:reload-start': { weaponId: string; duration: number; style?: string; empty?: boolean };
+  /** 一顆一顆塞的武器：塞進一顆（霰彈、栓動）；clip 代表用橋夾一次壓滿 */
+  'player:reload-round': { weaponId: string; loaded: number; magazine: number; clip?: boolean };
+  /** 打空後最後拉一下泵動／槍栓 */
+  'player:rack': { weaponId: string };
+  /** 換彈被開火或近戰打斷（已塞進去的子彈保留） */
+  'player:reload-cancel': { weaponId: string };
   'player:reload-end': { weaponId: string };
+  /** 泵動／栓動：開完一槍後上膛（音效接拉槓聲） */
+  'player:cycle': { weaponId: string; kind: 'pump' | 'bolt'; x: number; y: number; delay: number };
+  /** 近戰揮擊（起手時發） */
+  'player:melee-swing': { weaponId: string; x: number; y: number; heavy: boolean; tired: boolean };
+  /** 近戰打中（每隻各一次）；type 是傷害類型（slash / blunt） */
+  'player:melee-hit': { weaponId: string; x: number; y: number; type: string; killed: boolean; execute: boolean };
+  /** 體力不夠還硬揮 */
+  'player:exhausted': { stamina: number };
   'player:weapon-switch': { weaponId: string };
   /** 每一步落地；foot 左右腳交替，speed 0..1 */
   'player:step': { x: number; y: number; foot: 0 | 1; speed: number };
@@ -47,7 +62,7 @@ export interface GameEventMap {
   'wave:start': { wave: number; total: number };
   'game:over': { survived: boolean };
   /** NPC 夥伴開了一槍 */
-  'ally:shoot': { role: string; x: number; y: number; angle: number };
+  'ally:shoot': { role: string; x: number; y: number; angle: number; weaponId?: string };
   /** 夥伴真的被扣血 */
   'ally:hurt': { name: string; role: string; amount: number; hp: number; maxHp: number; x: number; y: number };
   /** 夥伴陣亡（永久離隊） */

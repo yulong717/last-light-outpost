@@ -6,6 +6,7 @@ import { Fx } from '../fx/Fx';
 import { ZOMBIE_NECK_ROW } from '../art/sprites';
 import { FOOT_ROW, GEAR_TEXTURE, HAT_ART, HEAD_ANCHORS } from '../art/ZombieComposer';
 import { GameEvents } from '../systems/GameEvents';
+import { armorAfter, type DamageInfo } from '../combat/Damage';
 import type { ZombieSpec } from '../systems/ZombieFactory';
 
 /** 受擊資訊：給程式化動畫決定怎麼反應 */
@@ -428,8 +429,8 @@ export class Zombie extends Phaser.GameObjects.Sprite {
 
   /**
    * 護甲結算：回傳實際扣血量。爆頭打頭盔、打身體打防彈背心，再套天生減傷（消防衣、硬皮）。
-   * 減傷 = max(0, 護甲 − 穿甲)；被吸收的傷害扣在裝備耐久上，歸零就壞掉。
-   * 之後武器的 resolveDamage() 合進來時，只要換掉這個函式的公式。
+   * 減傷用 src/combat/Damage.ts 的 armorAfter()：護甲 × 傷害類型係數 − 穿甲
+   * （霰彈對護甲最無力、鈍器與爆炸無視部分護甲）。被吸收的傷害扣在裝備耐久上，歸零就壞掉。
    */
   private mitigate(amount: number, info: HitInfo): number {
     const pen = info.penetration ?? 0;
@@ -440,7 +441,7 @@ export class Zombie extends Phaser.GameObjects.Sprite {
     let dmg = amount;
     if (info.headshot && !blast && this.helmet) {
       const piece = this.helmet;
-      const a = Math.max(0, piece.armor - pen) * (info.type === 'blunt' ? 0.5 : 1);
+      const a = armorAfter(piece.armor, info.type, pen);
       const absorbed = dmg * a;
       dmg -= absorbed;
       // 鈍擊特別容易把頭盔敲飛
@@ -453,7 +454,7 @@ export class Zombie extends Phaser.GameObjects.Sprite {
     } else if (!info.headshot || blast) {
       if (this.vest) {
         const piece = this.vest;
-        const a = Math.max(0, piece.armor - pen) * (blast ? 0.5 : 1);
+        const a = armorAfter(piece.armor, info.type, pen);
         const absorbed = dmg * a;
         dmg -= absorbed;
         piece.hp -= absorbed;
@@ -467,7 +468,7 @@ export class Zombie extends Phaser.GameObjects.Sprite {
           bus.emit('enemy:armor', { enemyId: this.def.id, x: this.footX, y: this.footY - 30 * this.s, part: 'vest', broke });
         }
       }
-      const body = Math.max(0, this.spec.bodyArmor - pen) * (blast ? 0.5 : 1);
+      const body = armorAfter(this.spec.bodyArmor, info.type, pen);
       dmg *= 1 - body;
     }
     return dmg;
@@ -489,6 +490,32 @@ export class Zombie extends Phaser.GameObjects.Sprite {
     this.hat.destroy();
     this.hat = null;
     this.helmet = null;
+  }
+
+  /** 正在硬直（近戰處決、子彈打暈） */
+  get stunned(): boolean {
+    return this.stunTimer > 0;
+  }
+
+  /**
+   * 子彈打到這裡會不會被擋下、不再往後穿：看這一槍打到的部位剩多少護甲（≥ 30% 就停）。
+   * 只是預判，不會扣裝備耐久。
+   */
+  stopsBullet(info: Pick<DamageInfo, 'type' | 'penetration' | 'headshot'>): boolean {
+    const raw = info.headshot ? (this.helmet?.armor ?? 0) : Math.max(this.vest?.armor ?? 0, this.spec.bodyArmor);
+    return armorAfter(raw, info.type, info.penetration) >= 0.3;
+  }
+
+  /** 武器的統一入口：先上硬直（已含職業抗性），再交給 takeDamage 扣血與結算護甲 */
+  takeHit(info: DamageInfo): boolean {
+    if (this.dead) return false;
+    if (info.stagger > 0) this.stagger(info.stagger);
+    return this.takeDamage(info.amount, info.knockback, {
+      headshot: info.headshot,
+      dirX: info.dirX,
+      type: info.type,
+      penetration: info.penetration,
+    });
   }
 
   takeDamage(amount: number, knockback: number, info: HitInfo = {}): boolean {

@@ -18,6 +18,8 @@ export interface InputState {
   /** 指定切換到第幾把武器（0 起算），-1 代表沒切換 */
   selectWeapon: number;
   nextWeapon: boolean;
+  /** 這一幀按下近戰（右鍵、V、E 或觸控按鈕；F 是夥伴指令） */
+  meleePressed: boolean;
 }
 
 type Rect = { x: number; y: number; w: number; h: number };
@@ -50,15 +52,15 @@ function inRect(r: Rect, x: number, y: number): boolean {
 }
 
 /** 讓 UI 按鈕（換彈、換槍）也能送出動作。 */
-const queued = { reload: false, next: false };
-export function queueAction(action: 'reload' | 'next'): void {
+const queued = { reload: false, next: false, melee: false };
+export function queueAction(action: 'reload' | 'next' | 'melee'): void {
   queued[action] = true;
 }
 
 export class InputManager {
   private scene: Phaser.Scene;
   private keys: Record<
-    'reload' | 'one' | 'two' | 'swap' | 'up' | 'down' | 'left' | 'right' | 'w' | 'a' | 's' | 'd',
+    'reload' | 'one' | 'two' | 'three' | 'swap' | 'melee' | 'melee2' | 'up' | 'down' | 'left' | 'right' | 'w' | 'a' | 's' | 'd',
     Phaser.Input.Keyboard.Key
   > | null = null;
   private movePointerId: number | null = null;
@@ -77,6 +79,7 @@ export class InputManager {
     reloadPressed: false,
     selectWeapon: -1,
     nextWeapon: false,
+    meleePressed: false,
   };
 
   constructor(scene: Phaser.Scene) {
@@ -87,6 +90,9 @@ export class InputManager {
         reload: kb.addKey(Phaser.Input.Keyboard.KeyCodes.R),
         one: kb.addKey(Phaser.Input.Keyboard.KeyCodes.ONE),
         two: kb.addKey(Phaser.Input.Keyboard.KeyCodes.TWO),
+        three: kb.addKey(Phaser.Input.Keyboard.KeyCodes.THREE),
+        melee: kb.addKey(Phaser.Input.Keyboard.KeyCodes.V),
+        melee2: kb.addKey(Phaser.Input.Keyboard.KeyCodes.E),
         swap: kb.addKey(Phaser.Input.Keyboard.KeyCodes.Q),
         up: kb.addKey(Phaser.Input.Keyboard.KeyCodes.UP),
         down: kb.addKey(Phaser.Input.Keyboard.KeyCodes.DOWN),
@@ -103,6 +109,11 @@ export class InputManager {
 
     joystick.active = false;
     scene.input.on('pointerdown', (p: Phaser.Input.Pointer) => {
+      // 滑鼠右鍵 = 近戰，不會開火
+      if (!p.wasTouch && p.rightButtonDown()) {
+        if (!isOverUI(p.x, p.y)) queued.melee = true;
+        return;
+      }
       if (p.wasTouch && this.movePointerId === null && inRect(JOYSTICK_ZONE, p.x, p.y) && !isOverUI(p.x, p.y)) {
         this.movePointerId = p.id;
         joystick.active = true;
@@ -180,9 +191,11 @@ export class InputManager {
     const jd = Phaser.Input.Keyboard.JustDown;
     s.reloadPressed = (k ? jd(k.reload) : false) || queued.reload;
     s.nextWeapon = (k ? jd(k.swap) : false) || queued.next;
-    s.selectWeapon = k && jd(k.one) ? 0 : k && jd(k.two) ? 1 : -1;
+    s.selectWeapon = k && jd(k.one) ? 0 : k && jd(k.two) ? 1 : k && jd(k.three) ? 2 : -1;
+    s.meleePressed = (k ? jd(k.melee) || jd(k.melee2) : false) || queued.melee;
     queued.reload = false;
     queued.next = false;
+    queued.melee = false;
     return s;
   }
 }

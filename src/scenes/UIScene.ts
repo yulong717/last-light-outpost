@@ -15,6 +15,10 @@ export class UIScene extends Phaser.Scene {
   private barricadeBar!: Phaser.GameObjects.Rectangle;
   private reloadBar!: Phaser.GameObjects.Rectangle;
   private ammoText!: Phaser.GameObjects.Text;
+  private reserveText!: Phaser.GameObjects.Text;
+  private slotText!: Phaser.GameObjects.Text;
+  private staminaBar!: Phaser.GameObjects.Rectangle;
+  private staminaFlash = 0;
   private waveText!: Phaser.GameObjects.Text;
   private killText!: Phaser.GameObjects.Text;
   private rotateHint!: Phaser.GameObjects.Container;
@@ -54,12 +58,22 @@ export class UIScene extends Phaser.Scene {
     this.killText = pixelText(this, GAME_WIDTH - 6, 4, '', 8).setOrigin(1, 0);
     this.buildMuteButton();
 
-    this.ammoText = pixelText(this, 6, GAME_HEIGHT - 20, '', 10);
-    this.add.rectangle(6, GAME_HEIGHT - 4, 60, 2, 0x000000).setOrigin(0);
-    this.reloadBar = this.add.rectangle(6, GAME_HEIGHT - 4, 60, 2, 0xfff176).setOrigin(0);
+    // 體力（近戰用）
+    pixelText(this, 6, 49, '體力', 7, '#81d4fa');
+    this.add.rectangle(40, 52, 80, 4, 0x000000).setOrigin(0);
+    this.staminaBar = this.add.rectangle(41, 53, 78, 2, 0x4fc3f7).setOrigin(0);
+
+    // 左下：武器欄（觸控時搖桿在左下，武器資訊改放中下）
+    const wx = this.sys.game.device.input.touch ? 210 : 6;
+    this.slotText = pixelText(this, wx, GAME_HEIGHT - 44, '', 7, '#90a4ae');
+    this.ammoText = pixelText(this, wx, GAME_HEIGHT - 30, '', 10);
+    this.reserveText = pixelText(this, wx, GAME_HEIGHT - 15, '', 7, '#b0bec5');
+    this.add.rectangle(wx, GAME_HEIGHT - 4, 80, 2, 0x000000).setOrigin(0);
+    this.reloadBar = this.add.rectangle(wx, GAME_HEIGHT - 4, 80, 2, 0xfff176).setOrigin(0);
 
     this.button(GAME_WIDTH - 38, GAME_HEIGHT - 38, '換彈', () => queueAction('reload'));
     this.button(GAME_WIDTH - 76, GAME_HEIGHT - 38, '換槍', () => queueAction('next'));
+    this.button(GAME_WIDTH - 38, GAME_HEIGHT - 76, '近戰', () => queueAction('melee'));
 
     this.crewRows = [];
     this.orderLabel = undefined;
@@ -129,7 +143,7 @@ export class UIScene extends Phaser.Scene {
   private buildCrew(count: number): void {
     const defense = this.scene.get('Defense');
     for (let i = 0; i < count; i++) {
-      const y = 54 + i * 14;
+      const y = 64 + i * 14;
       const mark = this.add.rectangle(8, y + 4, 5, 5, 0xffffff).setOrigin(0).setStrokeStyle(1, 0x000000);
       const label = pixelText(this, 16, y, '', 8);
       // 名字最長 3 字＋職業 2 字
@@ -179,8 +193,18 @@ export class UIScene extends Phaser.Scene {
     this.playerBar.width = 78 * (h.playerHp / h.playerMaxHp);
     this.baseBar.width = 78 * (h.baseHp / h.baseMaxHp);
     this.barricadeBar.width = 78 * (h.barricadeHp / h.barricadeMaxHp);
-    this.ammoText.setText(h.reloading ? `${h.weaponName}  換彈中…` : `${h.weaponName}  ${h.ammo} / ${h.magazine}`);
-    this.reloadBar.width = 60 * (h.reloading ? h.reloadProgress : h.ammo / h.magazine);
+    const reserve = h.reserve === Infinity ? '∞' : `${h.reserve}`;
+    this.ammoText.setText(h.reloading ? `${h.weaponName}  換彈中…  ${h.ammo}` : `${h.weaponName}  ${h.ammo}`);
+    this.ammoText.setColor(h.ammo === 0 && !h.reloading ? '#ff6b6b' : '#e8e8e8');
+    this.reserveText.setText(`${h.weaponModel}　備彈 ${reserve}`).setColor(h.reserve === 0 ? '#ff6b6b' : '#b0bec5');
+    this.reloadBar.width = 80 * Math.min(1, h.reloading ? h.reloadProgress : h.ammo / h.magazine);
+    const keys = this.touchUI ? '' : '1/2/3 ';
+    const melee = this.touchUI ? h.meleeName : `右鍵/V ${h.meleeName}`;
+    this.slotText.setText(`${keys}${h.slots.map((n, i) => (i === h.slot ? `[${n}]` : n)).join(' ')}　${melee}`);
+    this.staminaBar.width = 78 * h.stamina;
+    // 體力見底時閃紅
+    this.staminaFlash += 1;
+    this.staminaBar.setFillStyle(h.stamina < 0.25 ? (this.staminaFlash % 20 < 10 ? 0xef5350 : 0x4fc3f7) : 0x4fc3f7);
     this.waveText.setText(`第 ${GameState.data.day} 夜　第 ${h.wave} / ${h.totalWaves} 波`);
     this.killText.setText(`廢料 ${GameState.data.scrap}　擊殺 ${h.kills}`);
   }

@@ -10,6 +10,7 @@ import { ensureCrewTexture } from '../art/CrewArt';
 import { COMPANION_ROLES, MAX_DEPLOYED } from '../data/companions';
 import { ATTRS, TRAIT_BY_ID } from '../data/crewTraits';
 import { pixelText } from '../utils/text';
+import type { ArmoryData } from './ArmoryScene';
 
 export interface BuildUIData {
   mode: BuildMode;
@@ -57,6 +58,8 @@ export class BuildUIScene extends Phaser.Scene {
 
     this.button(GAME_WIDTH - 104, 2, 100, 22, '開始夜晚 ▶', true, () => this.onStartNight(), 0x7a2a22);
     this.button(GAME_WIDTH - 172, 2, 62, 22, `隊伍 ${GameState.data.crew.length}`, true, () => this.toggleRoster());
+    // 軍械庫：買槍、買彈、配置上場武器
+    this.button(GAME_WIDTH - 240, 2, 62, 22, '軍械庫', true, () => this.openArmory(), 0x3a4a2a);
 
     this.hint = pixelText(
       this,
@@ -78,7 +81,15 @@ export class BuildUIScene extends Phaser.Scene {
       this.input.keyboard?.off('keydown-ENTER', this.onStartNight);
       this.clearPanel();
       this.fixedRects.forEach((fn) => fn());
+      this.scene.stop('Armory');
     });
+  }
+
+  private openArmory(): void {
+    if (this.scene.isActive('Armory')) return;
+    const data: ArmoryData = { onChange: () => this.mode.events.emit('changed') };
+    this.scene.launch('Armory', data);
+    this.scene.bringToTop('Armory');
   }
 
   private refresh(): void {

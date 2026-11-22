@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { DEPTH_FX, clampLaneY, depthForY } from '../config';
 import { crewShootAnim, ensureCrewTexture } from '../art/CrewArt';
 import type { CompanionRoleDef, CrewMember } from '../data/companions';
+import { companionGunFor } from '../data/weapons';
 import { TRAIT_TUNING, resolveCrewStats, type CrewStats } from '../data/crewTraits';
 import { Fx } from '../fx/Fx';
 import { GameEvents } from '../systems/GameEvents';
@@ -70,8 +71,8 @@ export class Companion {
     this.def = def;
     this.footX = x;
     this.footY = clampLaneY(y);
-    // 武器系統若配發了 weaponId，之後在這裡換成那把槍的基礎數值
-    this.stats = resolveCrewStats(def, member);
+    // 配發了武器就用那把槍的基礎數值（src/data/weapons.ts 的 companionGunFor），再套個人屬性與特質
+    this.stats = resolveCrewStats(def, member, member.weaponId ? companionGunFor(member.weaponId) : def.gun);
     this.hp = this.stats.maxHp;
     this.ammo = this.stats.gun.magazine;
     const key = ensureCrewTexture(scene, member);
@@ -242,7 +243,7 @@ export class Companion {
       fx.bulletTracer(fromX, fromY, endX, endY);
       fx.muzzleSmoke(fromX, fromY, angle);
     }
-    GameEvents.of(this.scene).emit('ally:shoot', { role: this.def.role, x: fromX, y: fromY, angle });
+    GameEvents.of(this.scene).emit('ally:shoot', { role: this.def.role, x: fromX, y: fromY, angle, weaponId: g.weaponId });
     if (this.shootAnim) this.sprite.play(this.shootAnim);
     else {
       const flash = this.scene.add.circle(fromX, fromY, 3, 0xfff3a0).setDepth(DEPTH_FX + 2);

@@ -13,6 +13,8 @@ import { hashSeed, randomSeed } from '../utils/rng';
 export type CompanionRole = 'shooter' | 'medic' | 'engineer';
 
 export interface CompanionGunDef {
+  /** 用哪把武器的槍聲（src/data/weapons.ts 的 id）；用 companionGunFor(id) 產生整組數值 */
+  weaponId?: string;
   damage: number;
   /** 每秒射擊次數 */
   fireRate: number;
