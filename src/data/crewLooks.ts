@@ -82,6 +82,14 @@ export interface CrewLook {
   build: { w: number; h: number };
   /** 體格：軀幹加寬幾格像素（負數變窄）；舊存檔沒有就是 0 */
   widen?: number;
+  /** 底圖（src/data/crewBases.ts 的 id）；沒有 = 用主角圖換裝（最早的存檔） */
+  base?: string;
+  /** 底圖上哪些部位要換色（沒換就保留底圖原本的顏色） */
+  recolor?: { hair: boolean; top: boolean; bottom: boolean };
+  /** 啤酒肚：肚子往前凸幾格（0～4） */
+  belly?: number;
+  /** 駝背：頭往前低幾格（0～2） */
+  hunch?: number;
 }
 
 type RoleWeights = Partial<Record<CompanionRole, number>>;

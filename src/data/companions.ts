@@ -1,4 +1,4 @@
-import { generateBodyInfo, generateCrewProfile } from './crewGen';
+import { applyBase, generateBodyInfo, generateCrewProfile } from './crewGen';
 import { BODIES, type BodyType, type Proficiency } from './crewBody';
 import type { CrewLook } from './crewLooks';
 import type { CrewAttrs } from './crewTraits';
@@ -147,6 +147,8 @@ export function upgradeCrewMember(m: Partial<CrewMember> & { id: string; name: s
     const info = generateBodyInfo(out.role, out.seed, out.traits, out.attrs);
     out = { ...out, ...info, look: { ...out.look, widen: BODIES[info.body].widen } };
   }
+  // 舊隊員還是主角換裝的樣子：補上底圖（不同的人），配件保留
+  if (!out.look.base) out = { ...out, look: applyBase(out.look, out.seed, out) };
   return out;
 }
 

@@ -1,4 +1,5 @@
-import { paintCrewSheet, type Pixels } from '../art/crewPaint';
+import { cropFrame, paintCrewSheet, type Pixels } from '../art/crewPaint';
+import { CREW_BASE_INDEX, crewBase } from '../data/crewBases';
 import { COMPANION_ROLES, makeCrewMember, type CompanionRole } from '../data/companions';
 import { BODY_GEAR, FACE_GEAR, HAIR_STYLES, HEAD_GEAR } from '../data/crewLooks';
 import { ATTRS, TRAIT_BY_ID, resolveCrewStats } from '../data/crewTraits';
@@ -24,6 +25,8 @@ const nameOf = <T extends { id: string; name: string }>(list: T[], id: string | 
 async function main(): Promise<void> {
   const src = await loadPixels('assets/sprites/player_shoot.png');
   const mask = await loadPixels('assets/sprites/player_shoot_regions.png');
+  const bases = await loadPixels('assets/sprites/crew_bases.png');
+  const baseMask = await loadPixels('assets/sprites/crew_bases_regions.png');
   const grid = document.getElementById('grid')!;
   const params = new URLSearchParams(location.search);
   const count = Number(params.get('n') ?? 24);
@@ -36,7 +39,9 @@ async function main(): Promise<void> {
     for (let i = 0; i < count; i++) {
       const role = roles[i % 3];
       const m = makeCrewMember(`lab-${i}`, role, base + i * 7919);
-      const out = paintCrewSheet(src, mask, m.look);
+      const bi = m.look.base ? CREW_BASE_INDEX[m.look.base] : undefined;
+      const out =
+        bi !== undefined ? paintCrewSheet(cropFrame(bases, bi), cropFrame(baseMask, bi), m.look) : paintCrewSheet(src, mask, m.look);
       const card = document.createElement('div');
       card.className = 'card';
       const cv = document.createElement('canvas');
@@ -51,7 +56,7 @@ async function main(): Promise<void> {
       ctx.imageSmoothingEnabled = false;
       const w = 64 * S * m.look.build.w;
       const h = 64 * S * m.look.build.h;
-      ctx.drawImage(tmp, frame * 64, 0, 64, 64, (64 * S - w) / 2, 64 * S - h, w, h);
+      ctx.drawImage(tmp, Math.min(frame, out.width / 64 - 1) * 64, 0, 64, 64, (64 * S - w) / 2, 64 * S - h, w, h);
       card.appendChild(cv);
       const st = resolveCrewStats(COMPANION_ROLES[role], m);
       const traits = m.traits
@@ -59,7 +64,7 @@ async function main(): Promise<void> {
         .join('、');
       const stars = ATTRS.map((a) => `${a.name} ${'★'.repeat(m.attrs[a.key])}${'☆'.repeat(5 - m.attrs[a.key])}`).join('\n');
       const gear = [
-        nameOf(HAIR_STYLES, m.look.hairStyle),
+        m.look.base ? `底圖:${crewBase(m.look.base)?.name}${m.look.belly ? `・肚${m.look.belly}` : ''}${m.look.hunch ? `・駝${m.look.hunch}` : ''}` : nameOf(HAIR_STYLES, m.look.hairStyle),
         nameOf(HEAD_GEAR, m.look.head),
         ...m.look.face.map((f) => nameOf(FACE_GEAR, f)),
         ...m.look.body.map((b) => nameOf(BODY_GEAR, b)),

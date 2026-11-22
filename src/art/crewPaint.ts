@@ -9,6 +9,7 @@ import {
   type HeadGearId,
   type Ramp,
 } from '../data/crewLooks';
+import { crewBase } from '../data/crewBases';
 
 /**
  * 紙娃娃換裝：把主角射擊圖依「部位遮罩」換色，再一層層疊上髮型、配件、帽子。
@@ -159,14 +160,29 @@ function headOffset(c: Canvas, ox: number): number {
   return 0;
 }
 
+/** 從橫排圖切出第 i 格 */
+export function cropFrame(p: Pixels, i: number, size = 64): Pixels {
+  const out = new Uint8ClampedArray(size * size * 4);
+  for (let y = 0; y < size; y++) {
+    const from = (y * p.width + i * size) * 4;
+    out.set(p.data.subarray(from, from + size * 4), y * size * 4);
+  }
+  return { width: size, height: size, data: out };
+}
+
 export interface PaintOptions {
   frameSize?: number;
+}
+
+/** 換裝結果：圖＋給 WeaponRig 畫手臂用的袖子與膚色（從畫好的圖裡取樣） */
+export interface PaintedCrew extends Pixels {
+  colors: { sleeve: number; sleeveHi: number; skin: number };
 }
 
 /**
  * 依外觀產生新的精靈圖。src 與 mask 尺寸必須相同（橫排多格）。
  */
-export function paintCrewSheet(src: Pixels, mask: Pixels, look: CrewLook, opt: PaintOptions = {}): Pixels {
+export function paintCrewSheet(src: Pixels, mask: Pixels, look: CrewLook, opt: PaintOptions = {}): PaintedCrew {
   const F = opt.frameSize ?? 64;
   const c = new Canvas(src, mask);
   const frames = Math.floor(c.w / F);
@@ -184,21 +200,26 @@ export function paintCrewSheet(src: Pixels, mask: Pixels, look: CrewLook, opt: P
   const ranges = new Map<Part, [number, number]>();
   for (const p of [Part.Hair, Part.Skin, Part.Band, Part.Jacket, Part.Pants, Part.Boots, Part.Knee]) ranges.set(p, lumRange(c, p));
 
+  // 底圖模式（不同的人）：髮型、頭帶、護膝都跟著底圖，只換允許的部位
+  const based = !!look.base;
+  const rc = look.recolor ?? { hair: true, top: true, bottom: true };
+
   for (let f = 0; f < frames; f++) {
     const ox = f * F;
-    const dy = headOffset(c, ox);
+    const dy = based ? 0 : headOffset(c, ox);
     const ctx: FrameCtx = { c, ox, dy, look, hairRamp, skinRamp, gearRamp, headRamp };
 
     // 1) 不綁頭帶：頭帶當成頭髮
     if (look.band === null) retag(c, ox, Part.Band, Part.Hair);
     // 2) 髮型修剪（帽子會再剪一次）
-    shapeHair(ctx);
+    if (!based) shapeHair(ctx);
     if (look.head) clipForHat(ctx, HATS[look.head].clipY);
 
     // 3) 依部位換色
     recolor(c, ox, ranges, (part, t, x, y) => {
       switch (part) {
         case Part.Hair:
+          if (based) return rc.hair ? rampAt(hairRamp, t) : null;
           return look.hairStyle === 'shaved' || (look.hairStyle === 'mohawk' && (x < ox + 25 || x > ox + 30))
             ? mix(rampAt(hairRamp, t * 0.8), rampAt(skinRamp, t * 0.7 + 0.1), 0.55)
             : rampAt(hairRamp, t);
@@ -207,11 +228,13 @@ export function paintCrewSheet(src: Pixels, mask: Pixels, look: CrewLook, opt: P
         case Part.Band:
           return rampAt(bandRamp, t);
         case Part.Jacket:
+          if (based && !rc.top) return null;
           return rampAt(jacketRamp, patternT(look, t, x - ox, y));
         case Part.Pants:
+          if (based && !rc.bottom) return null;
           return rampAt(pantsRamp, t);
         case Part.Boots:
-          return rampAt(bootRamp, t);
+          return based ? null : rampAt(bootRamp, t);
         case Part.Knee:
           return look.kneePads ? null : rampAt(pantsRamp, t * 0.7);
         default:
@@ -220,7 +243,7 @@ export function paintCrewSheet(src: Pixels, mask: Pixels, look: CrewLook, opt: P
     });
 
     // 4) 加長的頭髮（畫在身後）
-    addHair(ctx);
+    if (!based) addHair(ctx);
     // 5) 身上配件、臉部配件、帽子
     for (const id of look.body) BODY[id](ctx);
     for (const id of look.face) FACE[id](ctx);
@@ -229,10 +252,48 @@ export function paintCrewSheet(src: Pixels, mask: Pixels, look: CrewLook, opt: P
 
     // 6) 體格：脖子以下整段加寬或變窄（像素欄位複製／移除，不會糊）
     if (look.widen) widenBody(c, ox, F, look.widen);
-    // 7) 修外框
+    // 7) 啤酒肚、駝背
+    if (look.belly) addBelly(c, ox, look.belly);
+    if (look.hunch) hunchHead(c, ox, F, look.hunch);
+    // 8) 修外框
     reoutline(c, ox, F);
   }
-  return { width: c.w, height: c.h, data: c.px };
+  return { width: c.w, height: c.h, data: c.px, colors: sampleArmColors(c, look, skinRamp, jacketRamp) };
+}
+
+/**
+ * WeaponRig 畫手臂用的袖子顏色：取軀幹上衣像素（底圖手臂多半被手和槍擋住，取樣不準）。
+ * 無袖的底圖（背心）手臂就是皮膚。
+ */
+function sampleArmColors(c: Canvas, look: CrewLook, skinRamp: Ramp, jacketRamp: Ramp): PaintedCrew['colors'] {
+  const toHex = (p: RGB): number => (Math.round(p[0]) << 16) | (Math.round(p[1]) << 8) | Math.round(p[2]);
+  const byLum = (a: RGB, b: RGB): number => lumOf(...a) - lumOf(...b);
+  const sleeve: RGB[] = [];
+  const skin: RGB[] = [];
+  for (let y = 26; y <= 40; y++) for (let x = 18; x <= 34; x++) if (c.get(x, y) === Part.Jacket) sleeve.push(c.rgb(x, y));
+  for (let y = 10; y <= 24; y++) for (let x = 20; x <= 36; x++) if (c.get(x, y) === Part.Skin) skin.push(c.rgb(x, y));
+  sleeve.sort(byLum);
+  skin.sort(byLum);
+  const skinMid = skin.length ? skin[Math.floor(skin.length * 0.6)] : hex(skinRamp[2]);
+  if (crewBase(look.base)?.bareArms || sleeve.length < 6) {
+    const lo = skin.length ? skin[Math.floor(skin.length * 0.3)] : hex(skinRamp[1]);
+    return { sleeve: toHex(lo), sleeveHi: toHex(skinMid), skin: toHex(skinMid) };
+  }
+  // 最常見的顏色當袖子（避開領帶、鈕扣這類點綴），比它亮的裡面最常見的當反光
+  const mode = (list: RGB[]): RGB | undefined => {
+    const n = new Map<number, number>();
+    for (const p of list) n.set(toHex(p), (n.get(toHex(p)) ?? 0) + 1);
+    let best: number | undefined;
+    for (const [k, v] of n) if (best === undefined || v > (n.get(best) ?? 0)) best = k;
+    return best === undefined ? undefined : hex(best);
+  };
+  const mid = mode(sleeve) ?? hex(jacketRamp[1]);
+  const near = sleeve.filter((p) => {
+    const d = lumOf(...p) - lumOf(...mid);
+    return d > 12 && d < 60 && Math.abs(p[0] - mid[0]) + Math.abs(p[1] - mid[1]) + Math.abs(p[2] - mid[2]) < 140;
+  });
+  const hi = mode(near) ?? mix(mid, [255, 255, 255], 0.18);
+  return { sleeve: toHex(mid), sleeveHi: toHex(hi), skin: toHex(skinMid) };
 }
 
 interface FrameCtx {
@@ -439,6 +500,67 @@ function widenBody(c: Canvas, ox: number, F: number, d: number): void {
       c.part[i] = rowPart[sx - ox];
     }
   }
+}
+
+/**
+ * 啤酒肚：胸口以下、胯下以上，肚子那一段的前半身往前推（複製中線那欄），中間凸最多。
+ * 手臂在更前面（x ≥ 37）且高度在肚子之上，不會被推到。
+ */
+function addBelly(c: Canvas, ox: number, amount: number): void {
+  const y0 = 32;
+  const y1 = 47;
+  const cx = ox + BODY_CENTER_X;
+  for (let y = y0; y <= y1; y++) {
+    const b = Math.round(amount * Math.sin((Math.PI * (y - y0)) / (y1 - y0)));
+    if (b <= 0) continue;
+    // 找這一列的前緣（中線往前第一個透明處）
+    let edge = cx;
+    while (edge < ox + 63 && c.part[c.idx(edge + 1, y)] !== Part.None && edge < ox + 40) edge++;
+    for (let x = Math.min(ox + 63, edge + b); x > cx + b; x--) copyPx(c, x - b, y, x, y);
+    for (let x = cx + 1; x <= cx + b; x++) copyPx(c, cx, y, x, y);
+  }
+}
+
+/** 駝背：頭（肩膀以上）往前、往下移，像彎著腰 */
+function hunchHead(c: Canvas, ox: number, F: number, amount: number): void {
+  const neck = 26;
+  const dx = amount;
+  const dy = Math.ceil(amount / 2);
+  const buf: { x: number; y: number; px: number[]; part: number }[] = [];
+  for (let y = 0; y < neck; y++)
+    for (let x = ox; x < ox + 41; x++) {
+      const i = c.idx(x, y);
+      if (c.part[i] === Part.None || c.part[i] === Part.Gun) continue;
+      buf.push({ x, y, px: [c.px[i * 4], c.px[i * 4 + 1], c.px[i * 4 + 2], c.px[i * 4 + 3]], part: c.part[i] });
+      c.clear(x, y);
+    }
+  for (const p of buf) {
+    const x = p.x + dx;
+    const y = p.y + dy;
+    if (x >= ox + F || y >= c.h) continue;
+    const i = c.idx(x, y);
+    c.px[i * 4] = p.px[0];
+    c.px[i * 4 + 1] = p.px[1];
+    c.px[i * 4 + 2] = p.px[2];
+    c.px[i * 4 + 3] = p.px[3];
+    c.part[i] = p.part;
+  }
+  // 脖子後面露出的縫：用上衣補
+  for (let y = neck - 2; y < neck + dy; y++)
+    for (let x = ox + 14; x < ox + BODY_CENTER_X + dx; x++) {
+      const i = c.idx(x, y);
+      if (c.part[i] !== Part.None) continue;
+      const below = c.idx(x, y + 1);
+      const right = c.idx(x + 1, y);
+      if (c.part[below] !== Part.None && c.part[right] !== Part.None && c.part[c.idx(x - 1, y)] !== Part.None) copyPx(c, x, y + 1, x, y);
+    }
+}
+
+function copyPx(c: Canvas, sx: number, sy: number, dx: number, dy: number): void {
+  const s = c.idx(sx, sy);
+  const d = c.idx(dx, dy);
+  for (let k = 0; k < 4; k++) c.px[d * 4 + k] = c.px[s * 4 + k];
+  c.part[d] = c.part[s];
 }
 
 /**

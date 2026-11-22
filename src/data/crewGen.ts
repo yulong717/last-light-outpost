@@ -1,5 +1,6 @@
 import { Rng } from '../utils/rng';
 import { BACKGROUNDS, BACKGROUND_BY_ID, BODIES, WEAPON_GROUPS, type CrewBodyInfo, type Proficiency } from './crewBody';
+import { CREW_BASES, baseWeight } from './crewBases';
 import type { CompanionRole } from './companions';
 import {
   BODY_EXCLUSIVE,
@@ -265,7 +266,37 @@ export function generateCrewProfile(role: CompanionRole, seed: number, takenName
   const flawed = traits.some((t) => TRAIT_BY_ID[t]?.kind === 'flaw');
   const attrs = rollAttrs(rng, role, flawed);
   const info = generateBodyInfo(role, seed, traits, attrs);
-  const look = rollLook(rng, role, traits, info);
+  const look = applyBase(rollLook(rng, role, traits, info), seed, info);
   const name = randomName(rng, takenNames);
   return { name, look, attrs, traits, ...info };
+}
+
+/**
+ * 挑底圖（不同的人）並決定哪些部位換色、啤酒肚與駝背。
+ * 用獨立的亂數串：舊存檔補上底圖時，原本的配件、特質、名字都不變。
+ */
+export function applyBase(look: CrewLook, seed: number, info: CrewBodyInfo): CrewLook {
+  const rng = new Rng((seed ^ 0xba5e5) >>> 0);
+  const base = rng.weighted(CREW_BASES, (b) => baseWeight(b, info.background, info.body)) ?? CREW_BASES[0];
+  const recolor = {
+    hair: !base.hat && !base.keepHair && rng.chance(0.6),
+    top: !base.uniform && rng.chance(0.5),
+    bottom: !base.uniform && rng.chance(0.4),
+  };
+  // 體型：壯碩、巨漢常有啤酒肚；長者駝背
+  let belly = base.belly ?? 0;
+  if (info.body === 'stocky') belly += rng.int(0, 2);
+  else if (info.body === 'hulk') belly += rng.int(1, 3);
+  else if (info.body === 'average' && rng.chance(0.15)) belly += 1;
+  const hunch = base.old ? rng.int(1, 2) : 0;
+  return {
+    ...look,
+    base: base.id,
+    recolor,
+    belly: Math.min(4, belly),
+    hunch,
+    // 底圖自帶帽子就不再戴；底圖沒有頭帶
+    head: base.hat ? null : look.head,
+    band: null,
+  };
 }

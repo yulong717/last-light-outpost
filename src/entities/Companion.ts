@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { DEPTH_FX, clampLaneY, depthForY } from '../config';
-import { crewShootAnim, ensureCrewTexture } from '../art/CrewArt';
+import { crewArmColors, crewShootAnim, ensureCrewTexture } from '../art/CrewArt';
 import type { CompanionRoleDef, CrewMember } from '../data/companions';
 import { AMMO, getFirearm } from '../data/weapons';
 import { IMPROVISED_MELEE, crewWeapon } from '../data/crewLoadout';
@@ -97,15 +97,18 @@ export class Companion {
     this.loadMagazine(true);
     const key = ensureCrewTexture(scene, member);
     this.tint = key ? null : def.tint;
-    this.shootAnim = key ? crewShootAnim(member) : scene.anims.exists('player_shoot') ? 'player_shoot' : null;
+    const anim = key ? crewShootAnim(member) : 'player_shoot';
+    this.shootAnim = scene.anims.exists(anim) ? anim : null;
     // 身體擦掉手臂，手與武器由 WeaponRig 畫（和主角一樣會換彈、拉栓）
     const body = key ? stripArms(scene, key) : null;
     this.visualWeapon = this.stats.weaponId;
     if (body) {
+      // 袖子顏色從畫好的圖取樣（底圖沒換色時是原本衣服的顏色；背心的人是膚色）
       const look = member.look;
       const cloth = CLOTH[look?.jacket ?? 0]?.ramp ?? CLOTH[0].ramp;
       const skin = SKIN_TONES[look?.skin ?? 0] ?? SKIN_TONES[0];
-      this.rig = new WeaponRig(scene, { sleeve: cloth[1], sleeveHi: cloth[2], skin: skin[2] });
+      const arm = crewArmColors(member) ?? { sleeve: cloth[1], sleeveHi: cloth[2], skin: skin[2] };
+      this.rig = new WeaponRig(scene, arm);
       this.rig.setWeapon(this.visualWeapon);
       this.shootAnim = null;
     }
