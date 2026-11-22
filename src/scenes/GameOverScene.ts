@@ -3,6 +3,7 @@ import { GAME_HEIGHT, GAME_WIDTH } from '../config';
 import { GameState } from '../state/GameState';
 import { pixelText } from '../utils/text';
 import type { DefenseSceneData } from './DefenseScene';
+import { AudioManager } from '../audio/AudioManager';
 
 export interface GameOverData {
   survived: boolean;
@@ -33,9 +34,13 @@ export class GameOverScene extends Phaser.Scene {
     this.tweens.add({ targets: again, alpha: 0.3, duration: 700, yoyo: true, repeat: -1 });
     const next = (): void => {
       if (data.survived) {
+        AudioManager.ui('confirm');
         const d: DefenseSceneData = { newDay: true };
         this.scene.start('Defense', d);
-      } else this.scene.start('Menu');
+      } else {
+        AudioManager.ui('back');
+        this.scene.start('Menu');
+      }
     };
     this.time.delayedCall(500, () => {
       this.input.once('pointerdown', next);

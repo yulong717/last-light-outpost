@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { GAME_WIDTH } from '../config';
 import { BARRICADE_LEVELS, BUILDINGS, LAMP, SPIKES, TURRET, type BuildingKind } from '../data/buildings';
+import { AudioManager } from '../audio/AudioManager';
 import type { BuildMode } from '../build/BuildMode';
 import type { Quote } from '../build/Outpost';
 import { registerUIRect } from '../input/InputManager';
@@ -207,6 +208,7 @@ export class BuildUIScene extends Phaser.Scene {
       bg.on('pointerdown', (_p: Phaser.Input.Pointer, _x: number, _y: number, e: Phaser.Types.Input.EventData) => {
         e.stopPropagation();
         // 等這次點擊處理完再動作：動作會重建面板，不要在按鈕自己的事件裡把它銷毀
+        AudioManager.ui('tap');
         this.time.delayedCall(0, onPress);
       });
     }

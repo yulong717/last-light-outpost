@@ -27,8 +27,17 @@ export interface GameEventMap {
   'player:death': { x: number; y: number };
   /** 子彈打中敵人（每顆彈丸各一次） */
   'enemy:hit': { enemyId: string; x: number; y: number; damage: number; headshot: boolean; killed: boolean };
-  'barricade:hit': { damage: number; y: number; hp: number; maxHp: number };
-  'base:hit': { damage: number; hp: number; maxHp: number };
+  'barricade:hit': { damage: number; y: number; hp: number; maxHp: number; x?: number };
+  /** 路障被打爛 */
+  'barricade:break': { x: number };
+  'base:hit': { damage: number; hp: number; maxHp: number; x?: number };
+  /** 霧屍出現／低吼／出手攻擊／死亡（任何傷害來源，包含之後的 NPC 隊友） */
+  'enemy:spawn': { enemyId: string; x: number; y: number };
+  'enemy:groan': { enemyId: string; x: number; y: number };
+  'enemy:attack': { enemyId: string; x: number; y: number };
+  'enemy:death': { enemyId: string; x: number; y: number; headshot: boolean };
+  'wave:start': { wave: number; total: number };
+  'game:over': { survived: boolean };
 }
 
 export type GameEventName = keyof GameEventMap;

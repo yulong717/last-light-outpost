@@ -19,6 +19,7 @@ npm run build    # 型別檢查 + 打包到 dist/
 | 瞄準射擊 | 滑鼠瞄準、左鍵射擊 | 點住畫面瞄準射擊 |
 | 換彈 | R | 右下「換彈」 |
 | 換槍 | 1／2 或 Q | 右下「換槍」 |
+| 靜音 | M | 右上喇叭 |
 
 ## 目前進度（M0 骨架 + 防守雛形）
 
@@ -27,6 +28,7 @@ npm run build    # 型別檢查 + 打包到 dist/
 - 2.5D 帶狀戰場：主角與霧屍都能前後左右移動，依腳底 y 排序前後；戰場寬 1280，鏡頭跟著主角捲動
 - 霧屍會沿著路障散開；主角翻出路障外、靠太近時會被追擊（主角有獨立血量）
 - 夜晚防守：手槍、霰彈槍、爆頭判定、穿透、擊退；3 種霧屍；路障與據點耐久；3 波
+- 音效與音樂全部程式生成（無授權問題）：每把槍不同槍聲、換彈、彈殼、腳步、霧屍、路障、心跳、動態配樂、夜風蟲鳴；左右聲道、音量設定、M 靜音，見 [docs/AUDIO.md](docs/AUDIO.md)
 - 輸入抽象層（`src/input/InputManager.ts`），鍵鼠與觸控共用遊戲邏輯
 - 數值全部在 `src/data/`
 - 手感：開槍鏡頭後頓與 trauma 震動、連射／移動散射（準星會張開）、命中 ✕ 確認、槍口閃光照亮；
@@ -56,6 +58,7 @@ src/
   systems/   WeaponSystem（hitscan 射擊）, WaveSpawner, GameEvents（事件匯流排）
   feel/      手感：CameraFeel, Crosshair, ScreenFeedback, Haptics, FeelConfig
   input/     InputManager
+  audio/     AudioManager（程式生成音效與音樂）、AudioBridge（事件→聲音）
   state/     GameState（含 localStorage 存檔）
   data/      weapons, enemies, waves, buildings
 public/assets/  之後放像素圖、地圖、音效

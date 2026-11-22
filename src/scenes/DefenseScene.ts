@@ -18,6 +18,7 @@ import { WEAPONS } from '../data/weapons';
 import { Barricade } from '../entities/Barricade';
 import { Player } from '../entities/Player';
 import { Zombie, type ZombieContext } from '../entities/Zombie';
+import { attachAudio } from '../audio/AudioBridge';
 import { createAtmosphere } from '../fx/Atmosphere';
 import { Fx } from '../fx/Fx';
 import { CameraFeel } from '../feel/CameraFeel';
@@ -124,6 +125,8 @@ export class DefenseScene extends Phaser.Scene {
 
     this.screenFx = new ScreenFeedback(this);
     this.wireFeedback();
+    // 音效：訂閱 GameEvents，依鏡頭位置做左右聲道（見 src/audio/、docs/AUDIO.md）
+    attachAudio(this);
     this.weapons = new WeaponSystem(this, WEAPONS);
     this.spawner = new WaveSpawner(this, NIGHT_ONE, (id) => this.spawnZombie(id));
 
@@ -223,7 +226,9 @@ export class DefenseScene extends Phaser.Scene {
           blockX: this.barricade.frontX,
           hitBlock: (d: number, y: number) => {
             this.barricade.takeDamage(d, y);
-            GameEvents.of(this).emit('barricade:hit', { damage: d, y, hp: this.barricade.hp, maxHp: this.barricade.maxHp });
+            const bx = this.barricade.frontX;
+            GameEvents.of(this).emit('barricade:hit', { damage: d, y, hp: this.barricade.hp, maxHp: this.barricade.maxHp, x: bx });
+            if (!this.barricade.alive) GameEvents.of(this).emit('barricade:break', { x: bx });
           },
         }
       : {
@@ -231,7 +236,7 @@ export class DefenseScene extends Phaser.Scene {
           hitBlock: (d: number) => {
             const st = GameState.data;
             st.baseHp = Math.max(0, st.baseHp - d);
-            GameEvents.of(this).emit('base:hit', { damage: d, hp: st.baseHp, maxHp: st.baseMaxHp });
+            GameEvents.of(this).emit('base:hit', { damage: d, hp: st.baseHp, maxHp: st.baseMaxHp, x: BASE_X });
           },
         };
     const minFront = blocker.blockX;
@@ -396,6 +401,7 @@ export class DefenseScene extends Phaser.Scene {
   private finish(survived: boolean, reason: GameOverData['reason'] = 'base'): void {
     this.ended = true;
     this.outpost.persist();
+    GameEvents.of(this).emit('game:over', { survived });
     if (survived) {
       GameState.data.scrap += ECONOMY.nightBonus;
       this.scrapEarned += ECONOMY.nightBonus;
