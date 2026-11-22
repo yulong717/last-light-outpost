@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { GAME_WIDTH } from '../config';
 import { GameEvents } from '../systems/GameEvents';
+import { getFirearm } from '../data/weapons';
 import { AudioManager } from './AudioManager';
 
 /**
@@ -8,12 +9,9 @@ import { AudioManager } from './AudioManager';
  *   attachAudio(this)   // DefenseScene.create()
  * 場景關閉時匯流排會自動清空訂閱。用鏡頭位置算左右聲道與距離衰減。
  *
- * 新增武器時：在 SfxBank 加一個 `shot_<武器id>` 配方就會自動使用；
- * 沒有的話用 WEAPON_FALLBACK 對應的聲音。
+ * 新增武器時：在 src/data/weapons.ts 的 sound 欄位填 SfxBank 的配方名；
+ * 換彈聲依武器的裝填方式（換彈匣／一顆顆塞／左輪／雙管／彈鏈）自動挑。
  */
-const WEAPON_FALLBACK: Record<string, string> = { pistol: 'shot_pistol', shotgun: 'shot_shotgun' };
-/** 用「泵動」換彈的武器（其他用彈匣） */
-const PUMP_WEAPONS = new Set(['shotgun']);
 
 export function attachAudio(scene: Phaser.Scene): void {
   const cam = scene.cameras.main;
@@ -32,7 +30,17 @@ export function attachAudio(scene: Phaser.Scene): void {
   };
   /** 大型霧屍聲音低一點 */
   const kindPitch = (kind: string) => (kind === 'brute' ? -5 : kind === 'runner' ? 3 : 0);
-  const shotName = (id: string) => (AudioManager.has(`shot_${id}`) ? `shot_${id}` : (WEAPON_FALLBACK[id] ?? 'shot_pistol'));
+  const shotName = (id: string) => {
+    const snd = getFirearm(id)?.sound;
+    return snd && AudioManager.has(snd) ? snd : 'shot_pistol';
+  };
+  /** 一次裝滿的武器各自的開／合聲 */
+  const wholeSounds = (id: string): [string, string] => {
+    const d = getFirearm(id);
+    if (d?.cls === 'revolver') return ['revolver_out', 'revolver_in'];
+    if (d?.cls === 'lmg') return ['belt_open', 'belt_close'];
+    return ['break_open', 'break_close'];
+  };
 
   const updateIntensity = () => AudioManager.setIntensity(Math.min(1, alive / 8));
 
@@ -40,31 +48,47 @@ export function attachAudio(scene: Phaser.Scene): void {
   bus
     .on('player:shoot', (e) => {
       play(shotName(e.weaponId), e.x);
-      if (PUMP_WEAPONS.has(e.weaponId)) {
-        // 霰彈槍：開完槍拉一下泵動，彈殼才掉出來（彈匣打空時改在換彈結束才拉）
-        if (e.ammoLeft > 0) {
-          play('pump', e.x, { delay: 0.32, volume: 0.7 });
-          play('shell_drop', e.x, { delay: 0.62, semitones: -4 });
-        }
-      } else {
-        // 彈殼落地：拋殼後約 0.3 秒
-        play('shell_drop', e.x, { delay: 0.3 + Math.random() * 0.12 });
-      }
+      const d = getFirearm(e.weaponId);
+      // 泵動／栓動的彈殼在上膛時才掉（player:cycle）；左輪、雙管換彈時才退殼
+      if (!d || d.cycleSound || (d.reload === 'whole' && d.cls !== 'lmg')) return;
+      play('shell_drop', e.x, { delay: 0.3 + Math.random() * 0.12 });
+    })
+    .on('player:cycle', (e) => {
+      play(e.kind === 'bolt' ? 'bolt' : 'pump', e.x, { delay: e.delay, volume: 0.75 });
+      play('shell_drop', e.x, { delay: e.delay + 0.3, semitones: e.kind === 'pump' ? -4 : 0 });
     })
     .on('player:dryfire', () => play('dry_fire'))
     .on('player:reload-start', (e) => {
-      if (PUMP_WEAPONS.has(e.weaponId)) {
-        // 一顆一顆塞子彈的節奏，平均分配在換彈時間裡
-        const n = 3;
-        for (let i = 0; i < n; i++) play('shell_insert', undefined, { delay: (e.duration * (i + 0.6)) / (n + 0.6) - 0.15 });
-      } else play('reload_out');
+      if (e.style === 'magazine') play('reload_out');
+      else if (e.style === 'whole') {
+        const [open, close] = wholeSounds(e.weaponId);
+        play(open);
+        play(close, undefined, { delay: Math.max(0.2, e.duration - 0.45) });
+        if (open === 'break_open') {
+          play('shell_drop', undefined, { delay: 0.35, semitones: -4 });
+          play('shell_drop', undefined, { delay: 0.42, semitones: -4 });
+        }
+      }
+      // single：每塞一顆由 player:reload-round 發聲
+    })
+    .on('player:reload-round', (e) => {
+      if (e.clip) play('clip_insert');
+      else play('shell_insert', undefined, { semitones: getFirearm(e.weaponId)?.cls === 'sniper' ? 4 : 0 });
+    })
+    .on('player:rack', (e) => {
+      const d = getFirearm(e.weaponId);
+      play(d?.cycleSound === 'bolt' ? 'bolt' : d?.cycleSound === 'pump' ? 'pump' : 'reload_in');
     })
     .on('player:reload-end', (e) => {
-      if (PUMP_WEAPONS.has(e.weaponId)) {
-        play('pump');
-        play('shell_drop', undefined, { delay: 0.35, volume: 0.8, semitones: -4 });
-      } else play('reload_in');
+      if (getFirearm(e.weaponId)?.reload === 'magazine') play('reload_in');
     })
+    .on('player:melee-swing', (e) => {
+      play(e.heavy ? 'swing_heavy' : 'swing_light', e.x, { semitones: e.tired ? -3 : 0 });
+    })
+    .on('player:melee-hit', (e) => {
+      play(e.type === 'blunt' ? 'melee_blunt' : 'melee_slash', e.x, { semitones: e.execute ? -3 : 0 });
+    })
+    .on('player:exhausted', () => play('exhausted'))
     .on('player:weapon-switch', () => play('weapon_switch'))
     .on('player:step', (e) => play('footstep', e.x, { volume: 0.5 + 0.5 * e.speed, semitones: e.foot ? 0.7 : -0.7 }))
     .on('player:hurt', () => play('player_hurt'))
@@ -90,7 +114,8 @@ export function attachAudio(scene: Phaser.Scene): void {
     .on('base:hit', (e) => play('base_hit', e.x))
     // NPC 夥伴：沿用現有音色，調音高／音量區分（之後可換專屬配方）
     .on('ally:shoot', (e) => {
-      play('shot_pistol', e.x, { volume: 0.55, semitones: e.role === 'shooter' ? -1 : 1.5 });
+      if (e.weaponId) play(shotName(e.weaponId), e.x, { volume: 0.55 });
+      else play('shot_pistol', e.x, { volume: 0.55, semitones: e.role === 'shooter' ? -1 : 1.5 });
       play('shell_drop', e.x, { delay: 0.3 + Math.random() * 0.12, volume: 0.5 });
     })
     .on('ally:hurt', (e) => play('player_hurt', e.x, { volume: 0.6, semitones: 3 }))

@@ -187,7 +187,7 @@ export class Companion {
       fx.bulletTracer(fromX, fromY, endX, endY);
       fx.muzzleSmoke(fromX, fromY, angle);
     }
-    GameEvents.of(this.scene).emit('ally:shoot', { role: this.def.role, x: fromX, y: fromY, angle });
+    GameEvents.of(this.scene).emit('ally:shoot', { role: this.def.role, x: fromX, y: fromY, angle, weaponId: g.weaponId });
     if (this.scene.anims.exists('player_shoot')) this.sprite.play('player_shoot');
     else {
       const flash = this.scene.add.circle(fromX, fromY, 3, 0xfff3a0).setDepth(DEPTH_FX + 2);

@@ -7,6 +7,7 @@ import type { Quote } from '../build/Outpost';
 import { registerUIRect } from '../input/InputManager';
 import { GameState } from '../state/GameState';
 import { pixelText } from '../utils/text';
+import type { ArmoryData } from './ArmoryScene';
 
 export interface BuildUIData {
   mode: BuildMode;
@@ -51,6 +52,8 @@ export class BuildUIScene extends Phaser.Scene {
     this.fixedRects.push(registerUIRect({ x: 0, y: 0, w: GAME_WIDTH, h: 26 }));
 
     this.button(GAME_WIDTH - 104, 2, 100, 22, '開始夜晚 ▶', true, () => this.onStartNight(), 0x7a2a22);
+    // 軍械庫：買槍、買彈、配置上場武器
+    this.button(GAME_WIDTH - 184, 2, 76, 22, '軍械庫', true, () => this.openArmory(), 0x3a4a2a);
 
     this.hint = pixelText(
       this,
@@ -72,7 +75,15 @@ export class BuildUIScene extends Phaser.Scene {
       this.input.keyboard?.off('keydown-ENTER', this.onStartNight);
       this.clearPanel();
       this.fixedRects.forEach((fn) => fn());
+      this.scene.stop('Armory');
     });
+  }
+
+  private openArmory(): void {
+    if (this.scene.isActive('Armory')) return;
+    const data: ArmoryData = { onChange: () => this.mode.events.emit('changed') };
+    this.scene.launch('Armory', data);
+    this.scene.bringToTop('Armory');
   }
 
   private refresh(): void {

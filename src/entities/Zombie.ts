@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { clampLaneY, depthForY } from '../config';
 import type { EnemyDef } from '../data/enemies';
+import { resolveDamage, type ArmorProfile, type DamageInfo, type DamageType } from '../combat/Damage';
 import { Fx } from '../fx/Fx';
 import { ZOMBIE_NECK_ROW } from '../art/sprites';
 import { GameEvents } from '../systems/GameEvents';
@@ -10,6 +11,9 @@ export interface HitInfo {
   headshot?: boolean;
   /** 子彈飛行方向的 x 分量（-1..1），決定血往哪噴、往哪倒、往哪退 */
   dirX?: number;
+  /** 傷害類型與穿甲（見 src/combat/Damage.ts）；沒填 = 一般子彈、不穿甲 */
+  type?: DamageType;
+  penetration?: number;
 }
 
 /** 霧屍每幀需要知道的戰場資訊 */
@@ -64,6 +68,12 @@ export class Zombie extends Phaser.GameObjects.Sprite {
   /** 攻擊時往前撲的位移 */
   private lunge = 0;
   dead = false;
+  /** 個體護甲（頭盔、防彈背心……由霧屍職業／隨機配件決定），沒有就是裸身 */
+  armor?: ArmorProfile;
+  /** 抗硬直 0..1：硬直時間乘上 (1 - staggerResist) */
+  staggerResist = 0;
+  /** 硬直剩餘秒數：期間不能移動、不能攻擊 */
+  stunTimer = 0;
   /** 下次低吼前的秒數（給音效用） */
   private groanIn = 1 + Math.random() * 6;
 
@@ -128,6 +138,14 @@ export class Zombie extends Phaser.GameObjects.Sprite {
       GameEvents.of(this.scene).emit('enemy:groan', { enemyId: this.def.id, x: this.footX, y: this.footY });
     }
     this.hitLean *= Math.max(0, 1 - dt * 12);
+    if (this.stunTimer > 0) {
+      // 硬直：原地搖晃，攻擊節奏重來
+      this.stunTimer = Math.max(0, this.stunTimer - dt);
+      this.attackTimer = 0;
+      this.footY = clampLaneY(this.footY);
+      this.sync(0, dt * 3);
+      return;
+    }
     const blk = ctx.blockerFor?.(this.footX, this.footY);
     const blockX = blk ? blk.blockX : ctx.blockX;
     const hitBlock = blk ? blk.hit : ctx.hitBlock;
@@ -259,8 +277,36 @@ export class Zombie extends Phaser.GameObjects.Sprite {
     this.setDepth(depthForY(this.footY));
   }
 
+  /** 正在硬直（近戰處決、子彈打暈） */
+  get stunned(): boolean {
+    return this.stunTimer > 0;
+  }
+
+  /**
+   * 武器的統一入口：處理硬直，再交給 takeDamage 扣血（護甲在 takeDamage 裡算）。
+   * 體型越大越難打退、打暈。
+   */
+  takeHit(info: DamageInfo): boolean {
+    if (this.dead) return false;
+    const heavy = this.s >= 1.2;
+    const stagger = info.stagger * (1 - this.staggerResist) * (heavy ? 0.4 : 1);
+    if (stagger > 0) this.stunTimer = Math.max(this.stunTimer, stagger);
+    return this.takeDamage(info.amount, info.knockback / (this.s * this.s), {
+      headshot: info.headshot,
+      dirX: info.dirX,
+      type: info.type,
+      penetration: info.penetration,
+    });
+  }
+
   takeDamage(amount: number, knockback: number, info: HitInfo = {}): boolean {
     if (this.dead) return false;
+    if (this.armor) {
+      amount = resolveDamage(
+        { amount, type: info.type ?? 'ballistic', penetration: info.penetration ?? 0, headshot: !!info.headshot },
+        this.armor,
+      );
+    }
     this.hp -= amount;
     this.footX += knockback * Math.sign(info.dirX ?? 1);
     this.x = this.footX;

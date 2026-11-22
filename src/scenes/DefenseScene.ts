@@ -14,7 +14,8 @@ import { Outpost } from '../build/Outpost';
 import { ECONOMY } from '../data/buildings';
 import { ENEMIES } from '../data/enemies';
 import { NIGHT_ONE } from '../data/waves';
-import { WEAPONS } from '../data/weapons';
+import type { FirearmDef } from '../data/weapons';
+import { MeleeSystem } from '../systems/MeleeSystem';
 import { Barricade } from '../entities/Barricade';
 import { Player } from '../entities/Player';
 import { Zombie, type ZombieContext } from '../entities/Zombie';
@@ -49,8 +50,18 @@ export interface HudData {
   barricadeHp: number;
   barricadeMaxHp: number;
   weaponName: string;
+  weaponModel: string;
   ammo: number;
   magazine: number;
+  /** 備彈（Infinity = 無限） */
+  reserve: number;
+  /** 帶上場的槍（1/2/3 鍵）與目前拿的是第幾把 */
+  slots: string[];
+  slot: number;
+  meleeName: string;
+  /** 體力 0..1 */
+  stamina: number;
+  meleeBusy: boolean;
   reloading: boolean;
   reloadProgress: number;
   wave: number;
@@ -73,6 +84,7 @@ const PLAYER_MAX_HP = 100;
 export class DefenseScene extends Phaser.Scene {
   private input2!: InputManager;
   private weapons!: WeaponSystem;
+  private melee!: MeleeSystem;
   private spawner!: WaveSpawner;
   private barricade!: Barricade;
   private player!: Player;
@@ -138,7 +150,6 @@ export class DefenseScene extends Phaser.Scene {
       maxX: WORLD_WIDTH - 16,
       barricadeX: BARRICADE_X,
     });
-    this.weapons = new WeaponSystem(this, WEAPONS);
     this.spawner = new WaveSpawner(this, NIGHT_ONE, (id) => this.spawnZombie(id));
 
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
@@ -174,7 +185,12 @@ export class DefenseScene extends Phaser.Scene {
     this.outpost.persist();
     GameState.save();
     this.scene.stop('BuildUI');
+    this.scene.stop('Armory');
     if (this.dusk) this.tweens.add({ targets: this.dusk, alpha: 0, duration: 800, onComplete: () => this.dusk?.destroy() });
+    // 武器在入夜才上膛：白天在軍械庫換的配置、買的子彈都算進去
+    const armory = GameState.data.armory;
+    this.weapons = new WeaponSystem(this, armory.loadout, armory.ammo);
+    this.melee = new MeleeSystem(this, armory.melee);
     // 輸入在入夜時才接上，白天點槽位不會變成第一發子彈
     this.input2 = new InputManager(this);
     // 準星會隱藏滑鼠游標，白天要點槽位，所以入夜才建立
@@ -276,9 +292,18 @@ export class DefenseScene extends Phaser.Scene {
     // 武器
     if (inp.selectWeapon >= 0) this.weapons.select(inp.selectWeapon);
     if (inp.nextWeapon) this.weapons.next();
-    if (inp.reloadPressed) this.weapons.reload();
+    if (inp.reloadPressed && !this.melee.busy) this.weapons.reload();
     this.weapons.update(dt);
+    // 近戰：隨時可用，會打斷換彈
+    if (inp.meleePressed && this.player.alive && !this.melee.busy) {
+      this.weapons.cancelReload();
+      this.melee.trySwing(this.player);
+    } else if (inp.meleePressed) this.melee.trySwing(this.player);
+    const meleeRes = this.melee.update(dt, this.player, this.zombies);
+    this.kills += meleeRes.kills;
     this.animateReload();
+    // 負重：拿機槍走得慢
+    this.player.speedMul = this.weapons.active.def.moveMul;
 
     // 主角移動：據點外牆內側到戰場右緣
     this.player.update(dt, inp.moveX, inp.moveY, inp.aimX, { minX: BASE_X + 14, maxX: WORLD_WIDTH - 16 });
@@ -287,18 +312,20 @@ export class DefenseScene extends Phaser.Scene {
     const angle = Phaser.Math.Angle.Between(p.gunX, p.gunY, inp.aimX, inp.aimY);
     const muzzleX = p.gunX + Math.cos(angle) * 14;
     const muzzleY = p.gunY + Math.sin(angle) * 14;
-    const shot = p.alive
+    const shot = p.alive && !this.melee.busy
       ? this.weapons.tryFire(muzzleX, muzzleY, inp.aimX, inp.aimY, inp.fireHeld, inp.firePressed, this.zombies, p.moveFactor)
       : null;
     if (shot) {
-      this.playShotFeedback(muzzleX, muzzleY, angle);
+      this.playShotFeedback(muzzleX, muzzleY, shot.angle);
       this.kills += shot.kills;
       this.headshots += shot.headshots;
     }
     // 準星與畫面回饋用真實時間，卡肉時照樣更新
     const realDt = Math.min(deltaMs / 1000, 0.05);
     const aimDist = Phaser.Math.Distance.Between(muzzleX, muzzleY, inp.aimX, inp.aimY);
-    this.crosshair.update(realDt, inp.aimX, inp.aimY, this.weapons.spreadNow(p.moveFactor), aimDist, p.alive);
+    // 槍口上揚：準星跟著往上飄，鬆開扳機才慢慢回來
+    const climbY = Math.tan(Phaser.Math.DegToRad(this.weapons.climbDeg)) * Math.abs(inp.aimX - muzzleX);
+    this.crosshair.update(realDt, inp.aimX, inp.aimY - climbY, this.weapons.spreadNow(p.moveFactor), aimDist, p.alive);
     this.screenFx.update(realDt, p.hp, p.maxHp);
 
     // NPC 夥伴
@@ -355,7 +382,7 @@ export class DefenseScene extends Phaser.Scene {
   private animateReload(): void {
     const reloading = this.weapons.reloading;
     if (reloading && !this.wasReloading && this.anims.exists('player_reload')) {
-      this.player.sprite.play({ key: 'player_reload', duration: this.weapons.active.def.reloadTime * 1000 });
+      this.player.sprite.play({ key: 'player_reload', duration: this.weapons.reloadDuration * 1000 });
     } else if (!reloading && this.wasReloading && this.player.sprite.texture.key === 'player_reload') {
       this.player.sprite.stop();
       this.player.sprite.setTexture('player', 0);
@@ -388,7 +415,7 @@ export class DefenseScene extends Phaser.Scene {
 
   /** 開槍回饋：鏡頭後頓、震動、槍口閃光照亮、拋殼、槍口煙、後座力 */
   private playShotFeedback(x: number, y: number, angle: number): void {
-    const def = this.weapons.active.def;
+    const def: FirearmDef = this.weapons.active.def;
     this.camFeel.kick(angle, def.cameraKick);
     this.camFeel.addTrauma(def.trauma);
     this.crosshair.fired();
@@ -396,7 +423,12 @@ export class DefenseScene extends Phaser.Scene {
     if (def.selfKnockback > 0) this.player.push(-Math.cos(angle) * def.selfKnockback);
     if (def.rumbleMs > 0) rumble(def.rumbleMs, 0.6);
     // 拋殼 + 槍口煙（程式化粒子，見 src/fx/Fx.ts）
-    this.fx.ejectShell(this.player.footX + 4 * this.player.facing, y - 2, this.player.footY + 2, this.player.facing);
+    // 左輪、雙管換彈時才退殼；泵動／栓動拉槓時才拋殼
+    if (def.cls !== 'revolver' && def.id !== 'coach') {
+      const eject = () => this.fx.ejectShell(this.player.footX + 4 * this.player.facing, this.player.gunY - 2, this.player.footY + 2, this.player.facing);
+      if (def.cycleSound) this.time.delayedCall(Math.min(300, 350 / def.fireRate), eject);
+      else eject();
+    }
     this.fx.muzzleSmoke(x, y, angle);
     if (this.anims.exists('player_shoot')) {
       // 有開火影格時，火光與後座力都由動畫表現
@@ -419,8 +451,15 @@ export class DefenseScene extends Phaser.Scene {
       barricadeHp: this.barricade.hp,
       barricadeMaxHp: this.barricade.maxHp,
       weaponName: w.def.name,
+      weaponModel: w.def.model,
       ammo: w.ammo,
       magazine: w.def.magazine,
+      reserve: this.weapons.reserve(),
+      slots: this.weapons.weapons.map((g) => g.def.name),
+      slot: this.weapons.current,
+      meleeName: this.melee.def.name,
+      stamina: this.melee.staminaRatio,
+      meleeBusy: this.melee.busy,
       reloading: this.weapons.reloading,
       reloadProgress: this.weapons.reloadProgress,
       wave: Math.max(1, this.spawner.waveIndex + 1),
@@ -434,6 +473,8 @@ export class DefenseScene extends Phaser.Scene {
   private finish(survived: boolean, reason: GameOverData['reason'] = 'base'): void {
     this.ended = true;
     this.outpost.persist();
+    // 彈匣裡剩的子彈退回備彈
+    this.weapons?.unloadAll();
     GameEvents.of(this).emit('game:over', { survived });
     if (survived) {
       GameState.data.scrap += ECONOMY.nightBonus;

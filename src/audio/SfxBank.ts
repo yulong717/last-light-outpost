@@ -107,8 +107,241 @@ function voice(
   });
 }
 
+type ShotParams = Parameters<typeof gunshot>[2];
+
+/** 一把槍的槍聲定義：同一個骨架，靠參數做出不同口徑的個性 */
+function shot(o: ShotParams, opt: { volume?: number; variants?: number; voices?: number; gap?: number; pitch?: number } = {}): SfxDef {
+  return {
+    variants: opt.variants ?? 4,
+    volume: opt.volume ?? 0.55,
+    pitch: opt.pitch ?? 1,
+    maxVoices: opt.voices ?? 4,
+    minGapMs: opt.gap ?? 30,
+    recipe: (fs, r) => gunshot(fs, r, o),
+  };
+}
+
+/** 揮空的風切聲：帶通雜訊由低掃到高再落下 */
+function whoosh(fs: number, r: Rng, len: number, f0: number, f1: number, gain = 1): Buf {
+  const b = new Buf(fs, len + 0.05);
+  const bp = new Biquad('bp', fs, f0, 1.4);
+  b.add(0, len, (t, i) => {
+    const k = t / len;
+    if (i % 16 === 0) bp.set(f0 + (f1 - f0) * Math.sin(Math.PI * k));
+    return bp.run(noise(r)) * Math.sin(Math.PI * k) ** 1.5 * gain;
+  });
+  return b;
+}
+
+/** 摩擦聲（拉槍栓、彈鏈） */
+function scrape(b: Buf, at: number, len: number, freq: number, r: Rng, gain = 0.5): void {
+  const bp = new Biquad('bp', b.fs, freq, 1.6);
+  b.add(at, len, (t) => bp.run(noise(r)) * Math.sin((Math.PI * t) / len) * gain);
+}
+
 export const SFX: Record<string, SfxDef> = {
   // ── 武器 ──────────────────────────────────────────────
+  // 每把槍一個專屬聲音：口徑越大越低沉、尾音越長；衝鋒槍短而脆，栓動步槍的回音最長
+  shot_m1911: shot({ len: 0.6, crack: 0.006, body: 0.055, thumpHz: 120, thumpLen: 0.06, tone: 4200, tail: 0.18, verb: 0.3 }),
+  shot_python: shot({ len: 0.95, crack: 0.008, body: 0.085, thumpHz: 95, thumpLen: 0.1, tone: 5200, tail: 0.32, verb: 0.42 }, { volume: 0.7, gap: 60 }),
+  shot_mp5: shot({ len: 0.36, crack: 0.004, body: 0.03, thumpHz: 175, thumpLen: 0.03, tone: 4400, tail: 0.1, verb: 0.2 }, { volume: 0.42, voices: 6, gap: 18, pitch: 1.4 }),
+  shot_m4a1: shot({ len: 0.5, crack: 0.003, body: 0.04, thumpHz: 140, thumpLen: 0.045, tone: 7200, tail: 0.16, verb: 0.26 }, { volume: 0.5, voices: 6, gap: 18 }),
+  shot_ak47: shot({ len: 0.66, crack: 0.005, body: 0.062, thumpHz: 105, thumpLen: 0.065, tone: 5000, tail: 0.22, verb: 0.3 }, { volume: 0.58, voices: 6, gap: 22 }),
+  shot_r870: shot({ len: 0.95, crack: 0.01, body: 0.11, thumpHz: 95, thumpLen: 0.12, tone: 3600, tail: 0.32, verb: 0.38 }, { volume: 0.7, variants: 3, voices: 3, gap: 60 }),
+  shot_coach: shot({ len: 1.05, crack: 0.012, body: 0.13, thumpHz: 82, thumpLen: 0.15, tone: 3200, tail: 0.38, verb: 0.42 }, { volume: 0.78, variants: 3, voices: 3, gap: 50 }),
+  shot_m1014: shot({ len: 0.8, crack: 0.01, body: 0.1, thumpHz: 100, thumpLen: 0.1, tone: 3900, tail: 0.28, verb: 0.35 }, { volume: 0.66, variants: 3, voices: 3, gap: 50 }),
+  shot_mosin: shot({ len: 1.4, crack: 0.005, body: 0.09, thumpHz: 78, thumpLen: 0.12, tone: 6500, tail: 0.6, verb: 0.55 }, { volume: 0.75, variants: 3, voices: 2, gap: 120, pitch: 0.6 }),
+  shot_m249: shot({ len: 0.55, crack: 0.004, body: 0.05, thumpHz: 118, thumpLen: 0.05, tone: 6000, tail: 0.2, verb: 0.28 }, { volume: 0.5, voices: 8, gap: 18 }),
+  /** 拉槍栓：上抬、後拉、前推、下壓 */
+  bolt: {
+    variants: 2,
+    volume: 0.6,
+    pitch: 0.6,
+    maxVoices: 1,
+    minGapMs: 200,
+    recipe: (fs, r) => {
+      const b = new Buf(fs, 0.55);
+      metalClick(b, 0, 1500, r, 0.9, 0.015);
+      scrape(b, 0.05, 0.1, 2200, r, 0.5);
+      metalClick(b, 0.15, 1900, r, 1, 0.02);
+      scrape(b, 0.22, 0.09, 2600, r, 0.5);
+      metalClick(b, 0.31, 2300, r, 1, 0.018);
+      metalClick(b, 0.38, 1300, r, 0.8, 0.02);
+      thud(b, 0.38, 150, 0.025, r, 0.4, 700);
+      return b.normalize(0.85);
+    },
+  },
+  /** 橋夾壓彈：一排子彈被拇指壓進彈倉 */
+  clip_insert: {
+    variants: 2,
+    volume: 0.55,
+    pitch: 0.8,
+    maxVoices: 1,
+    minGapMs: 200,
+    recipe: (fs, r) => {
+      const b = new Buf(fs, 0.5);
+      metalClick(b, 0, 2400, r, 0.9, 0.012);
+      scrape(b, 0.03, 0.25, 3200, r, 0.55);
+      for (let k = 0; k < 5; k++) metalClick(b, 0.06 + k * 0.045, 2800 + r() * 500, r, 0.35, 0.008);
+      metalClick(b, 0.32, 1700, r, 0.8, 0.02);
+      return b.normalize(0.8);
+    },
+  },
+  /** 左輪：甩開轉輪、退殼（叮叮噹噹） */
+  revolver_out: {
+    variants: 2,
+    volume: 0.5,
+    pitch: 0.8,
+    maxVoices: 1,
+    minGapMs: 200,
+    recipe: (fs, r) => {
+      const b = new Buf(fs, 0.8);
+      metalClick(b, 0, 2100, r, 1, 0.02);
+      for (let k = 0; k < 6; k++) metalClick(b, 0.18 + r() * 0.25, 4500 + r() * 1500, r, 0.3, 0.03);
+      return b.normalize(0.75);
+    },
+  },
+  /** 左輪：快速裝填器塞入、甩回轉輪 */
+  revolver_in: {
+    variants: 2,
+    volume: 0.55,
+    pitch: 0.8,
+    maxVoices: 1,
+    minGapMs: 200,
+    recipe: (fs, r) => {
+      const b = new Buf(fs, 0.4);
+      scrape(b, 0, 0.06, 3000, r, 0.4);
+      metalClick(b, 0.05, 2600, r, 0.7, 0.012);
+      metalClick(b, 0.2, 1800, r, 1, 0.025);
+      // 轉輪棘輪的嗒嗒聲
+      for (let k = 0; k < 3; k++) metalClick(b, 0.24 + k * 0.03, 3600, r, 0.25, 0.006);
+      return b.normalize(0.8);
+    },
+  },
+  /** 雙管：折開槍管、彈殼彈出 */
+  break_open: {
+    variants: 2,
+    volume: 0.55,
+    pitch: 0.8,
+    maxVoices: 1,
+    minGapMs: 200,
+    recipe: (fs, r) => {
+      const b = new Buf(fs, 0.6);
+      metalClick(b, 0, 1200, r, 1, 0.025);
+      thud(b, 0.02, 120, 0.04, r, 0.6, 600);
+      thud(b, 0.25, 200, 0.02, r, 0.4, 1500);
+      thud(b, 0.3, 190, 0.02, r, 0.4, 1500);
+      return b.normalize(0.8);
+    },
+  },
+  /** 雙管：合上槍管 */
+  break_close: {
+    variants: 2,
+    volume: 0.6,
+    pitch: 0.8,
+    maxVoices: 1,
+    minGapMs: 200,
+    recipe: (fs, r) => {
+      const b = new Buf(fs, 0.3);
+      metalClick(b, 0, 1000, r, 1, 0.03);
+      thud(b, 0, 100, 0.05, r, 0.9, 500);
+      return b.normalize(0.85);
+    },
+  },
+  /** 機槍：掀開上蓋、拉出空彈鏈 */
+  belt_open: {
+    variants: 1,
+    volume: 0.5,
+    pitch: 0.5,
+    maxVoices: 1,
+    minGapMs: 300,
+    recipe: (fs, r) => {
+      const b = new Buf(fs, 1);
+      metalClick(b, 0, 1400, r, 1, 0.02);
+      for (let k = 0; k < 10; k++) metalClick(b, 0.2 + k * 0.05, 3500 + r() * 800, r, 0.3, 0.01);
+      scrape(b, 0.2, 0.5, 2500, r, 0.3);
+      return b.normalize(0.75);
+    },
+  },
+  /** 機槍：放上新彈鏈、拍上蓋、拉機柄 */
+  belt_close: {
+    variants: 1,
+    volume: 0.6,
+    pitch: 0.5,
+    maxVoices: 1,
+    minGapMs: 300,
+    recipe: (fs, r) => {
+      const b = new Buf(fs, 0.8);
+      for (let k = 0; k < 6; k++) metalClick(b, k * 0.04, 3000 + r() * 600, r, 0.3, 0.01);
+      thud(b, 0.3, 110, 0.05, r, 1, 600);
+      metalClick(b, 0.3, 1100, r, 1, 0.03);
+      scrape(b, 0.5, 0.08, 2000, r, 0.4);
+      metalClick(b, 0.58, 1700, r, 1, 0.02);
+      return b.normalize(0.85);
+    },
+  },
+  // ── 近戰 ──────────────────────────────────────────────
+  swing_light: {
+    variants: 4,
+    volume: 0.4,
+    pitch: 2,
+    maxVoices: 2,
+    minGapMs: 60,
+    recipe: (fs, r) => whoosh(fs, r, 0.16, 1200, 4200).normalize(0.7),
+  },
+  swing_heavy: {
+    variants: 3,
+    volume: 0.5,
+    pitch: 1.5,
+    maxVoices: 2,
+    minGapMs: 100,
+    recipe: (fs, r) => whoosh(fs, r, 0.32, 300, 1500).normalize(0.8),
+  },
+  /** 刀刃砍進肉裡 */
+  melee_slash: {
+    variants: 4,
+    volume: 0.55,
+    pitch: 2,
+    maxVoices: 3,
+    minGapMs: 30,
+    recipe: (fs, r) => {
+      const b = new Buf(fs, 0.3);
+      const bp = new Biquad('bp', fs, 2400, 1.2);
+      b.add(0, 0.12, (t) => bp.run(noise(r)) * env(t, 0.04, 0.001) * 0.9);
+      thud(b, 0.005, 110, 0.04, r, 0.9, 900);
+      return b.normalize(0.85);
+    },
+  },
+  /** 鈍器砸下去：低沉的悶擊加一點骨頭碎裂 */
+  melee_blunt: {
+    variants: 4,
+    volume: 0.65,
+    pitch: 1.5,
+    maxVoices: 3,
+    minGapMs: 30,
+    recipe: (fs, r) => {
+      const b = new Buf(fs, 0.35);
+      thud(b, 0, 70, 0.07, r, 1.2, 500);
+      const hp = new Biquad('hp', fs, 1500);
+      b.add(0.01, 0.08, (t) => hp.run(noise(r)) * env(t, 0.012, 0.0005) * 0.8);
+      return b.saturate(1.8).normalize(0.9);
+    },
+  },
+  /** 體力見底的喘氣 */
+  exhausted: {
+    variants: 2,
+    volume: 0.35,
+    pitch: 1,
+    maxVoices: 1,
+    minGapMs: 600,
+    recipe: (fs, r) => {
+      const b = new Buf(fs, 0.7);
+      const bp = new Biquad('bp', fs, 900, 0.9);
+      b.add(0, 0.28, (t) => bp.run(noise(r)) * Math.sin((Math.PI * t) / 0.28) * 0.7);
+      b.add(0.36, 0.3, (t) => bp.run(noise(r)) * Math.sin((Math.PI * t) / 0.3) * 0.5);
+      return b.normalize(0.7);
+    },
+  },
   shot_pistol: {
     variants: 4,
     volume: 0.55,

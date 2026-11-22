@@ -42,6 +42,10 @@ export class Player {
   private squashAmt = 0;
   private breath = 0;
   private lean = 0;
+  /** 武器負重的移動速度倍率（機槍較慢） */
+  speedMul = 1;
+  /** 近戰揮擊的身體角度（度），由 MeleeSystem 設定 */
+  swingLean = 0;
 
   constructor(private scene: Phaser.Scene, x: number, y: number, maxHp: number) {
     this.footX = x;
@@ -96,8 +100,8 @@ export class Player {
 
     // 倒退走較慢
     const back = moveX !== 0 && Math.sign(moveX) !== this.facing ? m.backpedal : 1;
-    const tx = moveX * m.speedX * back;
-    const ty = moveY * m.speedY;
+    const tx = moveX * m.speedX * back * this.speedMul;
+    const ty = moveY * m.speedY * this.speedMul;
     // 加速／煞車：指數逼近目標速度，放開時煞得比起步快
     const kx = Math.abs(tx) > Math.abs(this.vx) * 0.5 && tx !== 0 ? m.accel : m.decel;
     const ky = Math.abs(ty) > Math.abs(this.vy) * 0.5 && ty !== 0 ? m.accel : m.decel;
@@ -199,7 +203,7 @@ export class Player {
     s.y = this.footY - bob;
     s.setFlipX(this.facing < 0);
     s.setDepth(depthForY(this.footY));
-    s.angle = this.lean;
+    s.angle = this.lean + this.swingLean * this.facing;
     // 待機呼吸（走路時停掉）＋ 受擊／轉身擠壓
     const breathe = this.walkPhase > 0 ? 0 : Math.sin(this.breath * (Math.PI / 0.9)) * 0.015 + 0.015;
     s.setScale(1 + 0.16 * this.squashAmt, 1 + breathe - 0.12 * this.squashAmt);
