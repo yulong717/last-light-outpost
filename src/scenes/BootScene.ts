@@ -7,6 +7,7 @@ import { createBuildingTextures } from '../art/BuildingArt';
 import { createGearTexture } from '../art/ZombieComposer';
 import { ZOMBIE_NECK_ROW, ZOMBIE_SHEETS } from '../art/sprites';
 import { createFxTextures } from '../fx/FxTextures';
+import { createPropTextures } from '../art/PropArt';
 
 /**
  * 載入資源。目前沒有美術素材，所以用程式產生「色塊佔位圖」。
@@ -25,6 +26,9 @@ export class BootScene extends Phaser.Scene {
     // 主角換彈：9 格（PixelLab PixMiniMax 以射擊第 0 格為起始影格生成）
     // 主角射擊圖的部位遮罩（tools/art/make_player_regions.py 產生）：NPC 隊員換裝用
     this.load.image('player_regions', 'assets/sprites/player_shoot_regions.png');
+    // 隊員底圖：PixelLab 依主角姿勢重畫的 18 個不同的人＋部位遮罩（tools/art/make_crew_bases.py）
+    this.load.image('crew_bases', 'assets/sprites/crew_bases.png');
+    this.load.image('crew_bases_regions', 'assets/sprites/crew_bases_regions.png');
     this.load.spritesheet('player_reload', 'assets/sprites/player_reload.png', { frameWidth: 64, frameHeight: 64 });
     // 霧屍：PixelLab 走路圖經程式換色、加寬、做出攻擊影格的三種變體
     for (const key of ZOMBIE_SHEETS) {
@@ -36,6 +40,8 @@ export class BootScene extends Phaser.Scene {
     createFxTextures(this);
     createBarricadeTexture(this);
     createBuildingTextures(this);
+    // 場景道具（車、油桶、貨架、門、燈…），見 src/art/PropArt.ts
+    createPropTextures(this);
     // 霧屍頭飾與變異標記（身體外觀在出怪時才依職業合成，見 ZombieComposer）
     createGearTexture(this);
     // 武器像素圖（手持部件、圖示、彈殼、槍口火光），見 src/art/weaponMaps.ts

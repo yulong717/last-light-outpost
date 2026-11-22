@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { GAME_HEIGHT, GAME_WIDTH } from '../config';
 import { AudioManager } from '../audio/AudioManager';
 import { COMPANION_ROLES } from '../data/companions';
+import { crewStats } from '../data/crewLoadout';
 import { getZone, MEDKIT_HEAL, NOISE, SUPPLIES, type EventOption, type ExploreEvent, type Outcome } from '../data/explore';
 import { Expedition, playerExploreHp, describeLoot, type Resolution } from '../explore/Expedition';
 import { uiBar, uiButton, uiPanel } from '../explore/ui';
@@ -9,14 +10,19 @@ import { GameState } from '../state/GameState';
 import type { Chapter } from '../data/story';
 import { getWeapon } from '../data/weapons';
 import { pixelText } from '../utils/text';
+import { backdropScenery } from '../scenery/locations';
+import { placeStaticProps } from '../scenery/SceneryBuilder';
 import type { DefenseSceneData } from './DefenseScene';
 import type { ExploreFieldData, FieldResult } from './ExploreFieldScene';
 import type { QteData } from './QteScene';
 
-const CARD_X = 70;
-const CARD_Y = 104;
-const CARD_W = GAME_WIDTH - 140;
-const CARD_H = 200;
+/** 事件卡放右邊，左邊留給場景插圖（事件寫到的東西都畫在這裡） */
+const CARD_X = 316;
+const CARD_Y = 84;
+const CARD_W = GAME_WIDTH - CARD_X - 12;
+const CARD_H = 262;
+/** 插圖擺件的範圍 */
+const ART_SPAN: [number, number] = [24, 296];
 
 /**
  * 一趟探索的主畫面：上方是路線與狀態，中間是事件卡。
@@ -34,6 +40,8 @@ export class ExpeditionScene extends Phaser.Scene {
   private event: ExploreEvent | null = null;
   /** 最後選的選項（屍潮要知道是不是丟了誘餌） */
   private lastOpt: EventOption | null = null;
+  private backdrop!: Phaser.GameObjects.Container;
+  private backdropFor = '';
 
   constructor() {
     super('Expedition');
@@ -49,7 +57,8 @@ export class ExpeditionScene extends Phaser.Scene {
     this.event = null;
     AudioManager.setMood('menu');
     this.cameras.main.fadeIn(300, 0, 0, 0);
-    this.drawBackdrop();
+    this.backdropFor = '';
+    this.drawBackdrop(null);
 
     // 上方狀態列
     this.add.rectangle(0, 0, GAME_WIDTH, 26, 0x000000, 0.6).setOrigin(0).setDepth(98);
@@ -68,20 +77,32 @@ export class ExpeditionScene extends Phaser.Scene {
     this.showApproach();
   }
 
-  private drawBackdrop(): void {
-    const z = this.exp.zone;
-    this.add.rectangle(0, 0, GAME_WIDTH, GAME_HEIGHT, 0x101216).setOrigin(0);
-    // 遠景剪影＋霧，配色依區域
-    const rng = new Phaser.Math.RandomDataGenerator([z.id]);
-    for (let x = 0; x < GAME_WIDTH; x += rng.between(30, 70)) {
-      const h = rng.between(40, 120);
-      this.add.rectangle(x, GAME_HEIGHT - 40, rng.between(26, 60), h, z.wall, 0.55).setOrigin(0, 1);
-    }
-    this.add.rectangle(0, GAME_HEIGHT - 40, GAME_WIDTH, 40, z.floor).setOrigin(0);
+  /**
+   * 背景：這一站的場景插圖。換事件就重畫（儲物間有紙箱、鐵櫃前有櫃子、拾荒者在營火旁…）。
+   * 所有物件先畫在場景上，再整批收進一個容器，換場景時一起清掉。
+   */
+  private drawBackdrop(eventId: string | null): void {
+    const key = eventId ?? 'arrive';
+    if (key === this.backdropFor) return;
+    this.backdropFor = key;
+    this.backdrop?.destroy(true);
+    const before = new Set(this.children.list);
+    const res = backdropScenery(this, this.exp.zone.id, eventId, ART_SPAN);
+    placeStaticProps(this, res);
+    // 暗角＋霧，讓插圖不要搶走事件卡的注意力
+    this.add.rectangle(0, 0, GAME_WIDTH, GAME_HEIGHT, 0x05070c, res.darkness + 0.12).setOrigin(0).setDepth(41);
     for (let i = 0; i < 3; i++) {
-      const fog = this.add.rectangle(0, 120 + i * 60, GAME_WIDTH * 1.5, 50, 0x9aa3ad, 0.05).setOrigin(0);
+      const fog = this.add.rectangle(0, 150 + i * 50, GAME_WIDTH * 1.5, 40, 0x9aa3ad, 0.05).setOrigin(0).setDepth(42);
       this.tweens.add({ targets: fog, x: -GAME_WIDTH * 0.4, duration: 14000 + i * 5000, yoyo: true, repeat: -1 });
     }
+    const made = this.children.list.filter((o) => !before.has(o));
+    this.backdrop = this.add.container(0, 0).setDepth(-1);
+    // 容器會吃掉子物件的深度：照原本的深度排好再放進去
+    made.sort((a, b) => ((a as unknown as { depth: number }).depth ?? 0) - ((b as unknown as { depth: number }).depth ?? 0));
+    this.backdrop.add(made);
+    // 淡入
+    this.backdrop.setAlpha(0);
+    this.tweens.add({ targets: this.backdrop, alpha: 1, duration: 350 });
   }
 
   // ── 狀態列 ──
@@ -121,7 +142,7 @@ export class ExpeditionScene extends Phaser.Scene {
     let cx = GAME_WIDTH - 8;
     for (const m of [...e.squad].reverse()) {
       const hp = e.crewHp.get(m.id) ?? 0;
-      const max = COMPANION_ROLES[m.role].maxHp;
+      const max = crewStats(m).maxHp;
       const t = pixelText(this, cx, 7, `${m.name} ${hp > 0 ? `${hp}/${max}` : '倒下'}`, 8, hp > 0 ? '#c8e6c9' : '#ef9a9a').setOrigin(1, 0);
       this.hud.add(t);
       cx -= t.width + 10;
@@ -146,6 +167,7 @@ export class ExpeditionScene extends Phaser.Scene {
     const e = this.exp;
     this.refreshHud();
     const first = e.index === 0;
+    if (e.index === 0) this.drawBackdrop(null);
     const story = e.chapter && e.isFinale;
     const title = story ? `最後一站：${e.chapter!.objective}` : e.isFinale ? '最後一站：大獎就在前面' : first ? `抵達${e.zone.name}` : `前往第 ${e.index + 1} 站`;
     const who = e.squad.length ? '你們' : '你';
@@ -181,6 +203,7 @@ export class ExpeditionScene extends Phaser.Scene {
   }
 
   private showEvent(ev: ExploreEvent): void {
+    this.drawBackdrop(ev.id);
     this.refreshHud();
     this.cardFrame(ev.title, ev.text, ev.id === 'horde' ? '#ff6b6b' : '#f5d76e');
     const n = ev.options.length;
@@ -236,6 +259,7 @@ export class ExpeditionScene extends Phaser.Scene {
       case 'field': {
         const data: ExploreFieldData = {
           spec: a.field,
+          eventId: ev.id,
           onDone: (r: FieldResult) => this.afterField(ev, r, a.success, a.clean),
         };
         this.clearCard();

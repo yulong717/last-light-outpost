@@ -4,6 +4,7 @@ import { attachAudio } from '../audio/AudioBridge';
 import { AudioManager } from '../audio/AudioManager';
 import { ensureCrewTexture } from '../art/CrewArt';
 import { COMPANION_ROLES, type CrewMember } from '../data/companions';
+import { crewStats } from '../data/crewLoadout';
 import { NOISE, type FieldSpec } from '../data/explore';
 import type { FirearmDef } from '../data/weapons';
 import { Player } from '../entities/Player';
@@ -29,6 +30,12 @@ import { prewarmLooks, spawnEnemy } from '../systems/ZombieFactory';
 import { PROFESSIONS } from '../data/zombies';
 import { Rng, randomSeed } from '../utils/rng';
 import { pixelText } from '../utils/text';
+import { propKey } from '../art/PropArt';
+import { PROP_TUNING } from '../data/scenery';
+import { describeLoot, mergeLoot } from '../explore/Expedition';
+import { PropSystem, type Interaction } from '../scenery/PropSystem';
+import { fieldScenery } from '../scenery/locations';
+import type { PlacedProp, SceneryResult } from '../scenery/SceneryBuilder';
 
 export interface FieldResult {
   /** clean：潛入全程沒被發現；win：達成目標；failed：保護目標陣亡；down：主角倒下 */
@@ -38,6 +45,8 @@ export interface FieldResult {
 
 export interface ExploreFieldData {
   spec: FieldSpec;
+  /** 哪個事件：決定場景佈置（停車場、公車、倉庫…） */
+  eventId?: string;
   onDone: (r: FieldResult) => void;
 }
 
@@ -83,6 +92,12 @@ interface Follower {
  */
 export class ExploreFieldScene extends Phaser.Scene {
   private spec!: FieldSpec;
+  private eventId?: string;
+  private scenery!: SceneryResult;
+  private props!: PropSystem;
+  private interaction: Interaction | null = null;
+  private interactHint!: Phaser.GameObjects.Text;
+  private hiddenHint!: Phaser.GameObjects.Text;
   private onDone!: (r: FieldResult) => void;
   private exp!: Expedition;
   private player!: Player;
@@ -124,6 +139,7 @@ export class ExploreFieldScene extends Phaser.Scene {
 
   init(data: ExploreFieldData): void {
     this.spec = data.spec;
+    this.eventId = data.eventId;
     this.onDone = data.onDone;
   }
 
@@ -171,6 +187,22 @@ export class ExploreFieldScene extends Phaser.Scene {
     this.wireRig();
 
     this.spawnFollowers();
+    this.props = new PropSystem(this, {
+      player: this.player,
+      zombies: () => this.zombies,
+      others: () => this.context().others ?? [],
+      onKill: (n) => (this.kills += n),
+      onNoise: (n) => {
+        exp.addNoise(n);
+        if (n >= 20) this.raiseAlarm();
+      },
+      onLoot: (loot, x, y) => {
+        mergeLoot(exp.bag, loot);
+        this.fx.popText(x, y - 10, describeLoot(loot)[0] ?? '物資', '#f5d76e');
+      },
+      rollLoot: () => exp.rollLoot('small'),
+      stealth: () => !this.alerted,
+    }, this.scenery);
     const zone = exp.zone;
     prewarmLooks(this, Object.keys(zone.zombies));
     const count = exp.zombieCount(this.spec);
@@ -180,53 +212,35 @@ export class ExploreFieldScene extends Phaser.Scene {
 
     this.input.keyboard?.on('keydown-G', this.grenade, this);
     this.input.keyboard?.on('keydown-H', this.medkit, this);
+    this.input.keyboard?.on('keydown-F', this.interact, this);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.input.keyboard?.off('keydown-G', this.grenade, this);
       this.input.keyboard?.off('keydown-H', this.medkit, this);
+      this.input.keyboard?.off('keydown-F', this.interact, this);
       this.unregister.forEach((fn) => fn());
     });
   }
 
   // ── 場景 ──
 
+  /** 場景：依區域與事件擺出對應的環境（停車場有車、倉庫有貨架、公車頂有倖存者…） */
   private drawBackdrop(): void {
-    const z = this.exp.zone;
-    const rng = new Phaser.Math.RandomDataGenerator([z.id, String(this.spec.title)]);
-    // 室內／街景：牆面、窗、門
-    this.add.rectangle(0, 0, WORLD_W, GROUND_Y, z.wall).setOrigin(0);
-    this.add.rectangle(0, 0, WORLD_W, GROUND_Y, 0x000000, 0.35).setOrigin(0);
-    for (let x = 20; x < WORLD_W; x += rng.between(70, 120)) {
-      const w = rng.between(24, 44);
-      const h = rng.between(30, 54);
-      const lit = rng.frac() < 0.2;
-      this.add.rectangle(x, GROUND_Y - 40 - h, w, h, lit ? 0x6a5a3a : 0x14161a, lit ? 0.7 : 0.9).setOrigin(0).setStrokeStyle(2, 0x000000, 0.6);
-    }
-    // 地板
-    const bands = 6;
-    const bandH = (GAME_HEIGHT - GROUND_Y) / bands;
-    for (let i = 0; i < bands; i++) {
-      const c = Phaser.Display.Color.IntegerToColor(z.floor).lighten(i * 2).color;
-      this.add.rectangle(0, GROUND_Y + i * bandH, WORLD_W, bandH + 1, c).setOrigin(0);
-    }
-    for (let n = 0; n < 60; n++) {
-      const y = rng.between(GROUND_Y + 4, GAME_HEIGHT - 2);
-      this.add.rectangle(rng.between(0, WORLD_W), y, rng.between(2, 8), 1, 0x000000, 0.35);
-    }
-    // 雜物：箱子、翻倒的推車（純裝飾）
-    for (let x = 140; x < WORLD_W - 60; x += rng.between(110, 190)) {
-      const y = rng.between(LANE_TOP - 4, LANE_TOP + 6);
-      const w = rng.between(18, 34);
-      const h = rng.between(12, 24);
-      this.add.rectangle(x, y, w, h, 0x4a3a28).setOrigin(0.5, 1).setStrokeStyle(1, 0x000000, 0.7).setDepth(depthForY(y));
-    }
-    // 出口（潛入目標）
+    const keep: [number, number][] = [[0, 110]];
+    if (this.spec.goal === 'reach') keep.push([EXIT_X - 50, WORLD_W]);
+    this.scenery = fieldScenery(this, this.exp.zone.id, this.eventId, WORLD_W, keep);
+    // 出口（潛入目標）：一扇亮著綠光的門
     if (this.spec.goal === 'reach') {
-      const door = this.add.rectangle(EXIT_X, GROUND_Y + 2, 26, 60, 0x1a2a1a).setOrigin(0.5, 1).setStrokeStyle(2, 0x9ad17a, 0.9);
-      const glow = this.add.rectangle(EXIT_X, GROUND_Y - 30, 30, 64, 0x9ad17a, 0.12);
+      const y = GROUND_Y + 1;
+      this.add.image(EXIT_X, y, propKey('door'), 1).setOrigin(0.5, 1).setDepth(5);
+      const glow = this.add.rectangle(EXIT_X, y - 24, 30, 52, 0x9ad17a, 0.14).setDepth(6);
       this.tweens.add({ targets: glow, alpha: 0.03, duration: 700, yoyo: true, repeat: -1 });
-      pixelText(this, EXIT_X, GROUND_Y - 70, '出口', 8, '#9ad17a').setOrigin(0.5);
-      door.setDepth(5);
+      pixelText(this, EXIT_X, y - 58, '出口', 8, '#9ad17a').setOrigin(0.5).setDepth(70).setStroke('#000000', 3);
     }
+  }
+
+  /** 場景佈置裡標記成「保護目標」的擺件（公車、避難所的門） */
+  private protectPiece(): PlacedProp | undefined {
+    return this.scenery.props.find((p) => p.role === 'protect');
   }
 
   private spawnFollowers(): void {
@@ -305,7 +319,12 @@ export class ExploreFieldScene extends Phaser.Scene {
   private updateSleepers(dt: number): void {
     const p = this.player;
     const range = VISION * this.exp.stealthMul();
-    const hidden = this.inShadow(p.footX, p.footY);
+    const hidden = this.inShadow(p.footX, p.footY) || this.props.isHidden(p.footX, p.footY);
+    const lit = !hidden && this.props.isLit(p.footX, p.footY);
+    const light = (lit ? PROP_TUNING.stealthLit : 1) * (this.props.powerOff ? PROP_TUNING.stealthDark : 1);
+    this.hiddenHint.setVisible(p.alive && (hidden || lit)).setText(hidden ? '隱蔽中' : '燈光下！').setColor(hidden ? '#9ad17a' : '#ffd24a');
+    this.hiddenHint.setPosition(p.footX, p.footY - 62);
+    const alarms = this.props.alarms();
     let best: Sleeper | null = null;
     for (const s of this.sleepers) {
       const z = s.z;
@@ -313,6 +332,25 @@ export class ExploreFieldScene extends Phaser.Scene {
         s.icon.destroy();
         s.cone.destroy();
         continue;
+      }
+      // 車子警報：附近巡邏的霧屍被吸過去，之後就在車旁邊晃
+      const near = alarms.find((a) => Math.abs(a.x - z.footX) < PROP_TUNING.car.lureRange * 0.6);
+      if (near) {
+        s.minX = near.x - 24;
+        s.maxX = near.x + 24;
+        s.alert = Math.max(0, s.alert - dt * 0.8);
+        const dir = near.x > z.footX ? 1 : -1;
+        if (Math.abs(near.x - z.footX) > 20) {
+          s.dir = dir;
+          s.pause = 0;
+          z.footX += dir * 30 * dt;
+          z.footY += Phaser.Math.Clamp(near.y + 6 - z.footY, -20 * dt, 20 * dt);
+          z.setFlipX(dir < 0);
+          z.idle(dt);
+          s.icon.setPosition(z.footX, z.footY - 64 * z.def.scale!).setText('♪').setColor('#90caf9').setScale(1);
+          s.cone.clear();
+          continue;
+        }
       }
       // 巡邏
       if (s.pause > 0) {
@@ -335,7 +373,7 @@ export class ExploreFieldScene extends Phaser.Scene {
       const ahead = dx * s.dir > 0;
       let rate = 0;
       if (p.alive && ahead && Math.abs(dx) < range && dy < VISION_DY) {
-        rate = 0.5 + (1 - Math.abs(dx) / range) * 1.8;
+        rate = (0.5 + (1 - Math.abs(dx) / range) * 1.8) * light;
         if (hidden) rate *= 0.3;
         if (p.moveFactor > 0.7) rate *= 1.3;
       } else if (Math.hypot(dx, dy * 1.6) < 26 && p.moveFactor > 0.3) {
@@ -418,14 +456,23 @@ export class ExploreFieldScene extends Phaser.Scene {
     } else this.spawnEvery = 2.2;
     this.spawnTimer = this.spawnEvery;
     if (spec.goal === 'protect') {
-      const x = 300;
-      const y = (LANE_TOP + LANE_BOTTOM) / 2;
-      const img = this.add.image(x, y, 'player', 0).setOrigin(0.5, 63 / 64).setTint(0xd8c090).setFlipX(true).setDepth(depthForY(y));
-      this.fx.attachShadow(img as unknown as Phaser.GameObjects.Sprite, 20);
-      const label = pixelText(this, x, y - 70, '倖存者', 8, '#ffd24a').setOrigin(0.5).setDepth(70);
+      // 保護目標：場景有指定（公車頂上的人、避難所的門）就用它，否則是站在路中間的倖存者
+      const piece = this.protectPiece();
+      const x = piece?.x ?? 300;
+      const y = piece && !piece.wall ? piece.y + 2 : piece ? LANE_TOP + 4 : (LANE_TOP + LANE_BOTTOM) / 2;
+      const door = piece?.id === 'barricadedoor';
+      // 站在公車頂：畫在車頂上，霧屍圍在車邊抓
+      const standY = piece?.id === 'bus' ? piece.y - 104 : y;
+      const img = door
+        ? this.add.image(x, GROUND_Y + 1, propKey('barricadedoor')).setOrigin(0.5, 1).setDepth(6)
+        : this.add.image(x, standY, 'player', 0).setOrigin(0.5, 63 / 64).setTint(0xd8c090).setFlipX(true).setDepth(depthForY(y) + 1);
+      if (!door) this.fx.attachShadow(img as unknown as Phaser.GameObjects.Sprite, 20);
+      if (piece?.id === 'bus') this.tweens.add({ targets: img, y: standY - 2, duration: 300, yoyo: true, repeat: -1 });
+      const top = door ? GROUND_Y - 92 : standY - 70;
+      const label = pixelText(this, x, top, door ? '避難所的門' : '倖存者', 8, '#ffd24a').setOrigin(0.5).setDepth(70);
       label.setStroke('#000000', 3);
-      this.add.rectangle(x - 16, y - 60, 32, 4, 0x000000).setDepth(70);
-      const bar = this.add.rectangle(x - 15, y - 59, 30, 2, 0x9ad17a).setOrigin(0, 0.5).setDepth(71);
+      this.add.rectangle(x - 16, top + 10, 32, 4, 0x000000).setDepth(70);
+      const bar = this.add.rectangle(x - 15, top + 11, 30, 2, 0x9ad17a).setOrigin(0, 0.5).setDepth(71);
       bar.setX(x - 15);
       this.survivor = {
         img,
@@ -437,11 +484,18 @@ export class ExploreFieldScene extends Phaser.Scene {
           bar.width = 30 * Math.max(0, r);
         },
       };
-      this.player.footX = 260;
+      this.player.footX = piece?.id === 'bus' ? x - 210 : x - 50;
     }
   }
 
   private spawnEdge(): void {
+    // 室內：有門的話，霧屍有時候破門而出（封住的門不會）
+    const doors = this.props.spawnDoors().filter((d) => Math.abs(d.x - this.player.footX) > 90);
+    if (doors.length && this.rng.chance(0.45)) {
+      const at = this.props.burstDoor(this.rng.pick(doors));
+      this.makeZombie(at.x, at.y);
+      return;
+    }
     const cam = this.cameras.main;
     const left = this.rng.chance(0.35);
     const x = left ? Math.max(-30, cam.scrollX - 24) : Math.min(WORLD_W + 30, cam.scrollX + GAME_WIDTH + 24);
@@ -471,11 +525,13 @@ export class ExploreFieldScene extends Phaser.Scene {
       this.spec.mode === 'stealth'
         ? touch
           ? '躲進陰影・從背後按近戰暗殺'
-          : 'WASD 移動・躲進陰影・從背後按 E 暗殺・G 手榴彈・H 醫療包'
+          : 'WASD 移動・躲進陰影或掩體後・從背後按 E 暗殺・F 互動・G 手榴彈・H 醫療包'
         : touch
           ? ''
-          : 'G 手榴彈・H 醫療包';
+          : 'F 互動（封門・斷電）・射擊油桶引爆・G 手榴彈・H 醫療包';
     fix(pixelText(this, GAME_WIDTH / 2, GAME_HEIGHT - 14, help, 7, '#90a4ae').setOrigin(0.5));
+    this.interactHint = pixelText(this, 0, 0, '', 8, '#90caf9').setOrigin(0.5).setDepth(70).setStroke('#000000', 3).setVisible(false);
+    this.hiddenHint = pixelText(this, 0, 0, '', 7, '#9ad17a').setOrigin(0.5).setDepth(70).setStroke('#000000', 3).setVisible(false);
     this.takedownHint = pixelText(this, 0, 0, touch ? '近戰：暗殺' : 'E 暗殺', 8, '#c8e6c9').setOrigin(0.5).setDepth(70).setStroke('#000000', 3).setVisible(false);
     this.tweens.add({ targets: this.takedownHint, alpha: 0.5, duration: 400, yoyo: true, repeat: -1 });
 
@@ -485,6 +541,7 @@ export class ExploreFieldScene extends Phaser.Scene {
       this.touchButton(GAME_WIDTH - 38, GAME_HEIGHT - 76, '近戰', () => queueAction('melee'));
       this.touchButton(GAME_WIDTH - 76, GAME_HEIGHT - 76, '手雷', () => this.grenade());
       this.touchButton(GAME_WIDTH - 114, GAME_HEIGHT - 38, '醫療', () => this.medkit());
+      this.touchButton(GAME_WIDTH - 38, GAME_HEIGHT - 114, '互動', () => this.interact());
       if (GameState.data.hero === 'student') this.touchButton(GAME_WIDTH - 114, GAME_HEIGHT - 76, '奔跑', () => (heroTouch.sprint = !heroTouch.sprint));
       if (GameState.data.hero === 'soldier') this.touchButton(GAME_WIDTH - 114, GAME_HEIGHT - 76, '擊倒', () => (heroTouch.skill = true));
     }
@@ -528,6 +585,11 @@ export class ExploreFieldScene extends Phaser.Scene {
   }
 
   // ── 輔助用品 ──
+
+  private interact(): void {
+    if (this.ended || !this.interaction) return;
+    this.props.interact(this.interaction);
+  }
 
   private grenade(): void {
     if (this.ended) return;
@@ -609,6 +671,16 @@ export class ExploreFieldScene extends Phaser.Scene {
     this.screenFx.update(realDt, p.hp, p.maxHp);
 
     this.updateFollowers(dt);
+    this.props.update(dt);
+    this.props.collide(p);
+    for (const z of this.zombies) if (!z.dead && z.spec.body !== 'crow') this.props.collide(z);
+    this.interaction = p.alive ? this.props.nearestInteraction() : null;
+    const it = this.interaction;
+    this.interactHint.setVisible(!!it);
+    if (it) {
+      const touch = this.sys.game.device.input.touch;
+      this.interactHint.setText(`${touch ? '互動' : 'F'}：${it.label}`).setPosition(it.prop.x, it.prop.y - it.prop.h - 12);
+    }
 
     if (this.alerted) {
       const ctx = this.context();
@@ -646,10 +718,11 @@ export class ExploreFieldScene extends Phaser.Scene {
           sv.hp = Math.max(0, sv.hp - d);
           sv.bar(sv.hp / sv.maxHp);
           sv.img.setTintFill(0xffffff);
-          this.time.delayedCall(60, () => sv.img.setTint(0xd8c090));
+          this.time.delayedCall(60, () => (sv.img.texture.key === 'player' ? sv.img.setTint(0xd8c090) : sv.img.clearTint()));
         },
       });
     }
+    others.push(...this.props.lureTargets());
     return {
       blockX: -100000,
       hitBlock: () => {},
@@ -677,7 +750,47 @@ export class ExploreFieldScene extends Phaser.Scene {
         continue;
       }
       f.cd -= dt;
-      const gun = COMPANION_ROLES[f.m.role].gun;
+      const st = crewStats(f.m);
+      // 近戰型：衝上去砍附近的霧屍
+      if (st.melee) {
+        const ms = st.melee;
+        let near: Zombie | null = null;
+        let nd = 70;
+        for (const z of this.zombies) {
+          if (z.dead) continue;
+          const d = Math.hypot(z.footX - f.x, (z.footY - f.y) * 2);
+          if (d < nd) {
+            nd = d;
+            near = z;
+          }
+        }
+        if (!near) continue;
+        const dir = near.footX < f.x ? -1 : 1;
+        f.img.setFlipX(dir < 0);
+        // 往目標靠近（覆蓋跟隨位置）
+        f.x += (near.footX - dir * ms.reach * 0.7 - f.x) * Math.min(1, dt * 5);
+        f.y += (near.footY - f.y) * Math.min(1, dt * 4);
+        if (nd <= ms.reach + 12 && f.cd <= 0) {
+          f.cd = ms.windup + ms.active + ms.recovery + 0.1;
+          const killed = near.takeHit({
+            amount: ms.damage,
+            type: ms.damageType,
+            penetration: ms.penetration,
+            knockback: ms.knockback,
+            stagger: ms.stagger,
+            headshot: false,
+            dirX: dir,
+            source: 'ally',
+            weaponId: ms.id,
+          });
+          this.fx.blood(near.footX - 4 * dir, near.footY - 30, dir, near.footY, 4, 0.9);
+          GameEvents.of(this).emit('ally:shoot', { role: f.m.role, x: f.x, y: f.y - 30, angle: dir > 0 ? 0 : Math.PI, weaponId: ms.id });
+          if (killed) this.kills++;
+          this.exp.addNoise(0.3);
+        }
+        continue;
+      }
+      const gun = st.gun;
       let target: Zombie | null = null;
       let bestD = gun.range;
       for (const z of this.zombies) {
@@ -691,7 +804,7 @@ export class ExploreFieldScene extends Phaser.Scene {
       if (target) f.img.setFlipX(target.footX < f.x);
       if (target && f.cd <= 0) {
         f.cd = 1 / gun.fireRate + 0.3;
-        const head = this.rng.chance(gun.headChance + (f.m.attrs.aim - 3) * 0.05);
+        const head = this.rng.chance(gun.headChance);
         const sx = f.x + (target.footX < f.x ? -12 : 12);
         const sy = f.y - 40;
         const ty2 = target.footY - (head ? 52 : 34) * (target.def.scale ?? 1);
@@ -706,6 +819,11 @@ export class ExploreFieldScene extends Phaser.Scene {
   }
 
   private hurtFollower(f: Follower, d: number): void {
+    // 閃避：瘦小、身手矯健的人比較難被打中
+    if (this.rng.chance(crewStats(f.m).dodge)) {
+      this.fx.popText(f.x, f.y - 60, '閃開！', '#b3e5fc');
+      return;
+    }
     const hp = Math.max(0, (this.exp.crewHp.get(f.m.id) ?? 0) - d);
     this.exp.crewHp.set(f.m.id, hp);
     f.img.setTintFill(0xffffff);
@@ -714,7 +832,7 @@ export class ExploreFieldScene extends Phaser.Scene {
       f.down = true;
       this.fx.popText(f.x, f.y - 60, `${f.m.name} 倒下了！`, '#ff8a80');
       this.tweens.add({ targets: f.img, angle: f.img.flipX ? 90 : -90, alpha: 0.6, duration: 300 });
-      GameEvents.of(this).emit('ally:hurt', { name: f.m.name, role: f.m.role, amount: d, hp: 0, maxHp: COMPANION_ROLES[f.m.role].maxHp, x: f.x, y: f.y });
+      GameEvents.of(this).emit('ally:hurt', { name: f.m.name, role: f.m.role, amount: d, hp: 0, maxHp: crewStats(f.m).maxHp, x: f.x, y: f.y });
     }
   }
 

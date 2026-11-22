@@ -5,7 +5,6 @@ import {
   GROUND_Y,
   LANE_BOTTOM,
   LANE_TOP,
-  PLACEHOLDER_COLORS,
   WORLD_WIDTH,
 } from '../config';
 import { BuildMode } from '../build/BuildMode';
@@ -44,6 +43,12 @@ import { LUCK } from '../data/heroes';
 import { PROLOGUES } from '../data/story';
 import type { StoryData } from './StoryScene';
 import { throwGrenade, useMedkit } from '../explore/Supplies';
+import { describeLoot } from '../explore/Expedition';
+import { AMMO } from '../data/weapons';
+import { getFirearm } from '../data/weapons';
+import { PropSystem } from '../scenery/PropSystem';
+import { outpostScenery } from '../scenery/locations';
+import type { SceneryResult } from '../scenery/SceneryBuilder';
 
 /** 從結算畫面進來時帶的資料：newDay 代表撐過一夜、進入新的一天 */
 export interface DefenseSceneData {
@@ -117,6 +122,9 @@ export class DefenseScene extends Phaser.Scene {
   private camFeel!: CameraFeel;
   private crosshair!: Crosshair;
   private screenFx!: ScreenFeedback;
+  private scenery!: SceneryResult;
+  /** 戰場上的油桶、車、木箱、路燈 */
+  private props!: PropSystem;
 
   constructor() {
     super('Defense');
@@ -144,6 +152,17 @@ export class DefenseScene extends Phaser.Scene {
     this.outpost = new Outpost(this, this.barricade);
     this.build = new BuildMode(this, this.outpost, { barricadeX: BARRICADE_X, baseX: BASE_X });
     this.player = new Player(this, PLAYER_X, (LANE_TOP + LANE_BOTTOM) / 2, GameState.hero.maxHp);
+    this.props = new PropSystem(this, {
+      player: this.player,
+      zombies: () => this.zombies,
+      others: () => this.companions?.targets() ?? [],
+      onKill: (n) => (this.kills += n),
+      onLoot: (loot, x, y) => {
+        GameState.addLoot(loot);
+        this.fx.popText(x, y - 10, describeLoot(loot).join(' '), '#f5d76e');
+      },
+      rollLoot: () => this.crateLoot(),
+    }, this.scenery);
 
     // 戰場比畫面寬：鏡頭跟著主角水平捲動，中間留一段不跟的死區
     const cam = this.cameras.main;
@@ -299,40 +318,25 @@ export class DefenseScene extends Phaser.Scene {
     useMedkit(this, this.player);
   }
 
+  /** 戰場：依選擇的據點地圖畫出街口／加油站／校園，再擺上油桶、車、木箱 */
   private drawBackdrop(): void {
-    // 天空固定不捲動
-    this.add.rectangle(0, 0, GAME_WIDTH, GROUND_Y, PLACEHOLDER_COLORS.sky).setOrigin(0).setScrollFactor(0);
-    // 遠方的灰霧帶：視差捲動，越遠越慢
-    for (let i = 0; i < 3; i++) {
-      this.add
-        .rectangle(0, GROUND_Y - 70 + i * 18, WORLD_WIDTH, 30, PLACEHOLDER_COLORS.fog, 0.06 + i * 0.03)
-        .setOrigin(0)
-        .setScrollFactor(0.3 + i * 0.2);
-    }
-    // 遠景廢墟剪影
-    const rng = new Phaser.Math.RandomDataGenerator(['outpost']);
-    for (let x = 0; x < WORLD_WIDTH; x += rng.between(40, 90)) {
-      const h = rng.between(20, 60);
-      this.add.rectangle(x, GROUND_Y, rng.between(24, 50), h, 0x232831).setOrigin(0, 1).setScrollFactor(0.6);
-    }
-    // 地面帶：越近越亮一點，做出縱深
-    const bands = 6;
-    const bandH = (GAME_HEIGHT - GROUND_Y) / bands;
-    for (let i = 0; i < bands; i++) {
-      const c = Phaser.Display.Color.IntegerToColor(PLACEHOLDER_COLORS.ground).lighten(i * 2).color;
-      this.add.rectangle(0, GROUND_Y + i * bandH, WORLD_WIDTH, bandH + 1, c).setOrigin(0);
-    }
-    // 地上的碎石與裂痕，捲動時才看得出在移動
-    for (let n = 0; n < 90; n++) {
-      const y = rng.between(GROUND_Y + 4, GAME_HEIGHT - 2);
-      const near = (y - GROUND_Y) / (GAME_HEIGHT - GROUND_Y);
-      this.add
-        .rectangle(rng.between(0, WORLD_WIDTH), y, 2 + near * 6, 1 + Math.round(near), 0x1c1f25, 0.8)
-        .setOrigin(0.5);
-    }
+    this.scenery = outpostScenery(this, GameState.data.outpostMap, WORLD_WIDTH, GameState.data.day);
     // 據點外牆與射擊平台（整條地面帶都被外牆擋住）
     this.add.rectangle(0, GROUND_Y - 84, BASE_X, GAME_HEIGHT - GROUND_Y + 84, 0x3d4450).setOrigin(0);
+    this.add.rectangle(0, GROUND_Y - 84, BASE_X, 3, 0x6a7280).setOrigin(0);
+    for (let y = GROUND_Y - 78; y < GAME_HEIGHT; y += 10) this.add.rectangle(0, y, BASE_X, 1, 0x2e333c).setOrigin(0);
     this.add.rectangle(BASE_X, GROUND_Y, 6, GAME_HEIGHT - GROUND_Y, 0x555d6b).setOrigin(0);
+  }
+
+  /** 戰場上的物資箱：廢料，偶爾有手上槍的子彈 */
+  private crateLoot() {
+    const guns = GameState.data.armory.loadout.map((id) => getFirearm(id)).filter((d) => d && !d.infiniteReserve);
+    const loot: { scrap: number; ammo?: Partial<Record<keyof typeof AMMO, number>> } = { scrap: Phaser.Math.Between(4, 10) };
+    if (guns.length && Math.random() < 0.6) {
+      const g = Phaser.Utils.Array.GetRandom(guns)!;
+      loot.ammo = { [g.ammo]: Math.max(2, Math.round(AMMO[g.ammo].box * 0.5)) };
+    }
+    return loot;
   }
 
   private spawnZombie(id: string): void {
@@ -411,7 +415,7 @@ export class DefenseScene extends Phaser.Scene {
       player: { x: this.player.footX, y: this.player.footY, alive: this.player.alive },
       // 受擊回饋（震動、紅邊、卡肉）在 wireFeedback() 裡訂閱 player:hurt
       hitPlayer: (d, fromX, fromY, src) => (this.heroSys ? this.heroSys.hitPlayer(d, fromX, fromY, src) : this.player.takeDamage(d, fromX, fromY)),
-      others: this.companions.targets(),
+      others: [...this.companions.targets(), ...this.props.lureTargets()],
       zombies: this.zombies,
     };
   }
@@ -494,6 +498,10 @@ export class DefenseScene extends Phaser.Scene {
     // 敵人
     const ctx = this.zombieContext();
     for (const z of this.zombies) z.update(dt, ctx);
+    // 場景道具：油桶、火堆、汽車警報、掉落物；掩體擋路
+    this.props.update(dt);
+    this.props.collide(this.player);
+    for (const z of this.zombies) if (!z.dead && z.spec.body !== 'crow') this.props.collide(z);
     // 陷阱與砲塔
     this.kills += this.outpost.update(dt, this.zombies);
     this.collectScrap();

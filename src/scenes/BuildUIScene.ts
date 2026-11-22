@@ -9,6 +9,9 @@ import { GameState } from '../state/GameState';
 import { ensureCrewTexture } from '../art/CrewArt';
 import { COMPANION_ROLES, MAX_DEPLOYED } from '../data/companions';
 import { ATTRS, TRAIT_BY_ID } from '../data/crewTraits';
+import { BACKGROUND_BY_ID, BODIES, PROF_NAMES, profSummary } from '../data/crewBody';
+import { crewStats } from '../data/crewLoadout';
+import { getWeapon } from '../data/weapons';
 import { pixelText } from '../utils/text';
 import { EXPLORE_TIME, getZone } from '../data/explore';
 import { crewReady } from '../data/companions';
@@ -42,6 +45,9 @@ export class BuildUIScene extends Phaser.Scene {
   private fixedRects: (() => void)[] = [];
   /** 隊伍名冊面板是否打開 */
   private rosterOpen = false;
+  private rosterPage = 0;
+  /** 換武器失敗時的提示 */
+  private rosterNote = '';
 
   constructor() {
     super('BuildUI');
@@ -193,44 +199,94 @@ export class BuildUIScene extends Phaser.Scene {
   private showRoster(): void {
     const crew = GameState.data.crew;
     const cols = 2;
-    const cellH = 50;
-    const rows = Math.max(1, Math.ceil(crew.length / cols));
-    const x0 = PANEL_X - 40;
-    const w = PANEL_W + 80;
+    const perPage = 6;
+    const cellH = 72;
+    const pages = Math.max(1, Math.ceil(crew.length / perPage));
+    this.rosterPage = Math.min(this.rosterPage, pages - 1);
+    const list = crew.slice(this.rosterPage * perPage, (this.rosterPage + 1) * perPage);
+    const rows = Math.max(1, Math.ceil(list.length / cols));
+    const x0 = 20;
+    const w = GAME_WIDTH - 40;
     const cw = (w - 24) / cols;
     const h = 26 + rows * (cellH + 4);
-    const bg = this.add.rectangle(x0, PANEL_Y, w, h, 0x0d0f14, 0.9).setOrigin(0).setStrokeStyle(1, 0xf5d76e, 0.6);
+    const bg = this.add.rectangle(x0, PANEL_Y, w, h, 0x0d0f14, 0.92).setOrigin(0).setStrokeStyle(1, 0xf5d76e, 0.6);
     this.panel.add(bg);
     this.panelRects.push(registerUIRect({ x: x0, y: PANEL_Y, w, h }));
-    this.text(x0 + 10, PANEL_Y + 7, `隊伍名冊　前 ${MAX_DEPLOYED} 位出戰`, 9, '#f5d76e');
-    if (crew.length === 0) this.text(x0 + 10, PANEL_Y + 30, '現在只有你一個人。出門探索、推進主線，就能找到願意跟你走的倖存者。', 8, '#b0bec5');
+    this.text(x0 + 10, PANEL_Y + 7, `隊伍名冊　前 ${MAX_DEPLOYED} 位出戰　點武器列可換武器（一把只能一人拿）`, 9, '#f5d76e');
+    if (pages > 1) {
+      this.addButton(x0 + w - 70, PANEL_Y + 4, 28, 16, '◀', this.rosterPage > 0, () => {
+        this.rosterPage--;
+        this.refresh();
+      });
+      this.addButton(x0 + w - 38, PANEL_Y + 4, 28, 16, '▶', this.rosterPage < pages - 1, () => {
+        this.rosterPage++;
+        this.refresh();
+      });
+    }
     if (crew.length === 0) {
-      this.text(x0 + 10, PANEL_Y + 26, '沒有隊員。白天探索可以救回倖存者。', 8, '#c8c8c8');
+      this.text(x0 + 10, PANEL_Y + 26, '現在只有你一個人。出門探索、推進主線，就能找到願意跟你走的倖存者。', 8, '#b0bec5');
       return;
     }
-    crew.forEach((m, i) => {
+    const ready = crew.filter(crewReady);
+    list.forEach((m, i) => {
       const cx = x0 + 8 + (i % cols) * (cw + 8);
       const cy = PANEL_Y + 24 + Math.floor(i / cols) * (cellH + 4);
       this.panel.add(this.add.rectangle(cx, cy, cw, cellH, 0x1c2029, 0.95).setOrigin(0).setStrokeStyle(1, 0xffffff, 0.12));
-      // 半身像：只取頭到腰
+      // 半身像：切出頭到腰，對齊到格子左上
       const key = ensureCrewTexture(this, m) ?? 'player';
-      // 切出頭到腰，對齊到格子左上
-      const img = this.add.image(cx - 10, cy, key, 0).setOrigin(0, 0).setCrop(12, 4, 40, 44);
+      const img = this.add.image(cx - 10, cy + 6, key, 0).setOrigin(0, 0).setCrop(12, 4, 40, 50);
       if (key === 'player') img.setTint(COMPANION_ROLES[m.role].tint);
       this.panel.add(img);
-      const ready = crewReady(m);
-      const deployed = ready && crew.filter(crewReady).indexOf(m) < MAX_DEPLOYED;
-      this.text(cx + 44, cy + 3, m.name, 9, '#ffffff');
-      this.text(cx + cw - 6, cy + 4, `${COMPANION_ROLES[m.role].title}${!ready ? `・負傷 ${m.injuredDays} 天` : deployed ? '・出戰' : '・待命'}`, 8, !ready ? '#ef9a9a' : deployed ? '#f5d76e' : '#90a4ae').setOrigin(1, 0);
+      const isReady = crewReady(m);
+      const deployed = isReady && ready.indexOf(m) < MAX_DEPLOYED;
+      const tx0 = cx + 44;
+      this.text(tx0, cy + 3, m.name, 9, '#ffffff');
+      this.text(cx + cw - 6, cy + 4, `${COMPANION_ROLES[m.role].title}${!isReady ? `・負傷 ${m.injuredDays} 天` : deployed ? '・出戰' : '・待命'}`, 8, !isReady ? '#ef9a9a' : deployed ? '#f5d76e' : '#90a4ae').setOrigin(1, 0);
+      // 體格・出身・擅長
+      const body = BODIES[m.body] ?? BODIES.average;
+      const bgDef = BACKGROUND_BY_ID[m.background];
+      const good = m.prof ? profSummary(m.prof) : '';
+      this.text(tx0, cy + 17, `${body.name}・${bgDef?.name ?? '倖存者'}${good ? `　擅長 ${good}` : ''}`, 8, '#cfd8dc');
       const traits = m.traits.map((t) => TRAIT_BY_ID[t]).filter(Boolean);
-      let tx = cx + 44;
+      let tx = tx0;
       for (const t of traits) {
-        const tt = this.text(tx, cy + 18, t.name, 8, t.kind === 'perk' ? '#a5d6a7' : '#ef9a9a');
+        const tt = this.text(tx, cy + 30, t.name, 8, t.kind === 'perk' ? '#a5d6a7' : '#ef9a9a');
         tx += tt.width + 6;
       }
+      const st = crewStats(m);
       const attrs = ATTRS.map((a) => `${a.name[0]}${m.attrs[a.key]}`).join(' ');
-      this.text(cx + 44, cy + 32, attrs, 8, '#b0bec5');
+      this.text(tx0, cy + 42, `${attrs}　血 ${st.maxHp}　速 ${Math.round(st.speed)}`, 8, '#b0bec5');
+      // 武器列：點一下換下一把能用的
+      const wname = this.weaponLabel(m.weaponId, st.weaponId, st.sidearm, !!st.melee);
+      const label = `武器：${wname}・${PROF_NAMES[st.proficiency] ?? ''}`;
+      this.addButton(tx0, cy + 55, cw - 50, 14, '', true, () => this.cycleCrewWeapon(m.id));
+      this.text(tx0 + 4, cy + 56, label, 8, st.sidearm ? '#90a4ae' : '#ffe082');
     });
+    if (this.rosterNote) this.text(x0 + 10, PANEL_Y + h + 4, this.rosterNote, 8, '#ff8a80');
+  }
+
+  private weaponLabel(assigned: string | undefined, actual: string, sidearm: boolean, melee: boolean): string {
+    if (sidearm) return '隨身手槍';
+    if (!assigned && melee) return '隨身小刀';
+    return getWeapon(actual)?.name ?? actual;
+  }
+
+  /** 換下一把：隨身 → 能用的武器依序 → 回到隨身 */
+  private cycleCrewWeapon(crewId: string): void {
+    const m = GameState.data.crew.find((c) => c.id === crewId);
+    if (!m) return;
+    const options: (string | null)[] = [null, ...GameState.wieldableFor(crewId)];
+    let i = options.indexOf(m.weaponId ?? null);
+    this.rosterNote = '';
+    // 往後找一把配得上的（主角最後一把槍之類的會被拒絕，跳過）
+    for (let n = 0; n < options.length; n++) {
+      i = (i + 1) % options.length;
+      const res = GameState.assignWeapon(crewId, options[i]);
+      if (res.ok) break;
+      this.rosterNote = res.reason ?? '';
+    }
+    GameState.save();
+    this.refresh();
   }
 
   private effectLine(kind: BuildingKind, level: number): string {

@@ -83,10 +83,10 @@ export class UIScene extends Phaser.Scene {
     this.button(GAME_WIDTH - 38, GAME_HEIGHT - 38, '換彈', () => queueAction('reload'));
     this.button(GAME_WIDTH - 76, GAME_HEIGHT - 38, '換槍', () => queueAction('next'));
     this.button(GAME_WIDTH - 38, GAME_HEIGHT - 76, '近戰', () => queueAction('melee'));
-    // 主角技能鍵：阿凱奔跑（切換）、馬克擊倒
+    // 主角技能鍵：阿凱奔跑（切換）、馬克擊倒（放在夥伴指令鍵左邊，不要疊在一起）
     const heroId = GameState.data.hero;
-    if (heroId === 'student') this.button(GAME_WIDTH - 114, GAME_HEIGHT - 38, '奔跑', () => (heroTouch.sprint = !heroTouch.sprint));
-    if (heroId === 'soldier') this.button(GAME_WIDTH - 114, GAME_HEIGHT - 38, '擊倒', () => (heroTouch.skill = true));
+    if (heroId === 'student') this.button(GAME_WIDTH - 152, GAME_HEIGHT - 38, '奔跑', () => (heroTouch.sprint = !heroTouch.sprint));
+    if (heroId === 'soldier') this.button(GAME_WIDTH - 152, GAME_HEIGHT - 38, '擊倒', () => (heroTouch.skill = true));
     // 探索帶回來的輔助用品（鍵盤 G／H）
     this.grenadeLabel = this.supplyButton(GAME_WIDTH - 76, GAME_HEIGHT - 76, 'G', 'use-grenade');
     this.medkitLabel = this.supplyButton(GAME_WIDTH - 114, GAME_HEIGHT - 76, 'H', 'use-medkit');
@@ -175,7 +175,7 @@ export class UIScene extends Phaser.Scene {
   private buildCrew(count: number): void {
     const defense = this.scene.get('Defense');
     for (let i = 0; i < count; i++) {
-      const y = 64 + i * 14;
+      const y = 74 + i * 14;
       const mark = this.add.rectangle(8, y + 4, 5, 5, 0xffffff).setOrigin(0).setStrokeStyle(1, 0x000000);
       const label = pixelText(this, 16, y, '', 8);
       // 名字最長 3 字＋職業 2 字

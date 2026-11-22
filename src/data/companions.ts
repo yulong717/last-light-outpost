@@ -1,4 +1,5 @@
-import { generateCrewProfile } from './crewGen';
+import { applyBase, generateBodyInfo, generateCrewProfile } from './crewGen';
+import { BODIES, type BodyType, type Proficiency } from './crewBody';
 import type { CrewLook } from './crewLooks';
 import type { CrewAttrs } from './crewTraits';
 import { hashSeed, randomSeed } from '../utils/rng';
@@ -95,7 +96,13 @@ export interface CrewMember {
   attrs: CrewAttrs;
   /** 特質 id（見 src/data/crewTraits.ts） */
   traits: string[];
-  /** 之後可配發武器系統裡的槍；沒有就用職業預設槍 */
+  /** 體格（src/data/crewBody.ts）：血量、速度、閃避、近戰、後座、負重、身形 */
+  body: BodyType;
+  /** 出身：決定武器熟練度的底子 */
+  background: string;
+  /** 各類武器熟練度 0～4（0 = 不會用） */
+  prof: Proficiency;
+  /** 配發的武器（一把槍同時只會在一個人手上）；沒有就用隨身手槍 */
   weaponId?: string;
   /** 探索中倒下：還要休養幾天（> 0 時不能出戰、不能探索） */
   injuredDays?: number;
@@ -109,7 +116,18 @@ export function crewReady(m: CrewMember): boolean {
 /** 依職業與種子產生一位完整的隊員 */
 export function makeCrewMember(id: string, role: CompanionRole, seed: number, takenNames: string[] = [], name?: string): CrewMember {
   const p = generateCrewProfile(role, seed, takenNames);
-  return { id, role, seed, name: name ?? p.name, look: p.look, attrs: p.attrs, traits: p.traits };
+  return {
+    id,
+    role,
+    seed,
+    name: name ?? p.name,
+    look: p.look,
+    attrs: p.attrs,
+    traits: p.traits,
+    body: p.body,
+    background: p.background,
+    prof: p.prof,
+  };
 }
 
 /**
@@ -117,10 +135,21 @@ export function makeCrewMember(id: string, role: CompanionRole, seed: number, ta
  * 缺欄位才補，已經有的不動。
  */
 export function upgradeCrewMember(m: Partial<CrewMember> & { id: string; name: string; role: CompanionRole }): CrewMember {
-  if (m.look && m.attrs && Array.isArray(m.traits) && typeof m.seed === 'number') return m as CrewMember;
-  const seed = typeof m.seed === 'number' ? m.seed : hashSeed(m.id);
-  const full = makeCrewMember(m.id, m.role, seed, [], m.name);
-  return { ...full, ...(m.weaponId ? { weaponId: m.weaponId } : {}) };
+  let out: CrewMember;
+  if (m.look && m.attrs && Array.isArray(m.traits) && typeof m.seed === 'number') out = m as CrewMember;
+  else {
+    const seed = typeof m.seed === 'number' ? m.seed : hashSeed(m.id);
+    const full = makeCrewMember(m.id, m.role, seed, [], m.name);
+    out = { ...full, ...(m.weaponId ? { weaponId: m.weaponId } : {}), ...(m.injuredDays ? { injuredDays: m.injuredDays } : {}) };
+  }
+  // 舊隊員沒有體格與出身：用獨立亂數補上，原本的長相不變（只依體格加寬身形）
+  if (!out.body || !out.background || !out.prof) {
+    const info = generateBodyInfo(out.role, out.seed, out.traits, out.attrs);
+    out = { ...out, ...info, look: { ...out.look, widen: BODIES[info.body].widen } };
+  }
+  // 舊隊員還是主角換裝的樣子：補上底圖（不同的人），配件保留
+  if (!out.look.base) out = { ...out, look: applyBase(out.look, out.seed, out) };
+  return out;
 }
 
 /** 探索模式完成前，新遊戲先送一組預設小隊（每局隨機長相與能力） */

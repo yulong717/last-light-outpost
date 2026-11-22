@@ -1,4 +1,6 @@
 import type { CompanionGunDef, CompanionRole, CompanionRoleDef } from './companions';
+import { BACKGROUND_BY_ID, BODIES, PROF_EFFECT, weaponGroup, type BodyType, type Proficiency } from './crewBody';
+import { companionGunFor, getFirearm, getMelee, type MeleeDef } from './weapons';
 import type { BodyGearId, FaceGearId } from './crewLooks';
 
 /**
@@ -101,17 +103,48 @@ export const TRAITS: TraitDef[] = [
   { id: 'smoker', name: '老菸槍', desc: '血量 -10%、移動速度 -10%', kind: 'flaw', weight: 1.5, mods: { hp: 0.9, speed: 0.9 }, face: 'cigarette' },
   { id: 'wasteful', name: '浪費子彈', desc: '彈匣 -35%', kind: 'flaw', weight: 2, mods: { magazine: 0.65 }, excludes: ['deadeye'] },
   { id: 'reckless', name: '莽撞', desc: '常常站到隊形前面', kind: 'flaw', weight: 1.5, hook: 'reckless', excludes: ['skittish'] },
+  { id: 'gunshy', name: '不碰槍', desc: '所有槍都不會用，只拿近戰武器（近戰更熟）', kind: 'flaw', weight: 1.2, excludes: ['sharpshooter', 'triggerhappy', 'deadeye', 'quickhands', 'wasteful'] },
   { id: 'loner', name: '獨行俠', desc: '不吃鼓舞效果，治療量 -30%', kind: 'flaw', weight: 1, mods: { heal: 0.7 }, excludes: ['inspiring'] },
 ];
 
 export const TRAIT_BY_ID: Record<string, TraitDef> = Object.fromEntries(TRAITS.map((t) => [t.id, t]));
 
-/** 一位隊員實際的戰鬥數值（職業基礎 × 屬性 × 特質） */
+/** 近戰型隊員的揮擊數值 */
+export interface CrewMeleeStats {
+  id: string;
+  damage: number;
+  damageType: MeleeDef['damageType'];
+  penetration: number;
+  reach: number;
+  arc: number;
+  maxTargets: number;
+  knockback: number;
+  stagger: number;
+  windup: number;
+  active: number;
+  recovery: number;
+  swing: MeleeDef['swing'];
+}
+
+/** 一位隊員實際的戰鬥數值（職業基礎 × 體格 × 屬性 × 武器熟練 × 特質） */
 export interface CrewStats {
   maxHp: number;
   speed: number;
+  /** 手上的武器 id（隨身手槍是 'm1911' 的外觀） */
+  weaponId: string;
+  /** 沒有配發，用的是隨身手槍（備彈無限） */
+  sidearm: boolean;
+  /** 槍（近戰型也會有，只是不用） */
   gun: CompanionGunDef;
+  /** 拿近戰武器時才有 */
+  melee?: CrewMeleeStats;
+  /** 這把武器的熟練度 0～4 */
+  proficiency: number;
   aimDelay: number;
+  /** 閃避霧屍攻擊的機率 */
+  dodge: number;
+  /** 探索時多帶回的戰利品倍率加成 */
+  carry: number;
   heal?: { amount: number; interval: number; range: number };
   repairPerSec?: number;
   hooks: Set<TraitHook>;
@@ -129,13 +162,26 @@ const PER_STAR = {
 };
 
 const BASE_AIM_DELAY = 0.25;
+/** 每點負重 = 探索戰利品 +8% */
+export const CARRY_PER_POINT = 0.08;
+
+/** 武器有多「重」：越重越吃體格的後座控制 */
+const HEFT: Record<string, number> = { pistol: 0.15, revolver: 0.4, smg: 0.25, rifle: 0.45, shotgun: 0.6, sniper: 0.5, lmg: 1 };
 
 export interface CrewProfile {
   attrs: CrewAttrs;
   traits: string[];
+  /** 舊資料可能沒有（就當標準體格、普通熟練） */
+  body?: BodyType;
+  background?: string;
+  prof?: Proficiency;
 }
 
-export function resolveCrewStats(def: CompanionRoleDef, profile: CrewProfile, baseGun: CompanionGunDef = def.gun): CrewStats {
+/**
+ * 算出一位隊員拿某把武器時的實際數值。
+ * weaponId 不填 = 隨身手槍（職業預設數值、M1911 外觀、備彈無限）。
+ */
+export function resolveCrewStats(def: CompanionRoleDef, profile: CrewProfile, weaponId?: string): CrewStats {
   const a = profile.attrs;
   const m: Required<TraitMods> = {
     hp: 1,
@@ -162,25 +208,74 @@ export function resolveCrewStats(def: CompanionRoleDef, profile: CrewProfile, ba
       else m[k] *= v;
     }
   }
+  const body = BODIES[profile.body ?? 'average'] ?? BODIES.average;
+  const bg = profile.background ? BACKGROUND_BY_ID[profile.background] : undefined;
   const d = (k: AttrKey): number => (a[k] ?? 3) - 3;
+
+  const meleeDef = weaponId ? getMelee(weaponId) : undefined;
+  const fire = weaponId ? getFirearm(weaponId) : undefined;
+  const sidearm = !meleeDef && !fire;
+  const group = weaponId ? weaponGroup(weaponId) ?? 'handgun' : 'handgun';
+  const level = profile.prof ? profile.prof[group] ?? 2 : 2;
+  const pl = Math.max(1, level) - 2;
+
+  const baseGun: CompanionGunDef = fire ? companionGunFor(fire.id) : { ...def.gun, weaponId: 'm1911' };
+  // 體格的後座控制：越重的槍影響越大
+  const heft = fire ? HEFT[fire.cls] ?? 0.3 : HEFT.pistol;
+  const recoilSpread = 1 + heft * (1 / body.recoil - 1) * 1.5;
+  const recoilRate = 1 + heft * (body.recoil - 1) * 0.4;
   const gun: CompanionGunDef = {
     ...baseGun,
     damage: baseGun.damage * m.damage,
-    fireRate: baseGun.fireRate * (1 + PER_STAR.fireRate * d('hand')) * m.fireRate,
+    fireRate: baseGun.fireRate * (1 + PER_STAR.fireRate * d('hand')) * (1 + PROF_EFFECT.fireRate * pl) * recoilRate * m.fireRate,
     magazine: Math.max(2, Math.round(baseGun.magazine * m.magazine)),
-    reloadTime: baseGun.reloadTime * (1 - PER_STAR.reload * d('hand')) * m.reload,
+    reloadTime: baseGun.reloadTime * (1 - PER_STAR.reload * d('hand')) * Math.max(0.5, 1 - PROF_EFFECT.reload * pl) * m.reload,
     range: baseGun.range * m.range,
-    spread: Math.max(0.5, baseGun.spread * (1 - PER_STAR.spread * d('aim')) * m.spread),
-    headChance: Math.min(0.75, Math.max(0, baseGun.headChance + PER_STAR.headChance * d('aim') + m.headChance)),
+    spread: Math.max(
+      0.4,
+      baseGun.spread * (1 - PER_STAR.spread * d('aim')) * Math.max(0.4, 1 - PROF_EFFECT.spread * pl) * recoilSpread * m.spread,
+    ),
+    headChance: Math.min(
+      0.75,
+      Math.max(0, baseGun.headChance + PER_STAR.headChance * d('aim') + PROF_EFFECT.headChance * pl + m.headChance),
+    ),
     knockback: baseGun.knockback * m.knockback,
   };
+
+  let melee: CrewMeleeStats | undefined;
+  if (meleeDef) {
+    const speed = Math.max(0.6, 1 - PROF_EFFECT.meleeSpeed * pl) * (1 - PER_STAR.fireRate * d('hand') * 0.5);
+    melee = {
+      id: meleeDef.id,
+      damage: meleeDef.damage * body.melee * (1 + PROF_EFFECT.meleeDamage * pl) * m.damage,
+      damageType: meleeDef.damageType,
+      penetration: meleeDef.penetration,
+      reach: meleeDef.reach,
+      arc: meleeDef.arc,
+      maxTargets: meleeDef.maxTargets,
+      knockback: meleeDef.knockback * body.melee * m.knockback,
+      stagger: meleeDef.stagger,
+      // AI 揮得比玩家慢一點，不然太強
+      windup: meleeDef.windup * speed * 1.4,
+      active: meleeDef.active,
+      recovery: meleeDef.recovery * speed * 1.6,
+      swing: meleeDef.swing,
+    };
+  }
+
   return {
-    maxHp: Math.round(def.maxHp * (1 + PER_STAR.hp * d('vit')) * m.hp),
-    speed: def.speed * (1 + PER_STAR.speed * d('agi')) * m.speed,
+    maxHp: Math.round(def.maxHp * body.hp * (1 + PER_STAR.hp * d('vit')) * m.hp),
+    speed: def.speed * body.speed * (1 + PER_STAR.speed * d('agi')) * m.speed,
+    weaponId: weaponId ?? 'm1911',
+    sidearm,
     gun,
+    melee,
+    proficiency: level,
     aimDelay: BASE_AIM_DELAY * Math.max(0.2, 1 - PER_STAR.aimDelay * d('nerve')) * m.aimDelay,
-    heal: def.heal ? { ...def.heal, amount: Math.round(def.heal.amount * m.heal) } : undefined,
-    repairPerSec: def.repairPerSec ? def.repairPerSec * m.repair : undefined,
+    dodge: body.dodge + (hooks.has('nimble') ? TRAIT_TUNING.nimbleChance : 0),
+    carry: body.carry * CARRY_PER_POINT,
+    heal: def.heal ? { ...def.heal, amount: Math.round(def.heal.amount * m.heal * (bg?.heal ?? 1)) } : undefined,
+    repairPerSec: def.repairPerSec ? def.repairPerSec * m.repair * (bg?.repair ?? 1) : undefined,
     hooks,
   };
 }

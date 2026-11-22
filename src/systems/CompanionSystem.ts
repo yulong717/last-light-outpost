@@ -119,6 +119,13 @@ export class CompanionSystem {
       let { x, y } = this.order === 'follow' && player.alive ? this.followSpot(player, i) : this.holdSpot(c.def.role, i);
       let canShoot = true;
       c.status = c.reloading ? '換彈' : this.order === 'hold' ? '固守' : '跟隨';
+      // 近戰型：固守時守在路障邊、對準正在拆路障的霧屍；跟隨時衝向附近的霧屍
+      if (c.isMelee) {
+        const spot = this.meleeSpot(c, player, zombies);
+        x = spot.x;
+        y = spot.y;
+        if (spot.engaging) c.status = '肉搏';
+      }
       // 莽撞：老是站到隊形前面
       if (c.stats.hooks.has('reckless')) x += TRAIT_TUNING.recklessStep;
       // 膽小：被貼身就往後退
@@ -226,6 +233,40 @@ export class CompanionSystem {
       this.scene.cameras.main.shake(80, 0.004);
       if (this.companions.every((o) => !o.alive)) this.order = 'hold';
     }
+  }
+
+  /** 近戰隊員要站的位置 */
+  private meleeSpot(c: Companion, player: CompanionPlayerLink, zombies: Zombie[]): { x: number; y: number; engaging: boolean } {
+    const reach = c.meleeReach;
+    const bx = this.layout.barricadeX;
+    const following = this.order === 'follow' && player.alive;
+    // 找目標：固守時只管貼在路障前的，跟隨時管主角附近的
+    let best: Zombie | null = null;
+    let bestD = Infinity;
+    for (const z of zombies) {
+      if (z.dead) continue;
+      const ok = following ? Math.abs(z.footX - player.footX) < 110 : z.footX < bx + 50;
+      if (!ok) continue;
+      const d = Math.hypot(z.footX - c.footX, (z.footY - c.footY) * 1.5);
+      if (d < bestD) {
+        bestD = d;
+        best = z;
+      }
+    }
+    if (best) {
+      // 站在目標靠據點這一側、剛好打得到的距離
+      const side = following && best.footX < c.footX ? 1 : -1;
+      let x = best.footX + side * Math.max(10, reach * 0.7);
+      if (!following) x = Math.min(x, bx + Math.max(0, reach - 16));
+      return { x, y: best.footY, engaging: true };
+    }
+    if (following) {
+      const i = this.companions.indexOf(c);
+      const o = FOLLOW_OFFSET[i % FOLLOW_OFFSET.length];
+      // 近戰的人站在主角前面
+      return { x: player.footX + Math.abs(o.x) * 0.8 * player.facing, y: player.footY + o.y, engaging: false };
+    }
+    return { x: bx - 4, y: c.footY, engaging: false };
   }
 
   /** 範圍內受傷最重（血量比例最低、且低於 9 成）的人 */
