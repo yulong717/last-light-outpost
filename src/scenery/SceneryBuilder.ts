@@ -367,6 +367,8 @@ const B = GROUND_Y;
 function facadeStreet(p: Painter, W: number, t: LocationTheme, rnd: Phaser.Math.RandomDataGenerator, signs: Sign[]): void {
   const names = ['五金行', '小吃', '藥局', '當舖', '網咖', '早餐', '機車行', '眼鏡'];
   const signCols = [0xc83a2a, 0x2a6ac8, 0x3a9a50, 0xd8a020, 0x8a3ac0];
+  rnd.shuffle(names);
+  let shop = 0;
   for (let x = 0; x < W; ) {
     const w = rnd.between(70, 120);
     if (rnd.frac() < 0.15) {
@@ -396,7 +398,7 @@ function facadeStreet(p: Painter, W: number, t: LocationTheme, rnd: Phaser.Math.
     // 一樓：招牌、鐵捲門（可能半開）
     const sc = signCols[rnd.between(0, signCols.length - 1)];
     p.box(x + 4, B - 44, w - 8, 12, sc);
-    signs.push({ x: x + w / 2, y: B - 38, text: names[rnd.between(0, names.length - 1)], color: '#f4ecd8', size: 8 });
+    signs.push({ x: x + w / 2, y: B - 38, text: names[shop++ % names.length], color: '#f4ecd8', size: 8 });
     const open = rnd.frac();
     p.rect(x + 6, B - 30, w - 12, 30, OUTLINE);
     const shutterBottom = open < 0.3 ? B - 14 : open < 0.5 ? B - 22 : B;
@@ -776,8 +778,8 @@ function drawInterior(
         for (let y = top + Math.floor((B - top) * 0.5); y < B; y += 6) p.rect(0, y, W, 1, tone(0x5a8a78, -0.12));
         p.rect(0, B - 48, W, 3, 0x9aa0a6);
         for (let x = 60; x < W; x += 140) {
-          p.box(x, top + 28, 16, 8, 0x2a4a6a);
-          signs.push({ x: x + 8, y: top + 32, text: `${rnd.between(2, 4)}0${rnd.between(1, 9)}`, color: '#ffffff', size: 6 });
+          p.box(x, top + 70, 16, 8, 0x2a4a6a);
+          signs.push({ x: x + 8, y: top + 74, text: `${rnd.between(2, 4)}0${rnd.between(1, 9)}`, color: '#ffffff', size: 6 });
         }
         // 拖行的血跡
         for (let x = rnd.between(0, 200); x < W; x += rnd.between(240, 400)) p.dither(x, B - 30, rnd.between(20, 40), 4, 0x5a0a08, 0.4);

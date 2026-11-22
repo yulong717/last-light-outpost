@@ -33,6 +33,8 @@ export interface GameStateData {
   exploredToday: string[];
   /** 今天的情報：哪一區發生了什麼 */
   intel?: { zone: string; kind: IntelKind };
+  /** 守城據點地圖（開新遊戲時選，見 src/data/scenery.ts 的 OUTPOST_MAPS） */
+  outpostMap?: string;
 }
 
 export interface ArmoryData {

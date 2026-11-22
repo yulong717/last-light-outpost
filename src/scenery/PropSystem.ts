@@ -372,8 +372,8 @@ export class PropSystem {
 
   // ── 汽車 ──
 
-  private startAlarm(o: PropObj): void {
-    if (o.alarmUsed || o.broken) return;
+  private startAlarm(o: PropObj, force = false): void {
+    if ((o.alarmUsed && !force) || o.broken || o.alarm > 0) return;
     o.alarmUsed = true;
     o.alarm = PROP_TUNING.car.alarmTime;
     o.alarmSfx = 0;
@@ -497,9 +497,8 @@ export class PropSystem {
       // 敲一下車窗，3 秒後才響：給主角時間躲起來
       AudioManager.play('glass_break', { volume: 0.25, semitones: 6 });
       Fx.of(this.scene)?.popText(o.x, o.y - o.h - 6, '3 秒後響！快躲', '#ffd24a');
-      o.alarmUsed = false;
-      this.scene.time.delayedCall(3000, () => this.startAlarm(o));
       o.alarmUsed = true;
+      this.scene.time.delayedCall(3000, () => this.startAlarm(o, true));
     }
   }
 

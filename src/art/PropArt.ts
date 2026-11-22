@@ -16,49 +16,61 @@ interface PropArt {
 
 const WOOD = 0x7a5636;
 
-/** 一輛轎車（側面），body 是車身色；f=1 燒毀 */
-function car(p: Painter, f: number, body: number, w = 64, h = 28, opt: { police?: boolean; taxi?: boolean } = {}): void {
+/** 一輛轎車（側面），body 是車身色；f=1 燒毀。尺寸 88×34，比例對齊 64px 高的角色 */
+function car(p: Painter, f: number, body: number, w = 88, h = 34, opt: { police?: boolean; taxi?: boolean } = {}): void {
   const burnt = f === 1;
   const c = burnt ? 0x2c2622 : body;
-  // 車身下半
-  p.box(1, h - 15, w - 2, 10, c);
-  // 車頂與車窗
-  p.rect(13, h - 25, w - 30, 1, OUTLINE);
-  p.rect(10, h - 24, w - 24, 10, OUTLINE);
-  p.rect(11, h - 24, w - 26, 9, tone(c, 0.05));
-  const glass = burnt ? 0x0c0c0c : 0x2c3e4c;
-  p.rect(14, h - 22, 15, 7, glass);
-  p.rect(31, h - 22, w - 48, 7, glass);
-  if (!burnt) {
-    p.line(15, h - 16, 20, h - 21, tone(glass, 0.35));
-    p.line(33, h - 16, 37, h - 20, tone(glass, 0.35));
+  // 車身下半（前後略收）
+  p.box(1, h - 19, w - 2, 13, c);
+  p.rect(0, h - 15, 2, 6, OUTLINE);
+  // 車頂與車窗（梯形）
+  const r0 = 18;
+  const r1 = w - 22;
+  for (let i = 0; i < 12; i++) {
+    const inset = Math.max(0, 6 - i);
+    p.rect(r0 + inset - 1, h - 31 + i, r1 - r0 - inset * 2 + 2, 1, OUTLINE);
+    p.rect(r0 + inset, h - 31 + i, r1 - r0 - inset * 2, 1, i === 1 ? tone(c, 0.3) : tone(c, 0.05));
   }
-  p.rect(30, h - 23, 1, 9, OUTLINE);
-  // 車門線、門把、車燈
-  p.rect(30, h - 14, 1, 8, tone(c, -0.35));
-  p.rect(25, h - 12, 3, 1, tone(c, 0.4));
-  p.rect(36, h - 12, 3, 1, tone(c, 0.4));
-  p.rect(w - 4, h - 13, 2, 3, burnt ? 0x3a2a20 : 0xf2e6a0);
-  p.rect(2, h - 13, 2, 3, burnt ? 0x3a2a20 : 0xb02a20);
-  p.rect(2, h - 7, w - 4, 1, tone(c, -0.45));
+  const glass = burnt ? 0x0c0c0c : 0x2c3e4c;
+  const mid = Math.round((r0 + r1) / 2);
+  p.rect(r0 + 5, h - 28, mid - r0 - 6, 8, glass);
+  p.rect(mid + 1, h - 28, r1 - mid - 6, 8, glass);
+  if (!burnt) {
+    p.line(r0 + 7, h - 21, r0 + 13, h - 27, tone(glass, 0.35));
+    p.line(mid + 4, h - 21, mid + 9, h - 26, tone(glass, 0.35));
+  }
+  p.rect(mid, h - 29, 1, 10, OUTLINE);
+  // 車門線、門把、腰線、車燈
+  p.rect(mid, h - 18, 1, 10, tone(c, -0.35));
+  p.rect(r0 + 2, h - 18, 1, 10, tone(c, -0.35));
+  p.rect(mid - 7, h - 16, 4, 1, tone(c, 0.4));
+  p.rect(mid + 4, h - 16, 4, 1, tone(c, 0.4));
+  p.rect(2, h - 14, w - 4, 1, tone(c, 0.18));
+  p.rect(w - 4, h - 17, 3, 4, burnt ? 0x3a2a20 : 0xf2e6a0);
+  p.rect(1, h - 17, 3, 4, burnt ? 0x3a2a20 : 0xb02a20);
+  p.rect(2, h - 8, w - 4, 2, tone(c, -0.45));
+  p.rect(w - 6, h - 9, 6, 2, 0x5a5e64);
+  p.rect(0, h - 9, 5, 2, 0x5a5e64);
   // 輪胎
-  for (const wx of [13, w - 14]) {
-    p.circle(wx, h - 5, 5, OUTLINE);
-    p.circle(wx, h - 5, 4, burnt ? 0x1a1816 : 0x222222);
-    p.circle(wx, h - 5, 2, burnt ? 0x3a3430 : 0x8a8e94);
+  for (const wx of [17, w - 18]) {
+    p.circle(wx, h - 6, 6, OUTLINE);
+    p.circle(wx, h - 6, 5, burnt ? 0x1a1816 : 0x222222);
+    p.circle(wx, h - 6, 2, burnt ? 0x3a3430 : 0x8a8e94);
   }
   if (opt.police && !burnt) {
-    p.rect(30, h - 28, 8, 3, OUTLINE);
-    p.rect(31, h - 27, 3, 2, 0xd03030);
-    p.rect(34, h - 27, 3, 2, 0x3060e0);
-    p.rect(3, h - 11, w - 6, 2, 0xf0f0f0);
-    p.rect(40, h - 13, 10, 1, 0x2a4a9a);
+    p.rect(mid - 6, h - 34, 13, 3, OUTLINE);
+    p.rect(mid - 5, h - 33, 5, 2, 0xd03030);
+    p.rect(mid + 1, h - 33, 5, 2, 0x3060e0);
+    p.rect(3, h - 13, w - 6, 3, 0xf0f0f0);
+    p.rect(mid + 6, h - 16, 14, 1, 0x2a4a9a);
   }
-  if (opt.taxi && !burnt) p.rect(30, h - 27, 6, 2, 0xf0d040);
+  if (opt.taxi && !burnt) {
+    p.rect(mid - 4, h - 34, 9, 3, 0xf0d040);
+    p.rect(mid - 4, h - 34, 9, 1, OUTLINE);
+  }
   if (burnt) {
-    // 焦黑與鏽斑
-    p.dither(4, h - 14, w - 8, 8, 0x5a3a24, 0.25);
-    p.dither(12, h - 24, w - 26, 9, 0x000000, 0.3);
+    p.dither(4, h - 18, w - 8, 10, 0x5a3a24, 0.25);
+    p.dither(r0, h - 30, r1 - r0, 10, 0x000000, 0.3);
   }
 }
 
@@ -215,12 +227,12 @@ export const PROPS: Record<string, PropArt> = {
   },
 
   // ── 車輛 ──
-  car_red: { w: 64, h: 28, frames: 2, draw: (p, f) => car(p, f, 0x9a2c26) },
-  car_blue: { w: 64, h: 28, frames: 2, draw: (p, f) => car(p, f, 0x2c4c8a) },
-  car_white: { w: 64, h: 28, frames: 2, draw: (p, f) => car(p, f, 0xb8bcc0) },
-  car_green: { w: 64, h: 28, frames: 2, draw: (p, f) => car(p, f, 0x3c5a3a) },
-  car_taxi: { w: 64, h: 28, frames: 2, draw: (p, f) => car(p, f, 0xd8a820, 64, 28, { taxi: true }) },
-  policecar: { w: 64, h: 28, frames: 2, draw: (p, f) => car(p, f, 0x22283a, 64, 28, { police: true }) },
+  car_red: { w: 88, h: 34, frames: 2, draw: (p, f) => car(p, f, 0x9a2c26) },
+  car_blue: { w: 88, h: 34, frames: 2, draw: (p, f) => car(p, f, 0x2c4c8a) },
+  car_white: { w: 88, h: 34, frames: 2, draw: (p, f) => car(p, f, 0xb8bcc0) },
+  car_green: { w: 88, h: 34, frames: 2, draw: (p, f) => car(p, f, 0x3c5a3a) },
+  car_taxi: { w: 88, h: 34, frames: 2, draw: (p, f) => car(p, f, 0xd8a820, 88, 34, { taxi: true }) },
+  policecar: { w: 88, h: 34, frames: 2, draw: (p, f) => car(p, f, 0x22283a, 88, 34, { police: true }) },
   ambulance: {
     w: 70,
     h: 38,
