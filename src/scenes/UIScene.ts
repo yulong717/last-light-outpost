@@ -132,9 +132,10 @@ export class UIScene extends Phaser.Scene {
       const y = 54 + i * 14;
       const mark = this.add.rectangle(8, y + 4, 5, 5, 0xffffff).setOrigin(0).setStrokeStyle(1, 0x000000);
       const label = pixelText(this, 16, y, '', 8);
-      this.add.rectangle(72, y + 3, 32, 4, 0x000000).setOrigin(0);
-      const bar = this.add.rectangle(73, y + 4, 30, 2, 0x81c784).setOrigin(0);
-      const status = pixelText(this, 108, y, '', 8, '#b0bec5');
+      // 名字最長 3 字＋職業 2 字
+      this.add.rectangle(88, y + 3, 32, 4, 0x000000).setOrigin(0);
+      const bar = this.add.rectangle(89, y + 4, 30, 2, 0x81c784).setOrigin(0);
+      const status = pixelText(this, 124, y, '', 8, '#b0bec5');
       this.crewRows.push({ mark, label, bar, status });
     }
     // 指令按鈕：切換固守／跟隨（鍵盤 F）
