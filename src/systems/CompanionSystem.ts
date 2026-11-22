@@ -1,0 +1,215 @@
+import Phaser from 'phaser';
+import { LANE_BOTTOM, LANE_TOP } from '../config';
+import { COMPANION_ROLES, MAX_DEPLOYED } from '../data/companions';
+import type { Barricade } from '../entities/Barricade';
+import { Companion, type CompanionShot } from '../entities/Companion';
+import type { ZombieTarget, Zombie } from '../entities/Zombie';
+import { Fx } from '../fx/Fx';
+import { GameState } from '../state/GameState';
+
+/** 全隊指令：固守據點（待在路障內側）或跟隨主角（可一起出擊） */
+export type CompanionOrder = 'hold' | 'follow';
+
+export interface CompanionHud {
+  name: string;
+  title: string;
+  color: number;
+  hp: number;
+  maxHp: number;
+  alive: boolean;
+  status: string;
+}
+
+/** 主角的狀態：給醫護補血、跟隨用 */
+export interface CompanionPlayerLink {
+  footX: number;
+  footY: number;
+  facing: number;
+  alive: boolean;
+  hp: number;
+  maxHp: number;
+  /** 補血；回傳實際補了多少 */
+  heal: (amount: number) => number;
+}
+
+export interface CompanionLayout {
+  /** 據點外牆內側 x（夥伴最左只能到這裡） */
+  minX: number;
+  /** 戰場右緣 */
+  maxX: number;
+  /** 路障 x：固守時站在它內側 */
+  barricadeX: number;
+}
+
+type Patient = { x: number; y: number; ratio: number; heal: (a: number) => number };
+
+/** 固守時各自站的 y，錯開避免疊在一起（主角預設在中間） */
+const HOLD_Y = [LANE_TOP + 22, LANE_BOTTOM - 18, LANE_TOP + 52];
+/** 跟隨時相對主角的位置（在主角左後方，靠據點那側） */
+const FOLLOW_OFFSET = [
+  { x: -26, y: -18 },
+  { x: -28, y: 18 },
+  { x: -50, y: 0 },
+];
+
+/**
+ * NPC 夥伴總管：依存檔的隊伍生成夥伴，決定每個人每幀要去哪、要做什麼。
+ *
+ * - 射手：專心開槍。
+ * - 醫護：替範圍內受傷最重的人（主角或夥伴）補血，空檔才開槍。
+ * - 工兵：路障受損就到路障後面修理（修理時不開槍），沒事才開槍。
+ *
+ * 夥伴血歸零就永久陣亡，立刻從 GameState.crew 移除。
+ * 指令：鍵盤 F 或 HUD 按鈕切換「固守／跟隨」；UI 透過場景事件 'companion-order' 送過來。
+ */
+export class CompanionSystem {
+  readonly companions: Companion[] = [];
+  order: CompanionOrder = 'hold';
+  private healTimers = new Map<Companion, number>();
+
+  constructor(private scene: Phaser.Scene, private layout: CompanionLayout) {
+    const crew = GameState.data.crew.slice(0, MAX_DEPLOYED);
+    crew.forEach((member, i) => {
+      const def = COMPANION_ROLES[member.role];
+      if (!def) return;
+      const home = this.holdSpot(member.role, i);
+      const c = new Companion(scene, member, def, home.x, home.y);
+      this.companions.push(c);
+      this.healTimers.set(c, 0);
+    });
+
+    // 用 keydown 事件而不是每幀輪詢，快速點一下也不會漏掉
+    scene.input.keyboard?.on('keydown-F', this.toggleOrder, this);
+    scene.events.on('companion-order', this.toggleOrder, this);
+    scene.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      scene.input.keyboard?.off('keydown-F', this.toggleOrder, this);
+      scene.events.off('companion-order', this.toggleOrder, this);
+    });
+  }
+
+  toggleOrder(): void {
+    if (this.companions.every((c) => !c.alive)) return;
+    this.order = this.order === 'hold' ? 'follow' : 'hold';
+    const lead = this.companions.find((c) => c.alive);
+    if (lead) Fx.of(this.scene)?.popText(lead.footX, lead.footY - 66, this.order === 'hold' ? '固守據點！' : '跟我來！', '#fff59d');
+  }
+
+  /** 給霧屍的可攻擊目標 */
+  targets(): ZombieTarget[] {
+    return this.companions
+      .filter((c) => c.alive)
+      .map((c) => ({ x: c.footX, y: c.footY, alive: true, hit: (d: number) => this.hit(c, d) }));
+  }
+
+  update(dt: number, player: CompanionPlayerLink, zombies: Zombie[], barricade: Barricade): CompanionShot {
+    const total: CompanionShot = { kills: 0, headshots: 0 };
+    this.companions.forEach((c, i) => {
+      if (!c.alive) return;
+      let { x, y } = this.order === 'follow' && player.alive ? this.followSpot(player, i) : this.holdSpot(c.def.role, i);
+      let canShoot = true;
+      c.status = c.reloading ? '換彈' : this.order === 'hold' ? '固守' : '跟隨';
+
+      // 工兵：路障受損就去修
+      if (c.def.repairPerSec && barricade.alive && barricade.hp < barricade.maxHp) {
+        x = this.layout.barricadeX - 14;
+        y = c.footY;
+        const atSpot = Math.abs(c.footX - x) < 6;
+        if (atSpot) {
+          barricade.repair(c.def.repairPerSec * dt);
+          canShoot = false;
+          c.status = '修理中';
+        } else {
+          c.status = '去修路障';
+        }
+      }
+
+      // 醫護：走到受傷最重的人身邊，計時補血
+      if (c.def.heal) {
+        const h = c.def.heal;
+        const patient = this.findPatient(c, player, h.range * 2.5);
+        if (patient && Math.hypot(patient.x - c.footX, patient.y - c.footY) > h.range * 0.7) {
+          x = patient.x - 16;
+          y = patient.y;
+          // 固守時不離開路障內側
+          if (this.order === 'hold') x = Math.min(x, this.layout.barricadeX - 14);
+        }
+        const t = (this.healTimers.get(c) ?? 0) - dt;
+        this.healTimers.set(c, Math.max(0, t));
+        const inRange = patient && Math.hypot(patient.x - c.footX, patient.y - c.footY) <= h.range;
+        if (patient && inRange && t <= 0) {
+          const healed = patient.heal(h.amount);
+          if (healed > 0) {
+            Fx.of(this.scene)?.popText(patient.x, patient.y - 58, `+${Math.round(healed)}`, '#a5d6a7');
+            this.healTimers.set(c, h.interval);
+          }
+        }
+        if (patient) c.status = '治療';
+      }
+
+      const shot = c.update(dt, {
+        moveX: x,
+        moveY: y,
+        minX: this.layout.minX,
+        maxX: this.layout.maxX,
+        canShoot,
+        zombies,
+      });
+      if (shot) {
+        total.kills += shot.kills;
+        total.headshots += shot.headshots;
+      }
+    });
+    return total;
+  }
+
+  hud(): CompanionHud[] {
+    return this.companions.map((c) => ({
+      name: c.member.name,
+      title: c.def.title,
+      color: c.def.markColor,
+      hp: c.hp,
+      maxHp: c.def.maxHp,
+      alive: c.alive,
+      status: c.alive ? c.status : '陣亡',
+    }));
+  }
+
+  private hit(c: Companion, damage: number): void {
+    if (c.takeDamage(damage)) {
+      // 永久陣亡：從隊伍除名（下次存檔就不會再出現）
+      GameState.removeCrew(c.member.id);
+      Fx.of(this.scene)?.popText(c.footX, c.footY - 60, `${c.member.name} 陣亡`, '#ff8a80');
+      this.scene.cameras.main.shake(80, 0.004);
+      if (this.companions.every((o) => !o.alive)) this.order = 'hold';
+    }
+  }
+
+  /** 範圍內受傷最重（血量比例最低、且低於 9 成）的人 */
+  private findPatient(medic: Companion, player: CompanionPlayerLink, range: number): Patient | null {
+    const list: Patient[] = [];
+    if (player.alive) list.push({ x: player.footX, y: player.footY, ratio: player.hp / player.maxHp, heal: player.heal });
+    for (const c of this.companions) {
+      if (c.alive) list.push({ x: c.footX, y: c.footY, ratio: c.hp / c.def.maxHp, heal: (a) => c.heal(a) });
+    }
+    let best: Patient | null = null;
+    for (const p of list) {
+      if (p.ratio >= 0.9) continue;
+      if (Math.hypot(p.x - medic.footX, p.y - medic.footY) > range) continue;
+      if (!best || p.ratio < best.ratio) best = p;
+    }
+    return best;
+  }
+
+  private holdSpot(role: string, i: number): { x: number; y: number } {
+    const bx = this.layout.barricadeX;
+    // 射手靠路障、醫護退到牆邊、工兵站中間方便衝去修
+    const x = role === 'shooter' ? bx - 18 : role === 'medic' ? this.layout.minX + 8 : bx - 32;
+    return { x, y: HOLD_Y[i % HOLD_Y.length] };
+  }
+
+  private followSpot(p: CompanionPlayerLink, i: number): { x: number; y: number } {
+    const o = FOLLOW_OFFSET[i % FOLLOW_OFFSET.length];
+    // 永遠站在主角靠據點那一側（左邊），主角轉身時隊形不會跟著翻來翻去
+    return { x: p.footX + o.x, y: p.footY + o.y };
+  }
+}

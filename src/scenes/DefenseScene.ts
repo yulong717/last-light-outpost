@@ -21,6 +21,7 @@ import { InputManager } from '../input/InputManager';
 import { GameState } from '../state/GameState';
 import { WaveSpawner } from '../systems/WaveSpawner';
 import { WeaponSystem } from '../systems/WeaponSystem';
+import { CompanionSystem, type CompanionHud, type CompanionOrder } from '../systems/CompanionSystem';
 import type { GameOverData } from './GameOverScene';
 
 /** 給 UIScene 讀的 HUD 資料 */
@@ -39,6 +40,8 @@ export interface HudData {
   wave: number;
   totalWaves: number;
   kills: number;
+  companions: CompanionHud[];
+  companionOrder: CompanionOrder;
 }
 
 const BASE_X = 44;
@@ -56,6 +59,7 @@ export class DefenseScene extends Phaser.Scene {
   private spawner!: WaveSpawner;
   private barricade!: Barricade;
   private player!: Player;
+  private companions!: CompanionSystem;
   private zombies: Zombie[] = [];
   private kills = 0;
   private headshots = 0;
@@ -90,6 +94,12 @@ export class DefenseScene extends Phaser.Scene {
     cam.setDeadzone(160, GAME_HEIGHT);
     cam.setFollowOffset(-90, 0);
     this.fx.attachShadow(this.player.sprite, 22);
+
+    this.companions = new CompanionSystem(this, {
+      minX: BASE_X + 14,
+      maxX: WORLD_WIDTH - 16,
+      barricadeX: BARRICADE_X,
+    });
 
     this.input2 = new InputManager(this);
     this.weapons = new WeaponSystem(this, WEAPONS);
@@ -164,6 +174,7 @@ export class DefenseScene extends Phaser.Scene {
       hitPlayer: (d) => {
         if (this.player.takeDamage(d)) this.cameras.main.shake(60, 0.004);
       },
+      others: this.companions.targets(),
     };
   }
 
@@ -195,6 +206,24 @@ export class DefenseScene extends Phaser.Scene {
       this.kills += shot.kills;
       this.headshots += shot.headshots;
     }
+
+    // NPC 夥伴
+    const ally = this.companions.update(
+      dt,
+      {
+        footX: p.footX,
+        footY: p.footY,
+        facing: p.facing,
+        alive: p.alive,
+        hp: p.hp,
+        maxHp: p.maxHp,
+        heal: (a) => p.heal(a),
+      },
+      this.zombies,
+      this.barricade,
+    );
+    this.kills += ally.kills;
+    this.headshots += ally.headshots;
 
     // 敵人
     const ctx = this.zombieContext();
@@ -258,6 +287,8 @@ export class DefenseScene extends Phaser.Scene {
       wave: Math.max(1, this.spawner.waveIndex + 1),
       totalWaves: this.spawner.totalWaves,
       kills: this.kills,
+      companions: this.companions.hud(),
+      companionOrder: this.companions.order,
     };
   }
 

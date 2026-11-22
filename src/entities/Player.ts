@@ -78,6 +78,14 @@ export class Player {
     this.recoil = 2;
   }
 
+  /** 補血（醫護夥伴用），回傳實際補了多少 */
+  heal(amount: number): number {
+    if (!this.alive) return 0;
+    const before = this.hp;
+    this.hp = Math.min(this.maxHp, this.hp + amount);
+    return this.hp - before;
+  }
+
   /** 回傳 true 代表這次真的扣血了 */
   takeDamage(amount: number): boolean {
     if (!this.alive || this.hurtCooldown > 0) return false;

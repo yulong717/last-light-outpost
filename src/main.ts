@@ -6,7 +6,7 @@ import { DefenseScene } from './scenes/DefenseScene';
 import { UIScene } from './scenes/UIScene';
 import { GameOverScene } from './scenes/GameOverScene';
 
-new Phaser.Game({
+const game = new Phaser.Game({
   type: Phaser.AUTO,
   parent: 'game',
   width: GAME_WIDTH,
@@ -25,3 +25,6 @@ new Phaser.Game({
   },
   scene: [BootScene, MenuScene, DefenseScene, UIScene, GameOverScene],
 });
+
+// 開發模式下把 game 掛到 window，方便在主控台或自動測試裡檢查狀態
+if (import.meta.env.DEV) (window as unknown as { __game: Phaser.Game }).__game = game;

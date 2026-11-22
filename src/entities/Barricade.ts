@@ -44,15 +44,7 @@ export class Barricade {
   takeDamage(amount: number, hitY?: number): void {
     if (!this.alive) return;
     this.hp = Math.max(0, this.hp - amount);
-    // 依耐久切換損壞階段的影格（ProceduralArt 用程式畫的 3 格），沒有影格時改用透明度
-    const ratio = this.hp / this.maxHp;
-    for (const s of this.segments) {
-      if (s.texture.frameTotal > BARRICADE_FRAMES) {
-        s.setFrame(Math.min(BARRICADE_FRAMES - 1, Math.floor((1 - ratio) * BARRICADE_FRAMES)));
-      } else {
-        s.setAlpha(0.35 + 0.65 * ratio);
-      }
-    }
+    this.refreshLook();
     const seg = this.segmentNear(hitY ?? (LANE_TOP + LANE_BOTTOM) / 2);
     // 被打：木屑飛濺 + 那一段晃一下
     const fx = Fx.of(this.scene);
@@ -61,6 +53,27 @@ export class Barricade {
     if (!this.alive) {
       for (const s of this.segments) fx?.woodChips(s.x, s.y - s.displayHeight / 2, s.y, 6);
       this.scene.tweens.add({ targets: this.segments, alpha: 0, scaleY: 0.2, duration: 250 });
+    }
+  }
+
+  /** 修理（工兵用）。路障已被打爛就修不回來，回傳實際修了多少。 */
+  repair(amount: number): number {
+    if (!this.alive || this.hp >= this.maxHp) return 0;
+    const before = this.hp;
+    this.hp = Math.min(this.maxHp, this.hp + amount);
+    this.refreshLook();
+    return this.hp - before;
+  }
+
+  /** 依耐久切換損壞階段的影格（ProceduralArt 用程式畫的 3 格），沒有影格時改用透明度 */
+  private refreshLook(): void {
+    const ratio = this.hp / this.maxHp;
+    for (const s of this.segments) {
+      if (s.texture.frameTotal > BARRICADE_FRAMES) {
+        s.setFrame(Math.min(BARRICADE_FRAMES - 1, Math.floor((1 - ratio) * BARRICADE_FRAMES)));
+      } else {
+        s.setAlpha(0.35 + 0.65 * ratio);
+      }
     }
   }
 

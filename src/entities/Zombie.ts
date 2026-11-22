@@ -19,6 +19,15 @@ export interface ZombieContext {
   hitBlock: (damage: number, y: number) => void;
   player: { x: number; y: number; alive: boolean };
   hitPlayer: (damage: number) => void;
+  /** 其他可被盯上的目標（NPC 夥伴）；和主角一樣，只有站在擋路線外側才會被追 */
+  others?: ZombieTarget[];
+}
+
+export interface ZombieTarget {
+  x: number;
+  y: number;
+  alive: boolean;
+  hit: (damage: number) => void;
 }
 
 /** 主角離多近會被盯上（以地面距離計，y 方向加權） */
@@ -104,18 +113,16 @@ export class Zombie extends Phaser.GameObjects.Sprite {
     this.hitLean *= Math.max(0, 1 - dt * 12);
     const minX = ctx.blockX + 18 * this.s;
     const speed = this.def.speed * this.speedJitter;
-    const p = ctx.player;
-
-    // 主角在擋路線外側、而且夠近 → 改追主角（2D 追擊）
-    const dx = p.x - this.footX;
-    const dy = p.y - this.footY;
-    const chasing = p.alive && p.x >= ctx.blockX && Math.hypot(dx, dy * 1.6) < AGGRO_RANGE;
+    // 主角或夥伴在擋路線外側、而且夠近 → 改追最近的那個（2D 追擊）
+    const p = this.pickTarget(ctx);
+    const dx = p ? p.x - this.footX : 0;
+    const dy = p ? p.y - this.footY : 0;
 
     let moved = false;
-    if (chasing) {
+    if (p) {
       if (Math.abs(dx) <= REACH_X && Math.abs(dy) <= REACH_Y) {
         this.setFlipX(dx < 0);
-        this.attack(dt, () => ctx.hitPlayer(this.def.damage), Math.sign(dx) || -1);
+        this.attack(dt, () => p.hit(this.def.damage), Math.sign(dx) || -1);
       } else {
         // 站到主角的左邊或右邊，而不是疊在主角身上
         const side = dx >= 0 ? -1 : 1;
@@ -152,6 +159,23 @@ export class Zombie extends Phaser.GameObjects.Sprite {
       this.setFrame(0);
     }
     this.sync(moved ? 1 : 0, dt);
+  }
+
+  /** 擋路線外側、仇恨範圍內最近的目標；沒有就回傳 null */
+  private pickTarget(ctx: ZombieContext): ZombieTarget | null {
+    const pl = ctx.player;
+    const list: ZombieTarget[] = [{ x: pl.x, y: pl.y, alive: pl.alive, hit: ctx.hitPlayer }, ...(ctx.others ?? [])];
+    let best: ZombieTarget | null = null;
+    let bestD = AGGRO_RANGE;
+    for (const t of list) {
+      if (!t.alive || t.x < ctx.blockX) continue;
+      const d = Math.hypot(t.x - this.footX, (t.y - this.footY) * 1.6);
+      if (d < bestD) {
+        bestD = d;
+        best = t;
+      }
+    }
+    return best;
   }
 
   private attack(dt: number, hit: () => void, dir: number): void {
