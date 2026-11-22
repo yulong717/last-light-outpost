@@ -4,6 +4,8 @@ import { ENEMIES } from '../data/enemies';
 import { NIGHT_ONE } from '../data/waves';
 import { WEAPONS } from '../data/weapons';
 import { Barricade } from '../entities/Barricade';
+import { createAtmosphere } from '../fx/Atmosphere';
+import { Fx } from '../fx/Fx';
 import { Zombie, type ZombieTarget } from '../entities/Zombie';
 import { InputManager } from '../input/InputManager';
 import { GameState } from '../state/GameState';
@@ -44,6 +46,7 @@ export class DefenseScene extends Phaser.Scene {
   private kills = 0;
   private headshots = 0;
   private ended = false;
+  private fx!: Fx;
 
   constructor() {
     super('Defense');
@@ -56,12 +59,15 @@ export class DefenseScene extends Phaser.Scene {
     this.ended = false;
 
     this.drawBackdrop();
+    this.fx = Fx.attach(this);
+    createAtmosphere(this, { groundY: GROUND_Y, lamp: { x: BASE_X - 6, y: GROUND_Y - 78 } });
 
     const st = GameState.data;
     this.barricade = new Barricade(this, BARRICADE_X, st.barricadeMaxHp);
     this.player = this.add.sprite(PLAYER_X, GROUND_Y - 8, 'player', 0).setDepth(10);
     // 影格腳底在 64 格中的第 63 列
     this.player.setOrigin(0.5, this.anims.exists('player_shoot') ? 63 / 64 : 1);
+    this.fx.attachShadow(this.player, 22);
     // 待機呼吸（程式化動態，之後換成影格動畫）
     this.tweens.add({ targets: this.player, scaleY: 1.03, duration: 900, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
     this.gun = this.add
@@ -119,7 +125,8 @@ export class DefenseScene extends Phaser.Scene {
 
   update(_time: number, deltaMs: number): void {
     if (this.ended) return;
-    const dt = Math.min(deltaMs / 1000, 0.05);
+    // 卡肉（hit-stop）期間 timeScale 為 0，整個戰場停頓一下
+    const dt = Math.min(deltaMs / 1000, 0.05) * this.fx.timeScale;
     const inp = this.input2.update();
 
     // 武器
@@ -134,7 +141,7 @@ export class DefenseScene extends Phaser.Scene {
     const muzzleY = this.gun.y + Math.sin(angle) * 14;
     const shot = this.weapons.tryFire(muzzleX, muzzleY, inp.aimX, inp.aimY, inp.fireHeld, inp.firePressed, this.zombies);
     if (shot) {
-      this.playShotFeedback(muzzleX, muzzleY);
+      this.playShotFeedback(muzzleX, muzzleY, angle);
       this.kills += shot.kills;
       this.headshots += shot.headshots;
     }
@@ -153,7 +160,10 @@ export class DefenseScene extends Phaser.Scene {
   }
 
   /** 開槍回饋：後座力往後頓一下＋槍口火光 */
-  private playShotFeedback(x: number, y: number): void {
+  private playShotFeedback(x: number, y: number, angle: number): void {
+    // 拋殼 + 槍口煙（程式化粒子，見 src/fx/Fx.ts）
+    this.fx.ejectShell(this.player.x + 4, y - 2, GROUND_Y + 2);
+    this.fx.muzzleSmoke(x, y, angle);
     if (this.anims.exists('player_shoot')) {
       // 有開火影格時，火光與後座力都由動畫表現
       this.player.play('player_shoot');

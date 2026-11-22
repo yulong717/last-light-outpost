@@ -22,7 +22,7 @@ npm run build    # 型別檢查 + 打包到 dist/
 ## 目前進度（M0 骨架 + 防守雛形）
 
 - 640×360 像素解析度（720p 2 倍、1080p 3 倍），FIT 等比縮放，手機直向時提示轉橫向
-- 色塊佔位圖（`BootScene` 產生），之後放入同名像素圖即可替換
+- 像素角色（PixelLab）＋程式化動畫與特效，流程與免費工具見 [docs/ART_PIPELINE.md](docs/ART_PIPELINE.md)
 - 夜晚防守：手槍、霰彈槍、爆頭判定、穿透、擊退；3 種霧屍；路障與據點耐久；3 波
 - 輸入抽象層（`src/input/InputManager.ts`），鍵鼠與觸控共用遊戲邏輯
 - 數值全部在 `src/data/`
