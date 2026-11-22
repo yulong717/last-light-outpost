@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { GAME_HEIGHT, GAME_WIDTH } from '../config';
 import { FEEL } from './FeelConfig';
 import { GameEvents } from '../systems/GameEvents';
 
@@ -18,7 +19,8 @@ export class ScreenFeedback {
 
   constructor(private scene: Phaser.Scene, private depth = 92) {
     createEdgeTexture(scene);
-    const { width, height } = scene.scale;
+    const width = GAME_WIDTH;
+    const height = GAME_HEIGHT;
     this.edge = scene.add
       .image(0, 0, EDGE_TEX)
       .setOrigin(0)

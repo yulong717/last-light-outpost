@@ -1,9 +1,34 @@
 import Phaser from 'phaser';
+import { RENDER_SCALE } from '../render/RenderScale';
+
+/** 最小字級（邏輯像素）：再小在手機上中文筆畫會擠成一團。 */
+const MIN_FONT_PX = 9;
+
+/** 全遊戲共用的字型。 */
+export const UI_FONT = '"Noto Sans TC", "PingFang TC", "Microsoft JhengHei", "Heiti TC", sans-serif';
+
+/** 依 size 換算實際字級（邏輯像素）。 */
+export function fontPx(size: number): number {
+  return Math.max(MIN_FONT_PX, Math.round((size * 4) / 3));
+}
 
 /**
- * 統一的像素風文字樣式；之後換成點陣字型只要改這裡。
+ * 全遊戲共用的文字樣式：所有 UI 文字都應該經由這裡建立，之後換字型只要改這裡。
  * size 以 480×270 時的大小撰寫，這裡依 640×360 等比放大。
+ *
+ * 清晰度：文字以 RENDER_SCALE 倍解析度繪製（畫布本身也是 RENDER_SCALE 倍），
+ * 每個字形像素都對到畫布的實際像素；再加一道 1 像素的硬陰影，壓在霧、火光上也讀得清楚。
  */
+export function textStyle(size = 8, color = '#e8e8e8'): Phaser.Types.GameObjects.Text.TextStyle {
+  return {
+    fontFamily: UI_FONT,
+    fontSize: `${fontPx(size)}px`,
+    color,
+    resolution: RENDER_SCALE,
+    shadow: { offsetX: 0, offsetY: 1, color: 'rgba(0,0,0,0.7)', blur: 0, fill: true, stroke: true },
+  };
+}
+
 export function pixelText(
   scene: Phaser.Scene,
   x: number,
@@ -12,12 +37,5 @@ export function pixelText(
   size = 8,
   color = '#e8e8e8',
 ): Phaser.GameObjects.Text {
-  return scene.add
-    .text(x, y, text, {
-      fontFamily: '"Noto Sans TC", "PingFang TC", "Microsoft JhengHei", monospace',
-      fontSize: `${Math.round(size * 4 / 3)}px`,
-      color,
-      resolution: 4,
-    })
-    .setDepth(100);
+  return scene.add.text(x, y, text, textStyle(size, color)).setDepth(100);
 }
