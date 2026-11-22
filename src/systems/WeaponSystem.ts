@@ -152,6 +152,11 @@ export class WeaponSystem {
   }
 
   private drawTracer(x1: number, y1: number, x2: number, y2: number): void {
+    const fx = Fx.of(this.scene);
+    if (fx) {
+      fx.bulletTracer(x1, y1, x2, y2);
+      return;
+    }
     const g = this.scene.add.graphics().setDepth(50);
     g.lineStyle(1, PLACEHOLDER_COLORS.bullet, 0.9);
     g.lineBetween(x1, y1, x2, y2);

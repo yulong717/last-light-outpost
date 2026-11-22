@@ -240,6 +240,37 @@ export class Fx {
   }
 
   /** 槍口煙：一小團抖色煙往上飄散 */
+  /**
+   * 子彈曳光：不畫整條雷射線，而是一小段高速飛行的彈頭（每秒約 3600 像素，畫面上停留 2–5 幀），
+   * 加上一條很淡、很快消失的軌跡，保留「子彈往哪飛」的提示。
+   */
+  bulletTracer(x1: number, y1: number, x2: number, y2: number): void {
+    const sc = this.scene;
+    const angle = Math.atan2(y2 - y1, x2 - x1);
+    const dist = Phaser.Math.Distance.Between(x1, y1, x2, y2);
+    const duration = Math.max(30, (dist / 3600) * 1000);
+
+    // 淡軌跡：只留 1px、透明度很低，60ms 內淡掉
+    const trail = sc.add.graphics().setDepth(49);
+    trail.lineStyle(1, 0xffe0a0, 0.14).lineBetween(x1, y1, x2, y2);
+    sc.tweens.add({ targets: trail, alpha: 0, duration: 90, onComplete: () => trail.destroy() });
+
+    // 彈頭：圖的原點在頭端，隨機長度一點點，避免每發都一樣
+    const head = sc.add
+      .image(x1, y1, FX.streak)
+      .setOrigin(1, 0.5)
+      .setRotation(angle)
+      .setScale(Phaser.Math.FloatBetween(1.1, 1.6), 1)
+      .setDepth(50);
+    sc.tweens.add({
+      targets: head,
+      x: x2,
+      y: y2,
+      duration,
+      onComplete: () => head.destroy(),
+    });
+  }
+
   muzzleSmoke(x: number, y: number, angle: number): void {
     for (let i = 0; i < 2; i++) {
       const p = this.scene.add

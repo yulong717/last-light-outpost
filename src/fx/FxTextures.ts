@@ -12,6 +12,7 @@ export const FX = {
   px2: 'fx_px2', // 2×2 白點：較大的碎塊
   shell: 'fx_shell', // 彈殼
   chip: 'fx_chip', // 木屑
+  streak: 'fx_streak', // 曳光彈頭：前端亮、尾巴漸暗
   smoke: 'fx_smoke', // 抖色煙團
   splat: 'fx_splat', // 地上血跡（3 個影格）
   shadow: 'fx_shadow', // 腳下影子
@@ -33,6 +34,17 @@ export function createFxTextures(scene: Phaser.Scene): void {
     [0, 0, 3, 1, 0xe8c25a],
     [0, 1, 3, 1, 0x9c7a2c],
   ]);
+  canvas(scene, FX.streak, 12, 1, (ctx) => {
+    // 由尾到頭：暗橘 → 亮黃 → 白，像素風只用 5 階
+    const steps = ['rgba(200,90,30,0.15)', 'rgba(230,140,50,0.35)', 'rgba(255,200,90,0.6)', 'rgba(255,235,160,0.9)', '#ffffff'];
+    const widths = [3, 3, 3, 2, 1];
+    let x = 0;
+    steps.forEach((c, i) => {
+      ctx.fillStyle = c;
+      ctx.fillRect(x, 0, widths[i], 1);
+      x += widths[i];
+    });
+  });
   rects(scene, FX.chip, 3, 2, [
     [0, 0, 3, 1, 0xb08a64],
     [0, 1, 2, 1, 0x6d4c33],
