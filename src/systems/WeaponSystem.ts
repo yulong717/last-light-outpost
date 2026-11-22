@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { HEADSHOT_MULTIPLIER, type WeaponDef } from '../data/weapons';
 import type { Zombie } from '../entities/Zombie';
 import { PLACEHOLDER_COLORS } from '../config';
+import { Fx } from '../fx/Fx';
 
 export interface WeaponRuntime {
   def: WeaponDef;
@@ -134,8 +135,16 @@ export class WeaponSystem {
       const head = h.z.isHeadshot(h.y);
       const dmg = def.damage * (head ? HEADSHOT_MULTIPLIER : 1);
       if (head) result.headshots++;
-      if (h.z.takeDamage(dmg, def.knockback)) result.kills++;
-      this.spawnHitSpark(h.x, h.y, head);
+      const dirX = Math.cos(angle);
+      const floorY = h.z.y;
+      const fx = Fx.of(this.scene);
+      fx?.bulletHit(h.x, h.y, dirX, floorY, head);
+      if (h.z.takeDamage(dmg, def.knockback, { headshot: head, dirX })) {
+        result.kills++;
+        // 爆頭擊殺卡肉久一點，一般擊殺輕輕頓一下
+        fx?.freeze(head ? 55 : 25);
+      }
+      if (!fx) this.spawnHitSpark(h.x, h.y, head);
       endX = h.x;
       endY = h.y;
     }
@@ -143,6 +152,11 @@ export class WeaponSystem {
   }
 
   private drawTracer(x1: number, y1: number, x2: number, y2: number): void {
+    const fx = Fx.of(this.scene);
+    if (fx) {
+      fx.bulletTracer(x1, y1, x2, y2);
+      return;
+    }
     const g = this.scene.add.graphics().setDepth(50);
     g.lineStyle(1, PLACEHOLDER_COLORS.bullet, 0.9);
     g.lineBetween(x1, y1, x2, y2);
