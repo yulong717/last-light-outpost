@@ -480,6 +480,11 @@ export class DefenseScene extends Phaser.Scene {
     if (survived) {
       GameState.data.scrap += ECONOMY.nightBonus;
       this.scrapEarned += ECONOMY.nightBonus;
+      // 拾荒好手：多帶回一點廢料
+      for (const b of this.companions.scavengeBonus()) {
+        GameState.data.scrap += b.amount;
+        this.scrapEarned += b.amount;
+      }
       GameState.data.day += 1;
       GameState.save();
     }

@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { LANE_BOTTOM, LANE_TOP } from '../config';
 import { COMPANION_ROLES, MAX_DEPLOYED } from '../data/companions';
+import { TRAIT_TUNING, traitNames } from '../data/crewTraits';
 import type { Barricade } from '../entities/Barricade';
 import { Companion, type CompanionShot } from '../entities/Companion';
 import type { ZombieTarget, Zombie } from '../entities/Zombie';
@@ -14,6 +15,8 @@ export type CompanionOrder = 'hold' | 'follow';
 export interface CompanionHud {
   name: string;
   title: string;
+  /** 特質名稱（「神槍手、近視」） */
+  traits: string;
   color: number;
   hp: number;
   maxHp: number;
@@ -115,14 +118,21 @@ export class CompanionSystem {
       let { x, y } = this.order === 'follow' && player.alive ? this.followSpot(player, i) : this.holdSpot(c.def.role, i);
       let canShoot = true;
       c.status = c.reloading ? '換彈' : this.order === 'hold' ? '固守' : '跟隨';
+      // 莽撞：老是站到隊形前面
+      if (c.stats.hooks.has('reckless')) x += TRAIT_TUNING.recklessStep;
+      // 膽小：被貼身就往後退
+      if (c.wantsToRetreat) {
+        x = c.footX - 30;
+        c.status = '後退';
+      }
 
       // 工兵：路障受損就去修
-      if (c.def.repairPerSec && barricade.alive && barricade.hp < barricade.maxHp) {
+      if (c.stats.repairPerSec && barricade.alive && barricade.hp < barricade.maxHp) {
         x = this.layout.barricadeX - 14;
         y = c.footY;
         const atSpot = Math.abs(c.footX - x) < 6;
         if (atSpot) {
-          this.repairAcc += barricade.repair(c.def.repairPerSec * dt);
+          this.repairAcc += barricade.repair(c.stats.repairPerSec * dt);
           this.repairTick += dt;
           if (this.repairTick >= 0.5 && this.repairAcc > 0) {
             GameEvents.of(this.scene).emit('barricade:repair', { amount: this.repairAcc, hp: barricade.hp, maxHp: barricade.maxHp });
@@ -137,8 +147,8 @@ export class CompanionSystem {
       }
 
       // 醫護：走到受傷最重的人身邊，計時補血
-      if (c.def.heal) {
-        const h = c.def.heal;
+      if (c.stats.heal) {
+        const h = c.stats.heal;
         const patient = this.findPatient(c, player, h.range * 2.5);
         if (patient && Math.hypot(patient.x - c.footX, patient.y - c.footY) > h.range * 0.7) {
           x = patient.x - 16;
@@ -167,6 +177,7 @@ export class CompanionSystem {
         maxX: this.layout.maxX,
         canShoot,
         zombies,
+        fireRateMult: this.inspireMult(c),
       });
       if (shot) {
         total.kills += shot.kills;
@@ -176,13 +187,31 @@ export class CompanionSystem {
     return total;
   }
 
+  /** 鼓舞人心：附近有活著的鼓舞者（不是自己）就加射速；獨行俠不吃這套 */
+  private inspireMult(c: Companion): number {
+    if (c.member.traits?.includes('loner')) return 1;
+    const r = TRAIT_TUNING.inspireRange;
+    const near = this.companions.some(
+      (o) => o !== c && o.alive && o.stats.hooks.has('inspiring') && Math.hypot(o.footX - c.footX, o.footY - c.footY) <= r,
+    );
+    return near ? TRAIT_TUNING.inspireFireRate : 1;
+  }
+
+  /** 撐過一晚時，活著的拾荒好手多帶回的廢料 */
+  scavengeBonus(): { name: string; amount: number }[] {
+    return this.companions
+      .filter((c) => c.alive && c.stats.hooks.has('scavenger'))
+      .map((c) => ({ name: c.member.name, amount: TRAIT_TUNING.scavengerScrap }));
+  }
+
   hud(): CompanionHud[] {
     return this.companions.map((c) => ({
       name: c.member.name,
       title: c.def.title,
+      traits: traitNames(c.member.traits ?? []),
       color: c.def.markColor,
       hp: c.hp,
-      maxHp: c.def.maxHp,
+      maxHp: c.stats.maxHp,
       alive: c.alive,
       status: c.alive ? c.status : '陣亡',
     }));
@@ -203,7 +232,7 @@ export class CompanionSystem {
     const list: Patient[] = [];
     if (player.alive) list.push({ x: player.footX, y: player.footY, ratio: player.hp / player.maxHp, heal: player.heal });
     for (const c of this.companions) {
-      if (c.alive) list.push({ x: c.footX, y: c.footY, ratio: c.hp / c.def.maxHp, heal: (a) => c.heal(a) });
+      if (c.alive) list.push({ x: c.footX, y: c.footY, ratio: c.hp / c.stats.maxHp, heal: (a) => c.heal(a) });
     }
     let best: Patient | null = null;
     for (const p of list) {

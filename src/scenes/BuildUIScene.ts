@@ -6,6 +6,9 @@ import type { BuildMode } from '../build/BuildMode';
 import type { Quote } from '../build/Outpost';
 import { registerUIRect } from '../input/InputManager';
 import { GameState } from '../state/GameState';
+import { ensureCrewTexture } from '../art/CrewArt';
+import { COMPANION_ROLES, MAX_DEPLOYED } from '../data/companions';
+import { ATTRS, TRAIT_BY_ID } from '../data/crewTraits';
 import { pixelText } from '../utils/text';
 
 export interface BuildUIData {
@@ -30,6 +33,8 @@ export class BuildUIScene extends Phaser.Scene {
   private hint!: Phaser.GameObjects.Text;
   private panelRects: (() => void)[] = [];
   private fixedRects: (() => void)[] = [];
+  /** 隊伍名冊面板是否打開 */
+  private rosterOpen = false;
 
   constructor() {
     super('BuildUI');
@@ -51,6 +56,7 @@ export class BuildUIScene extends Phaser.Scene {
     this.fixedRects.push(registerUIRect({ x: 0, y: 0, w: GAME_WIDTH, h: 26 }));
 
     this.button(GAME_WIDTH - 104, 2, 100, 22, '開始夜晚 ▶', true, () => this.onStartNight(), 0x7a2a22);
+    this.button(GAME_WIDTH - 172, 2, 62, 22, `隊伍 ${GameState.data.crew.length}`, true, () => this.toggleRoster());
 
     this.hint = pixelText(
       this,
@@ -79,8 +85,12 @@ export class BuildUIScene extends Phaser.Scene {
     this.scrapText.setText(`廢料 ${GameState.data.scrap}`);
     this.clearPanel();
     const sel = this.mode.selection;
-    this.hint.setVisible(!sel);
-    if (!sel) return;
+    if (sel) this.rosterOpen = false;
+    this.hint.setVisible(!sel && !this.rosterOpen);
+    if (!sel) {
+      if (this.rosterOpen) this.showRoster();
+      return;
+    }
     const out = this.mode.outpost;
 
     if (sel.type === 'slot') {
@@ -136,6 +146,58 @@ export class BuildUIScene extends Phaser.Scene {
     this.text(PANEL_X + 10, PANEL_Y + 7, '據點外牆', 9, '#f5d76e');
     this.text(PANEL_X + 10, PANEL_Y + 24, `耐久 ${st.baseHp} / ${st.baseMaxHp}　歸零就失守`, 8, '#c8c8c8');
     this.actionButton(PANEL_X + 8, PANEL_Y + 42, PANEL_W - 16, '修理', out.wallRepairQuote(), () => this.mode.repair(), true);
+  }
+
+  private toggleRoster(): void {
+    this.rosterOpen = !this.rosterOpen;
+    // 打開名冊時取消槽位選取（select 會觸發 refresh）
+    if (this.rosterOpen && this.mode.selection) this.mode.select(null);
+    else this.refresh();
+  }
+
+  /**
+   * 隊伍名冊：每人一格，顯示換裝後的樣子、職業、特質與五項屬性。
+   * 前 MAX_DEPLOYED 位會出戰。
+   */
+  private showRoster(): void {
+    const crew = GameState.data.crew;
+    const cols = 2;
+    const cellH = 50;
+    const rows = Math.max(1, Math.ceil(crew.length / cols));
+    const x0 = PANEL_X - 40;
+    const w = PANEL_W + 80;
+    const cw = (w - 24) / cols;
+    const h = 26 + rows * (cellH + 4);
+    const bg = this.add.rectangle(x0, PANEL_Y, w, h, 0x0d0f14, 0.9).setOrigin(0).setStrokeStyle(1, 0xf5d76e, 0.6);
+    this.panel.add(bg);
+    this.panelRects.push(registerUIRect({ x: x0, y: PANEL_Y, w, h }));
+    this.text(x0 + 10, PANEL_Y + 7, `隊伍名冊　前 ${MAX_DEPLOYED} 位出戰`, 9, '#f5d76e');
+    if (crew.length === 0) {
+      this.text(x0 + 10, PANEL_Y + 26, '沒有隊員。白天探索可以救回倖存者。', 8, '#c8c8c8');
+      return;
+    }
+    crew.forEach((m, i) => {
+      const cx = x0 + 8 + (i % cols) * (cw + 8);
+      const cy = PANEL_Y + 24 + Math.floor(i / cols) * (cellH + 4);
+      this.panel.add(this.add.rectangle(cx, cy, cw, cellH, 0x1c2029, 0.95).setOrigin(0).setStrokeStyle(1, 0xffffff, 0.12));
+      // 半身像：只取頭到腰
+      const key = ensureCrewTexture(this, m) ?? 'player';
+      // 切出頭到腰，對齊到格子左上
+      const img = this.add.image(cx - 10, cy, key, 0).setOrigin(0, 0).setCrop(12, 4, 40, 44);
+      if (key === 'player') img.setTint(COMPANION_ROLES[m.role].tint);
+      this.panel.add(img);
+      const deployed = i < MAX_DEPLOYED;
+      this.text(cx + 44, cy + 3, m.name, 9, '#ffffff');
+      this.text(cx + cw - 6, cy + 4, `${COMPANION_ROLES[m.role].title}${deployed ? '・出戰' : '・待命'}`, 8, deployed ? '#f5d76e' : '#90a4ae').setOrigin(1, 0);
+      const traits = m.traits.map((t) => TRAIT_BY_ID[t]).filter(Boolean);
+      let tx = cx + 44;
+      for (const t of traits) {
+        const tt = this.text(tx, cy + 18, t.name, 8, t.kind === 'perk' ? '#a5d6a7' : '#ef9a9a');
+        tx += tt.width + 6;
+      }
+      const attrs = ATTRS.map((a) => `${a.name[0]}${m.attrs[a.key]}`).join(' ');
+      this.text(cx + 44, cy + 32, attrs, 8, '#b0bec5');
+    });
   }
 
   private effectLine(kind: BuildingKind, level: number): string {

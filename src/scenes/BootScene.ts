@@ -22,6 +22,8 @@ export class BootScene extends Phaser.Scene {
     // 主角：3 格 64×64（0 待機瞄準、1 開火火光、2 後座力上揚）
     this.load.spritesheet('player', 'assets/sprites/player_shoot.png', { frameWidth: 64, frameHeight: 64 });
     // 主角換彈：9 格（PixelLab PixMiniMax 以射擊第 0 格為起始影格生成）
+    // 主角射擊圖的部位遮罩（tools/art/make_player_regions.py 產生）：NPC 隊員換裝用
+    this.load.image('player_regions', 'assets/sprites/player_shoot_regions.png');
     this.load.spritesheet('player_reload', 'assets/sprites/player_reload.png', { frameWidth: 64, frameHeight: 64 });
     // 霧屍：PixelLab 走路圖經程式換色、加寬、做出攻擊影格的三種變體
     for (const key of ZOMBIE_SHEETS) {

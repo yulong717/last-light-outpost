@@ -1,8 +1,14 @@
+import { generateCrewProfile } from './crewGen';
+import type { CrewLook } from './crewLooks';
+import type { CrewAttrs } from './crewTraits';
+import { hashSeed, randomSeed } from '../utils/rng';
+
 /**
  * NPC 夥伴的職業資料。數值都集中在這裡調整。
  *
  * 招募方式：白天探索時救出倖存者，帶回據點後加入隊伍（GameState.recruit）。
- * 探索模式完成前，新遊戲先送一組預設小隊方便測試（DEFAULT_CREW）。
+ * 每位隊員的長相、屬性、特質都是隨機產生（src/data/crewGen.ts），職業只決定基礎數值與招牌配件。
+ * 探索模式完成前，新遊戲先送一組預設小隊方便測試（defaultCrew）。
  */
 export type CompanionRole = 'shooter' | 'medic' | 'engineer';
 
@@ -28,7 +34,7 @@ export interface CompanionRoleDef {
   maxHp: number;
   /** 移動速度（像素 / 秒，左右）；前後自動乘 0.7 */
   speed: number;
-  /** 佔位用：把主角圖染成這個顏色 */
+  /** 換裝貼圖還沒產生時的備用染色 */
   tint: number;
   /** 頭上職業標記的顏色 */
   markColor: number;
@@ -81,18 +87,39 @@ export interface CrewMember {
   id: string;
   name: string;
   role: CompanionRole;
+  /** 產生外觀與能力用的種子（除錯時可重現） */
+  seed: number;
+  look: CrewLook;
+  attrs: CrewAttrs;
+  /** 特質 id（見 src/data/crewTraits.ts） */
+  traits: string[];
+  /** 之後可配發武器系統裡的槍；沒有就用職業預設槍 */
+  weaponId?: string;
 }
 
-const NAMES = ['阿哲', '小芸', '老陳', '阿凱', '美玲', '大熊', '阿樂', '小雨', '志明', '春嬌'];
-
-export function randomCrewName(taken: string[] = []): string {
-  const free = NAMES.filter((n) => !taken.includes(n));
-  const pool = free.length > 0 ? free : NAMES;
-  return pool[Math.floor(Math.random() * pool.length)];
+/** 依職業與種子產生一位完整的隊員 */
+export function makeCrewMember(id: string, role: CompanionRole, seed: number, takenNames: string[] = [], name?: string): CrewMember {
+  const p = generateCrewProfile(role, seed, takenNames);
+  return { id, role, seed, name: name ?? p.name, look: p.look, attrs: p.attrs, traits: p.traits };
 }
 
-export const DEFAULT_CREW: CrewMember[] = [
-  { id: 'crew-1', name: '阿哲', role: 'shooter' },
-  { id: 'crew-2', name: '小芸', role: 'medic' },
-  { id: 'crew-3', name: '老陳', role: 'engineer' },
-];
+/**
+ * 舊存檔的隊員只有 id／名字／職業：用 id 換一個固定種子補上外觀與能力。
+ * 缺欄位才補，已經有的不動。
+ */
+export function upgradeCrewMember(m: Partial<CrewMember> & { id: string; name: string; role: CompanionRole }): CrewMember {
+  if (m.look && m.attrs && Array.isArray(m.traits) && typeof m.seed === 'number') return m as CrewMember;
+  const seed = typeof m.seed === 'number' ? m.seed : hashSeed(m.id);
+  const full = makeCrewMember(m.id, m.role, seed, [], m.name);
+  return { ...full, ...(m.weaponId ? { weaponId: m.weaponId } : {}) };
+}
+
+/** 探索模式完成前，新遊戲先送一組預設小隊（每局隨機長相與能力） */
+export function defaultCrew(): CrewMember[] {
+  const roles: CompanionRole[] = ['shooter', 'medic', 'engineer'];
+  const crew: CrewMember[] = [];
+  roles.forEach((role, i) => {
+    crew.push(makeCrewMember(`crew-${i + 1}-${randomSeed().toString(36)}`, role, randomSeed(), crew.map((c) => c.name)));
+  });
+  return crew;
+}
