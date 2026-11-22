@@ -16,7 +16,7 @@ export interface EnemyDef {
   color: number;
   /** 貼圖 key，換成像素圖時沿用同一個名字 */
   texture: string;
-  /** 共用貼圖時用色調與縮放做出差異（暫時做法，之後各自有圖） */
+  /** 額外色調與縮放（各型霧屍已有各自配色的圖，tint 通常不用設） */
   tint?: number;
   scale?: number;
 }
@@ -44,8 +44,7 @@ export const ENEMIES: Record<string, EnemyDef> = {
     width: 18,
     height: 40,
     color: PLACEHOLDER_COLORS.zombieRunner,
-    texture: 'zombie_basic',
-    tint: 0xffc48a,
+    texture: 'zombie_runner',
     scale: 0.9,
   },
   brute: {
@@ -58,8 +57,7 @@ export const ENEMIES: Record<string, EnemyDef> = {
     width: 32,
     height: 56,
     color: PLACEHOLDER_COLORS.zombieBrute,
-    texture: 'zombie_basic',
-    tint: 0xd2b4ff,
+    texture: 'zombie_brute',
     scale: 1.3,
   },
 };

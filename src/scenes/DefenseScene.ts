@@ -15,6 +15,8 @@ import { WEAPONS } from '../data/weapons';
 import { Barricade } from '../entities/Barricade';
 import { Player } from '../entities/Player';
 import { Zombie, type ZombieContext } from '../entities/Zombie';
+import { createAtmosphere } from '../fx/Atmosphere';
+import { Fx } from '../fx/Fx';
 import { InputManager } from '../input/InputManager';
 import { GameState } from '../state/GameState';
 import { WaveSpawner } from '../systems/WaveSpawner';
@@ -58,6 +60,8 @@ export class DefenseScene extends Phaser.Scene {
   private kills = 0;
   private headshots = 0;
   private ended = false;
+  private fx!: Fx;
+  private wasReloading = false;
 
   constructor() {
     super('Defense');
@@ -69,7 +73,12 @@ export class DefenseScene extends Phaser.Scene {
     this.headshots = 0;
     this.ended = false;
 
+    // 先設好世界範圍：Fx 的地面血跡畫布依鏡頭範圍決定大小
+    this.cameras.main.setBounds(0, 0, WORLD_WIDTH, GAME_HEIGHT);
     this.drawBackdrop();
+    this.fx = Fx.attach(this);
+    // 貼地霧放在地面帶中段，燈掛在據點外牆上
+    createAtmosphere(this, { groundY: LANE_TOP + 14, lamp: { x: BASE_X - 6, y: GROUND_Y - 70 } });
 
     const st = GameState.data;
     this.barricade = new Barricade(this, BARRICADE_X, st.barricadeMaxHp);
@@ -77,10 +86,10 @@ export class DefenseScene extends Phaser.Scene {
 
     // 戰場比畫面寬：鏡頭跟著主角水平捲動，中間留一段不跟的死區
     const cam = this.cameras.main;
-    cam.setBounds(0, 0, WORLD_WIDTH, GAME_HEIGHT);
     cam.startFollow(this.player.sprite, true, 0.12, 0);
     cam.setDeadzone(160, GAME_HEIGHT);
     cam.setFollowOffset(-90, 0);
+    this.fx.attachShadow(this.player.sprite, 22);
 
     this.input2 = new InputManager(this);
     this.weapons = new WeaponSystem(this, WEAPONS);
@@ -141,7 +150,7 @@ export class DefenseScene extends Phaser.Scene {
   /** 霧屍要攻擊的擋路線：路障還在就是路障，否則是據點外牆 */
   private zombieContext(): ZombieContext {
     const blocker = this.barricade.alive
-      ? { blockX: this.barricade.frontX, hitBlock: (d: number) => this.barricade.takeDamage(d) }
+      ? { blockX: this.barricade.frontX, hitBlock: (d: number, y: number) => this.barricade.takeDamage(d, y) }
       : {
           blockX: BASE_X,
           hitBlock: (d: number) => {
@@ -160,7 +169,8 @@ export class DefenseScene extends Phaser.Scene {
 
   update(_time: number, deltaMs: number): void {
     if (this.ended) return;
-    const dt = Math.min(deltaMs / 1000, 0.05);
+    // 卡肉（hit-stop）期間 timeScale 為 0，整個戰場停頓一下
+    const dt = Math.min(deltaMs / 1000, 0.05) * this.fx.timeScale;
     const inp = this.input2.update();
 
     // 武器
@@ -168,6 +178,7 @@ export class DefenseScene extends Phaser.Scene {
     if (inp.nextWeapon) this.weapons.next();
     if (inp.reloadPressed) this.weapons.reload();
     this.weapons.update(dt);
+    this.animateReload();
 
     // 主角移動：據點外牆內側到戰場右緣
     this.player.update(dt, inp.moveX, inp.moveY, inp.aimX, { minX: BASE_X + 14, maxX: WORLD_WIDTH - 16 });
@@ -180,7 +191,7 @@ export class DefenseScene extends Phaser.Scene {
       ? this.weapons.tryFire(muzzleX, muzzleY, inp.aimX, inp.aimY, inp.fireHeld, inp.firePressed, this.zombies)
       : null;
     if (shot) {
-      this.playShotFeedback(muzzleX, muzzleY);
+      this.playShotFeedback(muzzleX, muzzleY, angle);
       this.kills += shot.kills;
       this.headshots += shot.headshots;
     }
@@ -202,8 +213,23 @@ export class DefenseScene extends Phaser.Scene {
     else if (this.spawner.done && this.zombies.length === 0) this.finish(true);
   }
 
+  /** 換彈開始時播放換彈影格，長度對齊武器的換彈時間；換完回到射擊圖 */
+  private animateReload(): void {
+    const reloading = this.weapons.reloading;
+    if (reloading && !this.wasReloading && this.anims.exists('player_reload')) {
+      this.player.sprite.play({ key: 'player_reload', duration: this.weapons.active.def.reloadTime * 1000 });
+    } else if (!reloading && this.wasReloading && this.player.sprite.texture.key === 'player_reload') {
+      this.player.sprite.stop();
+      this.player.sprite.setTexture('player', 0);
+    }
+    this.wasReloading = reloading;
+  }
+
   /** 開槍回饋：後座力往後頓一下＋槍口火光 */
-  private playShotFeedback(x: number, y: number): void {
+  private playShotFeedback(x: number, y: number, angle: number): void {
+    // 拋殼 + 槍口煙（程式化粒子，見 src/fx/Fx.ts）
+    this.fx.ejectShell(this.player.footX + 4 * this.player.facing, y - 2, this.player.footY + 2, this.player.facing);
+    this.fx.muzzleSmoke(x, y, angle);
     if (this.anims.exists('player_shoot')) {
       // 有開火影格時，火光與後座力都由動畫表現
       this.player.sprite.play('player_shoot');

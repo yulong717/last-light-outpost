@@ -1,13 +1,22 @@
 import Phaser from 'phaser';
 import { clampLaneY, depthForY } from '../config';
 import type { EnemyDef } from '../data/enemies';
+import { Fx } from '../fx/Fx';
+import { ZOMBIE_NECK_ROW } from '../art/sprites';
+
+/** 受擊資訊：給程式化動畫決定怎麼反應 */
+export interface HitInfo {
+  headshot?: boolean;
+  /** 子彈飛行方向的 x 分量（-1..1），決定血往哪噴、往哪倒、往哪退 */
+  dirX?: number;
+}
 
 /** 霧屍每幀需要知道的戰場資訊 */
 export interface ZombieContext {
   /** 擋路的那條線（路障或據點外牆）的 x；霧屍不能越過 */
   blockX: number;
-  /** 撞到擋路線時的攻擊 */
-  hitBlock: (damage: number) => void;
+  /** 撞到擋路線時的攻擊；y 是攻擊者的腳底 y，讓特效出現在對的那一段 */
+  hitBlock: (damage: number, y: number) => void;
   player: { x: number; y: number; alive: boolean };
   hitPlayer: (damage: number) => void;
 }
@@ -30,6 +39,12 @@ export class Zombie extends Phaser.GameObjects.Sprite {
   private walkPhase = Math.random() * Math.PI * 2;
   /** 朝路障前進時想站的 y，讓屍群沿著柵欄散開而不是擠成一點 */
   private laneY: number;
+  private walkKey: string;
+  private attackKey: string;
+  /** 被打中時往後仰的角度，逐漸回正 */
+  private hitLean = 0;
+  /** 攻擊時往前撲的位移 */
+  private lunge = 0;
   dead = false;
 
   constructor(scene: Phaser.Scene, x: number, y: number, def: EnemyDef) {
@@ -39,14 +54,16 @@ export class Zombie extends Phaser.GameObjects.Sprite {
     this.footX = x;
     this.footY = clampLaneY(y);
     this.laneY = this.footY;
+    this.walkKey = `${def.texture}_walk`;
+    this.attackKey = `${def.texture}_attack`;
     // 走路圖的腳底在 64 格中的第 62 列
-    this.setOrigin(0.5, this.scene.anims.exists('zombie_walk') ? 62 / 64 : 1);
+    this.setOrigin(0.5, scene.anims.exists(this.walkKey) ? 62 / 64 : 1);
     // 美術素材朝右繪製，霧屍預設往左走所以水平翻轉
     this.setFlipX(true);
     if (def.scale) this.setScale(def.scale);
     this.restoreTint();
-    if (scene.anims.exists('zombie_walk')) {
-      this.play({ key: 'zombie_walk', startFrame: Phaser.Math.Between(0, 3) });
+    if (scene.anims.exists(this.walkKey)) {
+      this.play({ key: this.walkKey, startFrame: Phaser.Math.Between(0, 3) });
       // 跑得快的步伐也快
       this.anims.timeScale = Phaser.Math.Clamp(def.speed / 18, 0.6, 2);
     }
@@ -54,6 +71,7 @@ export class Zombie extends Phaser.GameObjects.Sprite {
     this.speedJitter = Phaser.Math.FloatBetween(0.85, 1.15);
     scene.add.existing(this);
     this.sync(0);
+    Fx.of(scene)?.attachShadow(this, 22 * this.s);
   }
 
   private get s(): number {
@@ -83,6 +101,7 @@ export class Zombie extends Phaser.GameObjects.Sprite {
 
   update(dt: number, ctx: ZombieContext): void {
     if (this.dead) return;
+    this.hitLean *= Math.max(0, 1 - dt * 12);
     const minX = ctx.blockX + 18 * this.s;
     const speed = this.def.speed * this.speedJitter;
     const p = ctx.player;
@@ -94,18 +113,17 @@ export class Zombie extends Phaser.GameObjects.Sprite {
 
     let moved = false;
     if (chasing) {
-      // 站到主角的左邊或右邊，而不是疊在主角身上
-      const side = dx >= 0 ? -1 : 1;
-      const tx = p.x + side * (REACH_X - 4);
-      const ex = tx - this.footX;
-      const ey = dy;
       if (Math.abs(dx) <= REACH_X && Math.abs(dy) <= REACH_Y) {
-        this.attack(dt, ctx.hitPlayer, Math.sign(dx) || -1);
+        this.setFlipX(dx < 0);
+        this.attack(dt, () => ctx.hitPlayer(this.def.damage), Math.sign(dx) || -1);
       } else {
-        const d = Math.hypot(ex, ey) || 1;
+        // 站到主角的左邊或右邊，而不是疊在主角身上
+        const side = dx >= 0 ? -1 : 1;
+        const ex = p.x + side * (REACH_X - 4) - this.footX;
+        const d = Math.hypot(ex, dy) || 1;
         // 前後（y）移動比左右慢，和主角一樣做出縱深感
         this.footX += (ex / d) * speed * dt;
-        this.footY += (ey / d) * speed * 0.7 * dt;
+        this.footY += (dy / d) * speed * 0.7 * dt;
         this.setFlipX(ex < 0);
         moved = true;
       }
@@ -118,7 +136,7 @@ export class Zombie extends Phaser.GameObjects.Sprite {
       moved = true;
     } else {
       this.setFlipX(true);
-      this.attack(dt, ctx.hitBlock, -1);
+      this.attack(dt, () => ctx.hitBlock(this.def.damage, this.footY), -1);
     }
 
     // 不能穿過路障
@@ -126,23 +144,27 @@ export class Zombie extends Phaser.GameObjects.Sprite {
     this.footY = clampLaneY(this.footY);
     if (moved) {
       this.attackTimer = 0;
+      if (this.anims.currentAnim?.key !== this.walkKey && this.scene.anims.exists(this.walkKey)) this.play(this.walkKey);
       this.walkPhase += dt * (4 + this.def.speed * 0.12);
+    } else if (this.anims.currentAnim?.key === this.walkKey) {
+      // 停下來攻擊：不再原地踏步，回到站姿
+      this.anims.stop();
+      this.setFrame(0);
     }
-    this.sync(moved ? 1 : 0);
+    this.sync(moved ? 1 : 0, dt);
   }
 
-  private attack(dt: number, hit: (d: number) => void, dir: number): void {
+  private attack(dt: number, hit: () => void, dir: number): void {
     this.attackTimer += dt;
     if (this.attackTimer >= this.def.attackInterval) {
       this.attackTimer = 0;
-      hit(this.def.damage);
+      hit();
+      if (this.scene.anims.exists(this.attackKey)) this.play(this.attackKey);
       // 攻擊時往前撲一下
       this.lunge = 3 * dir;
       this.scene.time.delayedCall(60, () => (this.lunge = 0));
     }
   }
-
-  private lunge = 0;
 
   /**
    * 互相推開：兩隻在地面上太近時沿著彼此的方向各退一半，
@@ -177,34 +199,52 @@ export class Zombie extends Phaser.GameObjects.Sprite {
   }
 
   /**
-   * 擺位與程式化走路動態：上下顛簸＋前後搖晃。
-   * 有正式影格動畫時只留很小的搖晃，避免和步伐打架。
+   * 擺位與程式化動態：走路時上下顛簸＋前後搖晃，停下時身體微微起伏，
+   * 再疊上被打中的後仰。有影格動畫時只留很小的搖晃，避免和步伐打架。
    */
-  private sync(walking: number): void {
+  private sync(walking: number, dt = 0): void {
     this.x = this.footX + this.lunge;
-    this.y = this.footY - Math.abs(Math.sin(this.walkPhase)) * 1 * this.s * walking;
-    this.angle = walking ? Math.sin(this.walkPhase) * (this.anims.isPlaying ? 1.5 : 4) : 0;
+    if (walking) {
+      this.y = this.footY - Math.abs(Math.sin(this.walkPhase)) * this.s;
+      this.angle = Math.sin(this.walkPhase) * (this.anims.isPlaying ? 1.5 : 4) + this.hitLean;
+    } else {
+      this.y = this.footY;
+      this.angle = Math.sin((this.walkPhase += dt * 3)) * 1.5 + this.hitLean;
+    }
     this.setDepth(depthForY(this.footY));
   }
 
-  takeDamage(amount: number, knockback: number, dirX = 1): boolean {
+  takeDamage(amount: number, knockback: number, info: HitInfo = {}): boolean {
     if (this.dead) return false;
     this.hp -= amount;
-    this.footX += knockback * dirX;
+    this.footX += knockback * Math.sign(info.dirX ?? 1);
     this.x = this.footX;
-    this.setTintFill(0xffffff);
-    this.scene.time.delayedCall(50, () => this.restoreTint());
+    const fx = Fx.of(this.scene);
     if (this.hp <= 0) {
       this.dead = true;
-      this.scene.tweens.add({
-        targets: this,
-        angle: 90 * (this.flipX ? 1 : -1),
-        alpha: 0,
-        duration: 350,
-        onComplete: () => this.destroy(),
-      });
+      this.restoreTint();
+      this.y = this.footY;
+      if (fx) {
+        // 程式化倒地：複製當下影格成屍體，自己立刻移除
+        const frame = this.frame.name;
+        fx.fall(this, {
+          dir: (info.dirX ?? 1) >= 0 ? 1 : -1,
+          headshot: !!info.headshot,
+          headFrame: this.texture.has(`head_${frame}`) ? `head_${frame}` : undefined,
+          neckRow: ZOMBIE_NECK_ROW,
+          deathAnim: `${this.def.texture}_death`,
+        });
+        this.destroy();
+      } else {
+        this.scene.tweens.add({ targets: this, angle: 90, alpha: 0, duration: 350, onComplete: () => this.destroy() });
+      }
       return true;
     }
+    // 受擊：閃白 + 擠壓 + 往後一仰
+    this.setTintFill(0xffffff);
+    this.scene.time.delayedCall(50, () => this.active && this.restoreTint());
+    fx?.squash(this, this.s, info.headshot ? 1.4 : 1);
+    this.hitLean = (info.headshot ? 12 : 7) * Math.sign(info.dirX ?? 1);
     return false;
   }
 }
