@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { HEADSHOT_MULTIPLIER, type WeaponDef } from '../data/weapons';
 import type { Zombie } from '../entities/Zombie';
-import { PLACEHOLDER_COLORS } from '../config';
+import { DEPTH_FX, PLACEHOLDER_COLORS } from '../config';
 import { Fx } from '../fx/Fx';
 
 export interface WeaponRuntime {
@@ -80,7 +80,7 @@ export class WeaponSystem {
   ): ShotResult | null {
     const w = this.active;
     if (this.reloading || this.cooldown > 0) return null;
-    if (!(w.def.automatic ? held : pressed)) return null;
+    if (!(w.def.automatic ? held || pressed : pressed)) return null;
     if (w.ammo <= 0) {
       this.reload();
       return null;
@@ -136,7 +136,8 @@ export class WeaponSystem {
       const dmg = def.damage * (head ? HEADSHOT_MULTIPLIER : 1);
       if (head) result.headshots++;
       const dirX = Math.cos(angle);
-      const floorY = h.z.y;
+      // 血落在這隻霧屍腳下（2.5D：每隻的地面 y 不同）
+      const floorY = h.z.footY;
       const fx = Fx.of(this.scene);
       fx?.bulletHit(h.x, h.y, dirX, floorY, head);
       if (h.z.takeDamage(dmg, def.knockback, { headshot: head, dirX })) {
@@ -157,7 +158,7 @@ export class WeaponSystem {
       fx.bulletTracer(x1, y1, x2, y2);
       return;
     }
-    const g = this.scene.add.graphics().setDepth(50);
+    const g = this.scene.add.graphics().setDepth(DEPTH_FX);
     g.lineStyle(1, PLACEHOLDER_COLORS.bullet, 0.9);
     g.lineBetween(x1, y1, x2, y2);
     this.scene.tweens.add({ targets: g, alpha: 0, duration: 70, onComplete: () => g.destroy() });
@@ -165,7 +166,7 @@ export class WeaponSystem {
 
   private spawnHitSpark(x: number, y: number, head: boolean): void {
     const size = head ? 4 : 2;
-    const r = this.scene.add.rectangle(x, y, size, size, head ? 0xff5252 : 0xaa2222).setDepth(51);
+    const r = this.scene.add.rectangle(x, y, size, size, head ? 0xff5252 : 0xaa2222).setDepth(DEPTH_FX + 1);
     this.scene.tweens.add({
       targets: r,
       y: y + 6,

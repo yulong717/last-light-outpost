@@ -26,7 +26,7 @@ export function createAtmosphere(scene: Phaser.Scene, opt: AtmosphereOptions): v
     frequency: 160,
     quantity: 1,
     advance: 9000,
-  }).setDepth(40);
+  }).setDepth(40).setScrollFactor(0);
 
   // 貼地霧：幾團大霧從右往左慢慢流過，前後兩層有視差
   for (let layer = 0; layer < 2; layer++) {
@@ -37,7 +37,9 @@ export function createAtmosphere(scene: Phaser.Scene, opt: AtmosphereOptions): v
         .setTint(0x9aa3ad)
         .setAlpha(layer === 0 ? 0.04 : 0.05)
         .setScale(Phaser.Math.FloatBetween(1.5, 2.6), Phaser.Math.FloatBetween(1, 1.6))
-        .setDepth(layer === 0 ? 4 : 30);
+        .setDepth(layer === 0 ? 4 : 30)
+        // 霧在畫面座標中流動，鏡頭捲動時不會只蓋住戰場的前半段
+        .setScrollFactor(0);
       const speed = layer === 0 ? 6 : 12;
       const drift = (): void => {
         const dist = fog.x + fog.displayWidth / 2;
