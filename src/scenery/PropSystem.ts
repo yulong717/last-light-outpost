@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { DEPTH_FX, LANE_BOTTOM, LANE_TOP, clampLaneY, depthForY } from '../config';
 import { AudioManager } from '../audio/AudioManager';
-import { PROPS, propKey } from '../art/PropArt';
+import { LAMP_HEAD, PROPS, propKey } from '../art/PropArt';
 import { getFirearm } from '../data/weapons';
 import { PROP_TUNING, type InteractKind } from '../data/scenery';
 import type { Loot } from '../data/explore';
@@ -169,8 +169,8 @@ export class PropSystem {
   private rect(o: PropObj): Phaser.Geom.Rectangle {
     if (o.def.id === 'lamppost') {
       // 只有燈頭打得到
-      const hx = o.x + (o.def.flip ? -6 : 6);
-      return new Phaser.Geom.Rectangle(hx - 5, o.y - 80, 10, 8);
+      const hx = o.x + (o.def.flip ? -LAMP_HEAD.dx : LAMP_HEAD.dx);
+      return new Phaser.Geom.Rectangle(hx - 9, o.y + LAMP_HEAD.dy - 6, 18, 12);
     }
     if (o.def.id === 'tubelight') return new Phaser.Geom.Rectangle(o.x - o.w / 2, o.y, o.w, o.h + 2);
     return new Phaser.Geom.Rectangle(o.x - o.w / 2, o.y - o.h, o.w, o.h);
@@ -433,8 +433,8 @@ export class PropSystem {
     o.broken = true;
     o.img.setFrame(1);
     for (const g of o.glow ?? []) (g as Phaser.GameObjects.Image).setVisible(false);
-    const hx = o.def.id === 'tubelight' ? o.x : o.x + (o.def.flip ? -6 : 6);
-    const hy = o.def.id === 'tubelight' ? o.y + 6 : o.y - 76;
+    const hx = o.def.id === 'tubelight' ? o.x : o.x + (o.def.flip ? -LAMP_HEAD.dx : LAMP_HEAD.dx);
+    const hy = o.def.id === 'tubelight' ? o.y + 6 : o.y + LAMP_HEAD.dy;
     Fx.of(this.scene)?.sparks(hx, hy, 1, o.def.id === 'tubelight' ? LANE_TOP + 10 : o.y, 10);
     AudioManager.play('glass_break', { volume: 0.5 });
     this.host.onNoise?.(4);
@@ -565,7 +565,7 @@ export class PropSystem {
     for (const o of this.props) {
       if (o.def.wall || (o.kind !== 'cover' && o.kind !== 'car' && o.def.id !== 'pump') || o.w < 14) continue;
       const rx = o.w / 2 + 2;
-      const ry = COVER_DEPTH;
+      const ry = o.w > 100 ? COVER_DEPTH + 4 : COVER_DEPTH;
       const dx = e.footX - o.x;
       const dy = e.footY - (o.y - ry + 3);
       const k = (dx * dx) / (rx * rx) + (dy * dy) / (ry * ry);

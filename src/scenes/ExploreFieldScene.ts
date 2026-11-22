@@ -456,13 +456,13 @@ export class ExploreFieldScene extends Phaser.Scene {
       const y = piece && !piece.wall ? piece.y + 2 : piece ? LANE_TOP + 4 : (LANE_TOP + LANE_BOTTOM) / 2;
       const door = piece?.id === 'barricadedoor';
       // 站在公車頂：畫在車頂上，霧屍圍在車邊抓
-      const standY = piece?.id === 'bus' ? piece.y - 40 : y;
+      const standY = piece?.id === 'bus' ? piece.y - 104 : y;
       const img = door
         ? this.add.image(x, GROUND_Y + 1, propKey('barricadedoor')).setOrigin(0.5, 1).setDepth(6)
         : this.add.image(x, standY, 'player', 0).setOrigin(0.5, 63 / 64).setTint(0xd8c090).setFlipX(true).setDepth(depthForY(y) + 1);
       if (!door) this.fx.attachShadow(img as unknown as Phaser.GameObjects.Sprite, 20);
       if (piece?.id === 'bus') this.tweens.add({ targets: img, y: standY - 2, duration: 300, yoyo: true, repeat: -1 });
-      const top = door ? GROUND_Y - 62 : standY - 70;
+      const top = door ? GROUND_Y - 92 : standY - 70;
       const label = pixelText(this, x, top, door ? '避難所的門' : '倖存者', 8, '#ffd24a').setOrigin(0.5).setDepth(70);
       label.setStroke('#000000', 3);
       this.add.rectangle(x - 16, top + 10, 32, 4, 0x000000).setDepth(70);
@@ -478,7 +478,7 @@ export class ExploreFieldScene extends Phaser.Scene {
           bar.width = 30 * Math.max(0, r);
         },
       };
-      this.player.footX = x - 40;
+      this.player.footX = piece?.id === 'bus' ? x - 210 : x - 50;
     }
   }
 

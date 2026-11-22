@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { GAME_HEIGHT, GAME_WIDTH, GROUND_Y, LANE_BOTTOM, LANE_TOP, depthForY } from '../config';
 import { OUTLINE, Painter, canvasTexture, mix, tone } from '../art/Painter';
-import { PROPS, propKey } from '../art/PropArt';
+import { LAMP_HEAD, PROPS, propKey } from '../art/PropArt';
 import {
   PROP_KIND,
   type FacadeStyle,
@@ -86,7 +86,7 @@ export function laneY(lane: Piece['lane'], rnd: Phaser.Math.RandomDataGenerator)
 }
 
 /** 道具是不是貼牆的（門、窗、貨架、置物櫃…） */
-const WALL_PROPS = new Set(['door', 'glasswin', 'shelf', 'fridge', 'locker', 'gunlocker', 'filecab', 'fusebox', 'wardrobe', 'shrine', 'tv', 'cellbars', 'noticeboard', 'redcross', 'shutter', 'lamppost', 'watchtower', 'billboard', 'hoop', 'flagpole', 'powerpole', 'barricadedoor']);
+const WALL_PROPS = new Set(['door', 'glasswin', 'shelf', 'fridge', 'locker', 'gunlocker', 'filecab', 'fusebox', 'wardrobe', 'shrine', 'tv', 'cellbars', 'noticeboard', 'redcross', 'shutter', 'lamppost', 'watchtower', 'billboard', 'hoop', 'flagpole', 'barricadedoor']);
 
 export function buildScenery(scene: Phaser.Scene, o: SceneryOptions): SceneryResult {
   const rnd = new Phaser.Math.RandomDataGenerator([o.seed]);
@@ -161,8 +161,8 @@ export function buildScenery(scene: Phaser.Scene, o: SceneryOptions): SceneryRes
 
   // 室內天花板燈：每 130px 一盞（可以射掉）
   if (!ext && o.ceilingLights !== false) {
-    for (let x = span[0] + 70; x < span[1] - 20; x += 130 + rnd.between(-20, 20)) {
-      props.push({ id: 'tubelight', x, y: 30, kind: 'light', flip: false, frame: 0, wall: true, scale: 1 });
+    for (let x = span[0] + 90; x < span[1] - 20; x += 210 + rnd.between(-20, 20)) {
+      props.push({ id: 'tubelight', x, y: Math.max(4, ceilingY(o.interior ?? t.interior)), kind: 'light', flip: false, frame: 0, wall: true, scale: 1 });
     }
   }
   return { setting: o.setting, props, darkness, light: t.light };
@@ -181,8 +181,8 @@ export function placeStaticProps(scene: Phaser.Scene, res: SceneryResult): void 
 /** 燈的光暈與地上的光圈；回傳兩個物件好讓互動系統控制開關 */
 export function addLightGlow(scene: Phaser.Scene, p: PlacedProp, color: number): Phaser.GameObjects.GameObject[] {
   const tube = p.id === 'tubelight';
-  const hx = p.x + (tube ? 0 : (p.flip ? -6 : 6));
-  const hy = tube ? p.y + 6 : p.y - 76;
+  const hx = p.x + (tube ? 0 : p.flip ? -LAMP_HEAD.dx : LAMP_HEAD.dx);
+  const hy = tube ? p.y + 8 : p.y + LAMP_HEAD.dy;
   const cone = scene.add.image(hx, hy, coneKey(scene, tube ? 70 : 90, (tube ? LANE_TOP + 30 : p.y + 20) - hy, color)).setOrigin(0.5, 0);
   cone.setBlendMode(Phaser.BlendModes.ADD).setDepth(42).setAlpha(tube ? 0.55 : 0.6);
   const pool = scene.add.ellipse(hx, tube ? LANE_TOP + 40 : p.y + 6, tube ? 110 : 120, tube ? 40 : 30, color, 0.1).setBlendMode(Phaser.BlendModes.ADD).setDepth(3);
@@ -362,309 +362,313 @@ function drawFacade(
 }
 
 const B = GROUND_Y;
+/** 比例尺：1 公尺 ≈ 34px（角色 60px = 175cm）。一層樓約 3.2m ≈ 108px，畫面裡只看得到一樓和二樓的下半 */
+const M = 34;
+const FLOOR_H = Math.round(3.2 * M);
 
-/** 一排店面：鐵捲門、招牌、樓上窗戶，偶爾是倒塌的空地 */
+/** 鐵捲門：x,y 是左上，openTo 是捲到哪（0 = 全關，1 = 全開） */
+function shutter(p: Painter, x: number, y: number, w: number, h: number, openTo: number): void {
+  p.rect(x - 2, y - 8, w + 4, 8, 0x3a3f46);
+  p.rect(x - 2, y - 8, w + 4, 1, 0x5a6068);
+  p.rect(x, y, w, h, 0x07080a);
+  const bottom = y + Math.round(h * (1 - openTo));
+  for (let yy = y; yy < bottom; yy += 4) p.rect(x, yy, w, 3, yy % 8 === y % 8 ? 0x7a8088 : 0x6a7078);
+  if (bottom < y + h) p.rect(x, bottom, w, 2, 0x4a5058);
+  p.rect(x - 3, y, 3, h, 0x2a2e34);
+  p.rect(x + w, y, 3, h, 0x2a2e34);
+}
+
+/** 冷氣室外機（80×55cm → 28×19） */
+function acUnit(p: Painter, x: number, y: number): void {
+  p.box(x, y, 28, 19, 0xb8bcc0);
+  p.circle(x + 10, y + 9, 6, 0x6a7076);
+  for (let i = 0; i < 3; i++) p.rect(x + 19, y + 4 + i * 4, 6, 1, 0x7a8086);
+  p.rect(x + 2, y + 19, 2, 3, 0x5a5e64);
+  p.rect(x + 24, y + 19, 2, 3, 0x5a5e64);
+}
+
+/** 二樓窗（1.2 × 1.4m → 41×48） */
+function upperWindows(p: Painter, x: number, w: number, top: number, rnd: Phaser.Math.RandomDataGenerator, bars = false): void {
+  const n = Math.max(1, Math.floor((w - 20) / 60));
+  const gap = (w - n * 41) / (n + 1);
+  for (let i = 0; i < n; i++) {
+    const wx = Math.round(x + gap + i * (41 + gap));
+    p.window(wx, top, 41, 48, { lit: rnd.frac() < 0.07, broken: rnd.frac() < 0.25, bars: bars || rnd.frac() < 0.35, blinds: rnd.frac() < 0.2 });
+    if (rnd.frac() < 0.4) acUnit(p, wx + 6, top + 52);
+  }
+}
+
+/** 一排店面：一樓鐵捲門＋招牌，上面是二樓窗戶；偶爾是倒塌的空地 */
 function facadeStreet(p: Painter, W: number, t: LocationTheme, rnd: Phaser.Math.RandomDataGenerator, signs: Sign[]): void {
-  const names = ['五金行', '小吃', '藥局', '當舖', '網咖', '早餐', '機車行', '眼鏡'];
-  const signCols = [0xc83a2a, 0x2a6ac8, 0x3a9a50, 0xd8a020, 0x8a3ac0];
+  const names = ['五金行', '小吃', '藥局', '當舖', '網咖', '早餐', '機車行', '眼鏡', '自助餐', '理髮'];
   rnd.shuffle(names);
   let shop = 0;
+  const signCols = [0xc83a2a, 0x2a6ac8, 0x3a9a50, 0xd8a020, 0x8a3ac0];
   for (let x = 0; x < W; ) {
-    const w = rnd.between(70, 120);
-    if (rnd.frac() < 0.15) {
-      // 倒塌的空地：瓦礫堆
-      for (let i = 0; i < 18; i++) p.rect(x + rnd.between(0, w - 8), B - rnd.between(2, 18), rnd.between(4, 10), rnd.between(2, 6), tone(t.wall, rnd.frac() * 0.2 - 0.1));
-      p.rect(x + 6, B - 40, 3, 40, tone(t.wall, -0.2));
-      p.line(x + 8, B - 40, x + 26, B - 60, 0x5a3a22);
+    const w = rnd.between(4, 6) * M;
+    if (rnd.frac() < 0.12) {
+      // 倒塌的空地：瓦礫堆、露出的鋼筋
+      for (let i = 0; i < 30; i++) p.rect(x + rnd.between(0, w - 16), B - rnd.between(4, 40), rnd.between(8, 22), rnd.between(4, 12), tone(t.wall, rnd.frac() * 0.2 - 0.1));
+      for (let i = 0; i < 4; i++) p.line(x + 20 + i * 30, B - 30, x + 26 + i * 30, B - 90 - i * 10, 0x5a3a22);
       x += w;
       continue;
     }
-    const floors = rnd.between(2, 3);
-    const h = 30 + floors * 30;
     const wall = tone(t.wall, rnd.frac() * 0.25 - 0.1);
-    p.box(x, B - h, w, h, wall, { light: 0.1 });
-    // 屋頂水塔與鐵皮加蓋
-    if (rnd.frac() < 0.5) {
-      p.box(x + 8, B - h - 10, 16, 10, 0x8a8e94);
-      p.rect(x + 10, B - h - 2, 2, 2, OUTLINE);
-    }
-    // 樓上窗
-    for (let f = 1; f < floors + 1; f++) {
-      const wy = B - 30 - f * 30 + 6;
-      for (let wx = x + 8; wx < x + w - 18; wx += 22) p.window(wx, wy, 14, 16, { lit: rnd.frac() < 0.06, broken: rnd.frac() < 0.25, bars: rnd.frac() < 0.3 });
-      // 冷氣室外機
-      if (rnd.frac() < 0.5) p.box(x + w - 18, wy + 10, 12, 8, 0xb0b4b8);
-    }
-    // 一樓：招牌、鐵捲門（可能半開）
+    p.box(x, 0, w, B, wall, { light: 0.08 });
+    // 樓層分隔
+    p.rect(x + 1, B - FLOOR_H - 4, w - 2, 4, tone(wall, -0.3));
+    upperWindows(p, x, w, B - FLOOR_H - 72, rnd);
+    // 招牌（70cm 高）
     const sc = signCols[rnd.between(0, signCols.length - 1)];
-    p.box(x + 4, B - 44, w - 8, 12, sc);
-    signs.push({ x: x + w / 2, y: B - 38, text: names[shop++ % names.length], color: '#f4ecd8', size: 8 });
+    p.box(x + 6, B - FLOOR_H + 4, w - 12, 24, sc);
+    p.rect(x + 8, B - FLOOR_H + 6, w - 16, 1, tone(sc, 0.4));
+    signs.push({ x: x + w / 2, y: B - FLOOR_H + 16, text: names[shop++ % names.length], color: '#f4ecd8', size: 11 });
+    // 一樓：2.6m 高的鐵捲門
     const open = rnd.frac();
-    p.rect(x + 6, B - 30, w - 12, 30, OUTLINE);
-    const shutterBottom = open < 0.3 ? B - 14 : open < 0.5 ? B - 22 : B;
-    for (let y = B - 29; y < shutterBottom; y += 3) p.rect(x + 7, y, w - 14, 2, y % 6 === 0 ? 0x7a8088 : 0x6a7078);
-    if (shutterBottom < B) p.rect(x + 7, shutterBottom, w - 14, B - shutterBottom, 0x07080a);
+    shutter(p, x + 10, B - 88, w - 20, 88, open < 0.25 ? 0.35 : open < 0.4 ? 0.15 : 0);
     // 塗鴉
-    if (rnd.frac() < 0.35) p.dither(x + 10, B - 26, rnd.between(14, 30), 8, rnd.pick([0xc83a2a, 0x3a9ae0, 0xe8e040]), 0.4, 0.7);
-    x += w + rnd.between(0, 4);
+    if (rnd.frac() < 0.4) p.dither(x + 20, B - 60, rnd.between(30, 60), 16, rnd.pick([0xc83a2a, 0x3a9ae0, 0xe8e040]), 0.4, 0.7);
+    x += w;
   }
   sidewalkTrim(p, W);
 }
 
-/** 透天厝：窄長四樓、陽台鐵窗、屋頂水塔、一樓鐵捲門與機車 */
+/** 透天厝：一樓騎樓與鐵捲門、二樓陽台鐵窗、冷氣機、直立招牌 */
 function facadeHomes(p: Painter, W: number, _t: LocationTheme, rnd: Phaser.Math.RandomDataGenerator, signs: Sign[]): void {
   const tiles = [0xa89a88, 0x8a7a6a, 0xb8b0a0, 0x7a8a8a, 0x9a8070];
   for (let x = 0; x < W; ) {
-    const w = rnd.between(44, 56);
-    const floors = rnd.between(3, 4);
-    const h = floors * 28 + 4;
+    const w = Math.round(rnd.between(42, 50) * M / 10);
     const c = tiles[rnd.between(0, tiles.length - 1)];
-    p.box(x, B - h, w, h, c, { light: 0.1 });
-    // 磁磚橫紋
-    for (let y = B - h + 4; y < B; y += 4) p.rect(x + 1, y, w - 2, 1, tone(c, -0.08));
-    // 頂樓水塔＋鐵皮屋
-    p.box(x + w - 20, B - h - 12, 14, 12, rnd.pick([0x3a6ac8, 0xd8d0c0, 0x5a8a5a]));
-    if (rnd.frac() < 0.5) p.box(x + 2, B - h - 8, 22, 8, 0x6a7078);
-    for (let f = 1; f < floors; f++) {
-      const fy = B - 28 - f * 28;
-      // 陽台＋鐵窗
-      p.rect(x + 3, fy + 22, w - 6, 3, tone(c, -0.3));
-      p.window(x + 7, fy + 4, w - 14, 16, { lit: rnd.frac() < 0.08, broken: rnd.frac() < 0.2, bars: true, frame: 0x3a3a3a });
-      for (let i = x + 4; i < x + w - 4; i += 3) p.rect(i, fy + 16, 1, 7, 0x2a2a2a);
-      // 曬衣服
-      if (rnd.frac() < 0.25) for (let i = 0; i < 3; i++) p.rect(x + 10 + i * 8, fy + 8, 5, 7, rnd.pick([0xc83a2a, 0xe8e8e0, 0x3a6ac8]));
-      if (rnd.frac() < 0.4) p.box(x + w - 14, fy + 12, 10, 7, 0xb0b4b8);
-    }
-    // 一樓鐵捲門
-    p.rect(x + 4, B - 26, w - 8, 26, OUTLINE);
-    const half = rnd.frac() < 0.25;
-    for (let y = B - 25; y < (half ? B - 10 : B); y += 3) p.rect(x + 5, y, w - 10, 2, 0x7a8088);
-    if (half) p.rect(x + 5, B - 10, w - 10, 10, 0x07080a);
+    p.box(x, 0, w, B, c, { light: 0.06 });
+    for (let y = 2; y < B - FLOOR_H; y += 5) p.rect(x + 1, y, w - 2, 1, tone(c, -0.08));
+    // 二樓：凸出的陽台＋整片鐵窗
+    const by = B - FLOOR_H - 4;
+    p.rect(x + 2, by - 76, w - 4, 76, tone(c, -0.35));
+    p.window(x + 8, by - 70, w - 16, 54, { lit: rnd.frac() < 0.08, glass: 0x1c2630 });
+    for (let i = x + 6; i < x + w - 6; i += 5) p.rect(i, by - 72, 1, 70, 0x2a2a2a);
+    p.rect(x + 4, by - 72, w - 8, 2, 0x2a2a2a);
+    p.rect(x + 4, by - 40, w - 8, 1, 0x2a2a2a);
+    p.box(x, by - 4, w, 8, tone(c, -0.2));
+    if (rnd.frac() < 0.35) for (let i = 0; i < 4; i++) p.rect(x + 16 + i * 22, by - 60, 12, 18, rnd.pick([0xc83a2a, 0xe8e8e0, 0x3a6ac8]));
+    if (rnd.frac() < 0.6) acUnit(p, x + w - 36, by - 100);
+    // 一樓騎樓：前面兩根柱子，裡面暗暗的鐵捲門
+    p.rect(x, B - FLOOR_H + 4, w, FLOOR_H - 4, tone(c, -0.55));
+    const open = rnd.frac() < 0.25 ? 0.3 : 0;
+    shutter(p, x + 18, B - 84, w - 36, 84, open);
+    p.box(x, B - FLOOR_H + 4, 12, FLOOR_H - 4, tone(c, 0.05));
+    p.box(x + w - 12, B - FLOOR_H + 4, 12, FLOOR_H - 4, tone(c, 0.05));
     // 直立招牌
-    if (rnd.frac() < 0.3) {
-      p.box(x + w - 8, B - h + 10, 8, 30, rnd.pick([0xc83a2a, 0x2a6ac8]));
+    if (rnd.frac() < 0.35) {
+      const sc = rnd.pick([0xc83a2a, 0x2a6ac8, 0x3a9a50]);
+      p.box(x + w - 22, by - 150, 18, 90, sc);
+      signs.push({ x: x + w - 13, y: by - 105, text: rnd.pick(['診所', '補習', '小吃', '茶']), color: '#ffffff', size: 9 });
     }
     x += w;
   }
-  // 巷口的紅綠燈
-  for (let x = 200; x < W; x += 420) {
-    p.rect(x, B - 70, 2, 70, 0x3a3f46);
-    p.box(x - 4, B - 78, 10, 10, 0x2a2a2a);
-    p.rect(x - 2, B - 76, 3, 2, 0xd03020);
-  }
-  void signs;
   sidewalkTrim(p, W);
 }
 
-/** 加油站：大雨棚＋加油機、便利商店、修車間、價目牌 */
+/** 加油站：5m 高的雨棚、便利商店、修車間、價目牌 */
 function facadeGas(p: Painter, W: number, _t: LocationTheme, rnd: Phaser.Math.RandomDataGenerator, signs: Sign[]): void {
-  for (let x0 = 0; x0 < W; x0 += 560) {
-    // 便利商店
-    const sx = x0 + 300;
-    p.box(sx, B - 64, 150, 64, 0xd8d4c8);
-    p.rect(sx + 1, B - 64, 148, 10, 0x2a8a4a);
-    p.rect(sx + 1, B - 56, 148, 2, 0xe8a020);
-    signs.push({ x: sx + 75, y: B - 59, text: '便利商店', color: '#ffffff', size: 8 });
-    for (let wx = sx + 8; wx < sx + 140; wx += 34) p.window(wx, B - 46, 28, 34, { glass: 0x1a2a2a, lit: wx === sx + 42, broken: rnd.frac() < 0.4 });
-    // 修車間
-    const gx = x0 + 460;
-    p.box(gx, B - 76, 96, 76, 0x8a8478);
-    p.rect(gx + 1, B - 76, 94, 6, 0x4a4a4a);
-    for (const dx of [6, 52]) {
-      p.rect(gx + dx, B - 60, 40, 60, OUTLINE);
-      const open = rnd.frac() < 0.5;
-      for (let y = B - 59; y < (open ? B - 30 : B); y += 3) p.rect(gx + dx + 1, y, 38, 2, 0x9aa0a6);
-      if (open) {
-        p.rect(gx + dx + 1, B - 30, 38, 30, 0x0a0a0c);
-        p.rect(gx + dx + 6, B - 12, 28, 6, 0x2a2a2a);
-      }
-    }
-    signs.push({ x: gx + 48, y: B - 66, text: '修車', color: '#e8d8a0', size: 8 });
-    // 雨棚
-    const cx = x0 + 30;
-    p.rect(cx + 20, B - 76, 4, 76, 0xd8d4c8);
-    p.rect(cx + 200, B - 76, 4, 76, 0xd8d4c8);
-    p.box(cx, B - 96, 240, 18, 0xe8e4d8);
-    p.rect(cx + 1, B - 86, 238, 5, 0xc83020);
-    p.rect(cx + 2, B - 79, 236, 1, 0xfff4c0);
-    signs.push({ x: cx + 120, y: B - 91, text: '加油站', color: '#c83020', size: 8 });
-    // 價目牌
-    const px = x0 + 270;
-    p.rect(px + 8, B - 120, 4, 120, 0x3a3f46);
-    p.box(px, B - 140, 22, 30, 0x1a1a1a);
-    p.rect(px + 2, B - 138, 18, 6, 0xc83020);
-    for (let i = 0; i < 3; i++) p.rect(px + 3, B - 128 + i * 6, 16, 4, 0x3a1a0a);
-    for (let i = 0; i < 3; i++) p.rect(px + 4, B - 127 + i * 6, rnd.between(6, 14), 2, 0xe86020);
+  for (let x0 = 0; x0 < W; x0 += 760) {
+    // 便利商店（3.6m 高）
+    const sx = x0 + 330;
+    const sw = 220;
+    p.box(sx, B - 124, sw, 124, 0xd8d4c8);
+    p.rect(sx + 1, B - 124, sw - 2, 22, 0x2a8a4a);
+    p.rect(sx + 1, B - 104, sw - 2, 4, 0xe8a020);
+    signs.push({ x: sx + sw / 2, y: B - 113, text: '便利商店', color: '#ffffff', size: 11 });
+    for (let wx = sx + 10; wx < sx + sw - 50; wx += 52) p.window(wx, B - 92, 46, 76, { glass: 0x1a2a2a, lit: wx === sx + 62, broken: rnd.frac() < 0.4 });
+    p.rect(sx + sw - 46, B - 80, 36, 80, OUTLINE);
+    p.rect(sx + sw - 45, B - 79, 34, 79, 0x1a2830);
+    // 修車間（兩個 3m 寬的車位）
+    const gx = x0 + 570;
+    p.box(gx, B - 140, 230, 140, 0x8a8478);
+    p.rect(gx + 1, B - 140, 228, 10, 0x4a4a4a);
+    signs.push({ x: gx + 115, y: B - 122, text: '修車保養', color: '#3a3a3a', size: 10 });
+    for (const dx of [10, 120]) shutter(p, gx + dx, B - 102, 100, 102, rnd.frac() < 0.5 ? 0.55 : 0);
+    // 雨棚（底部離地 5m）
+    const cx = x0 + 20;
+    const cw = 290;
+    for (const px of [cx + 40, cx + cw - 56]) p.box(px, B - 170, 16, 170, 0xd8d4c8, { light: 0.1 });
+    p.box(cx, B - 204, cw, 36, 0xe8e4d8);
+    p.rect(cx + 1, B - 190, cw - 2, 10, 0xc83020);
+    p.rect(cx + 2, B - 169, cw - 4, 2, 0xfff4c0);
+    signs.push({ x: cx + cw / 2, y: B - 196, text: '加油站', color: '#c83020', size: 10 });
+    // 價目牌（立柱）
+    const px = x0 + 300;
+    p.rect(px + 8, 10, 6, B - 10, 0x3a3f46);
+    p.box(px - 6, 0, 34, 60, 0x1a1a1a);
+    p.rect(px - 4, 2, 30, 10, 0xc83020);
+    for (let i = 0; i < 4; i++) p.rect(px - 3, 16 + i * 10, 28, 8, 0x3a1a0a);
+    for (let i = 0; i < 4; i++) p.rect(px - 1, 18 + i * 10, rnd.between(12, 24), 4, 0xe86020);
   }
   sidewalkTrim(p, W);
 }
 
-/** 超市：長條立面、大玻璃窗裡看得到貨架、綠色招牌 */
+/** 超市：4.5m 高的立面、整片玻璃窗裡看得到貨架、綠色招牌 */
 function facadeMarket(p: Painter, W: number, _t: LocationTheme, rnd: Phaser.Math.RandomDataGenerator, signs: Sign[]): void {
-  for (let x0 = 0; x0 < W; x0 += 600) {
-    const w = Math.min(560, W - x0 - 20);
-    if (w < 100) break;
-    p.box(x0 + 10, B - 88, w, 88, 0xc8c4b8);
-    p.rect(x0 + 11, B - 88, w - 2, 18, 0x2a8a4a);
-    p.rect(x0 + 11, B - 72, w - 2, 2, 0xf0d040);
-    signs.push({ x: x0 + 10 + w / 2, y: B - 79, text: '全聯社區超市', color: '#ffffff', size: 10 });
-    for (let wx = x0 + 20; wx < x0 + w - 30; wx += 46) {
-      if (Math.abs(wx - (x0 + w / 2)) < 30) {
-        // 自動門
-        p.rect(wx, B - 54, 40, 54, OUTLINE);
-        p.rect(wx + 1, B - 53, 19, 53, 0x1a2830);
-        p.rect(wx + 21, B - 53, 18, 53, 0x1a2830);
-        p.rect(wx + 26, B - 53, 18, 53, 0x0a1014);
-        continue;
+  p.box(0, 0, W, B, 0xa8a49a, { outline: null });
+  for (let x0 = 0; x0 < W; x0 += 640) {
+    const w = Math.min(600, W - x0 - 20);
+    if (w < 140) break;
+    p.box(x0 + 10, B - 154, w, 154, 0xc8c4b8);
+    p.rect(x0 + 11, B - 154, w - 2, 34, 0x2a8a4a);
+    p.rect(x0 + 11, B - 122, w - 2, 3, 0xf0d040);
+    signs.push({ x: x0 + 10 + w / 2, y: B - 137, text: '全聯社區超市', color: '#ffffff', size: 14 });
+    const doorX = x0 + 10 + Math.round(w / 2) - 34;
+    for (let wx = x0 + 20; wx < x0 + w - 60; wx += 66) {
+      if (wx + 60 > doorX && wx < doorX + 68) continue;
+      p.window(wx, B - 112, 60, 96, { glass: 0x1a2830, broken: rnd.frac() < 0.3 });
+      for (let sy = B - 100; sy < B - 22; sy += 16) {
+        p.rect(wx + 3, sy, 54, 2, 0x4a5058);
+        for (let k = wx + 4; k < wx + 56; k += 5) if (rnd.frac() < 0.55) p.rect(k, sy - 7, 4, 7, rnd.pick([0x8a2a22, 0x2a5a8a, 0x8a7a2a]), 0.6);
       }
-      p.window(wx, B - 60, 40, 46, { glass: 0x1a2830, broken: rnd.frac() < 0.3 });
-      // 窗裡的貨架
-      for (let sy = B - 50; sy < B - 18; sy += 9) {
-        p.rect(wx + 3, sy, 34, 1, 0x4a5058);
-        for (let k = wx + 4; k < wx + 36; k += 4) if (rnd.frac() < 0.5) p.rect(k, sy - 4, 3, 4, rnd.pick([0x8a2a22, 0x2a5a8a, 0x8a7a2a]), 0.6);
-      }
-      // 特價海報
-      if (rnd.frac() < 0.4) p.rect(wx + 6, B - 40, 10, 14, 0xf0e070);
+      if (rnd.frac() < 0.4) p.rect(wx + 8, B - 70, 16, 22, 0xf0e070);
     }
+    // 自動門（2m 寬、2.2m 高）
+    p.rect(doorX, B - 76, 68, 76, OUTLINE);
+    p.rect(doorX + 1, B - 75, 33, 75, 0x1a2830);
+    p.rect(doorX + 34, B - 75, 33, 75, 0x0a1014);
+    p.rect(doorX, B - 82, 68, 6, 0x6a6e72);
   }
   sidewalkTrim(p, W);
 }
 
-/** 停車場：遠處的圍籬與商場側牆 */
-function facadeParking(p: Painter, W: number, t: LocationTheme, rnd: Phaser.Math.RandomDataGenerator, signs: Sign[]): void {
-  p.box(0, B - 70, W, 50, tone(t.wall, -0.1), { outline: null });
-  for (let x = 30; x < W; x += 160) {
-    p.rect(x, B - 62, 60, 30, tone(t.wall, -0.25));
-    p.rect(x + 2, B - 60, 56, 2, tone(t.wall, 0.1));
+/** 停車場：遠處的商場側牆＋2m 高的鐵絲網圍籬 */
+function facadeParking(p: Painter, W: number, t: LocationTheme, _rnd: Phaser.Math.RandomDataGenerator, signs: Sign[]): void {
+  p.box(0, B - 150, W, 120, tone(t.wall, -0.1), { outline: null });
+  for (let x = 40; x < W; x += 220) {
+    p.rect(x, B - 130, 110, 60, tone(t.wall, -0.25));
+    p.rect(x + 3, B - 127, 104, 3, tone(t.wall, 0.1));
   }
-  for (let x = 120; x < W; x += 320) {
-    p.box(x, B - 66, 26, 20, 0x2a5aa8);
-    signs.push({ x: x + 13, y: B - 56, text: 'P', color: '#ffffff', size: 12 });
+  for (let x = 160; x < W; x += 440) {
+    p.box(x, B - 140, 40, 40, 0x2a5aa8);
+    signs.push({ x: x + 20, y: B - 120, text: 'P', color: '#ffffff', size: 20 });
   }
-  // 鐵絲網圍籬
-  for (let x = 0; x < W; x += 2) {
-    for (let y = B - 26; y < B; y += 4) p.px(x, y + (x % 4 === 0 ? 0 : 2), 0x6a7078, 0.6);
-  }
-  for (let x = 0; x < W; x += 40) p.rect(x, B - 28, 2, 28, 0x5a6068);
-  p.rect(0, B - 28, W, 1, 0x7a8088);
-  void rnd;
+  // 鐵絲網圍籬（2m）
+  const top = B - 68;
+  for (let x = 0; x < W; x += 3) for (let y = top; y < B; y += 6) p.px(x, y + (x % 6 === 0 ? 0 : 3), 0x6a7078, 0.6);
+  for (let x = 0; x < W; x += 80) p.rect(x, top - 2, 3, 70, 0x5a6068);
+  p.rect(0, top - 2, W, 2, 0x7a8088);
   sidewalkTrim(p, W);
 }
 
-/** 醫院：白色高樓、格子窗、紅十字、急診入口 */
+/** 醫院：白色大樓、急診雨棚與自動門、紅十字 */
 function facadeHospital(p: Painter, W: number, _t: LocationTheme, rnd: Phaser.Math.RandomDataGenerator, signs: Sign[]): void {
-  p.box(0, 10, W, B - 10, 0xc8ccc8, { outline: null });
-  for (let y = 18; y < B - 50; y += 22) {
-    p.rect(0, y + 16, W, 2, 0xa8aca8);
-    for (let x = 8; x < W - 20; x += 26) p.window(x, y, 18, 14, { glass: 0x2a3a48, lit: rnd.frac() < 0.04, broken: rnd.frac() < 0.15, blinds: rnd.frac() < 0.3 });
+  p.box(0, 0, W, B, 0xc8ccc8, { outline: null });
+  const fl = Math.round(3.6 * M);
+  p.rect(0, B - fl - 6, W, 6, 0xa8aca8);
+  for (let x = 14; x < W - 50; x += 72) p.window(x, B - fl - 60, 52, 46, { glass: 0x2a3a48, lit: rnd.frac() < 0.05, broken: rnd.frac() < 0.15, blinds: rnd.frac() < 0.4 });
+  // 一樓：牆面窗
+  for (let x = 14; x < W - 50; x += 72) p.window(x, B - 96, 52, 56, { glass: 0x2a3a48, broken: rnd.frac() < 0.2 });
+  for (let x0 = 60; x0 < W; x0 += 520) {
+    // 急診入口：雨棚（離地 3m）、2.4m 高的自動門
+    p.rect(x0 - 10, B - 112, 240, 110, 0xb8bcb8);
+    p.box(x0 - 20, B - 124, 260, 22, 0xe8e8e0);
+    p.rect(x0 - 19, B - 112, 258, 6, 0xc82828);
+    signs.push({ x: x0 + 110, y: B - 117, text: '急診 EMERGENCY', color: '#c82828', size: 10 });
+    for (const px of [x0 - 12, x0 + 226]) p.box(px, B - 102, 8, 102, 0xd0d0c8);
+    p.rect(x0 + 50, B - 82, 120, 82, OUTLINE);
+    p.rect(x0 + 51, B - 81, 59, 81, 0x1a2830);
+    p.rect(x0 + 111, B - 81, 58, 81, 0x1a2830);
+    p.line(x0 + 54, B - 6, x0 + 90, B - 76, 0x3a4a58);
+    p.rect(x0 + 80, B - 46, 6, 7, 0x6a1a12);
+    p.rect(x0 + 140, B - 32, 7, 6, 0x6a1a12);
+    // 紅十字（在二樓牆上）
+    p.box(x0 + 300, B - fl - 64, 50, 50, 0xf0f0f0);
+    p.rect(x0 + 319, B - fl - 58, 12, 38, 0xc82828);
+    p.rect(x0 + 306, B - fl - 45, 38, 12, 0xc82828);
   }
-  for (let x0 = 40; x0 < W; x0 += 420) {
-    // 紅十字
-    p.box(x0 + 150, 26, 30, 30, 0xf0f0f0);
-    p.rect(x0 + 161, 30, 8, 22, 0xc82828);
-    p.rect(x0 + 154, 37, 22, 8, 0xc82828);
-    // 急診雨棚
-    p.box(x0, B - 54, 140, 12, 0xe8e8e0);
-    p.rect(x0 + 1, B - 46, 138, 3, 0xc82828);
-    signs.push({ x: x0 + 70, y: B - 49, text: '急診 EMERGENCY', color: '#c82828', size: 7 });
-    p.rect(x0 + 6, B - 42, 3, 42, 0xb8b8b0);
-    p.rect(x0 + 131, B - 42, 3, 42, 0xb8b8b0);
-    p.rect(x0 + 30, B - 40, 80, 40, OUTLINE);
-    p.rect(x0 + 31, B - 39, 38, 39, 0x1a2830);
-    p.rect(x0 + 71, B - 39, 38, 39, 0x1a2830);
-    p.line(x0 + 33, B - 4, x0 + 60, B - 36, 0x3a4a58);
-    // 血手印
-    p.rect(x0 + 50, B - 24, 4, 5, 0x6a1a12);
-    p.rect(x0 + 86, B - 18, 5, 4, 0x6a1a12);
-  }
-  signs.push({ x: Math.min(W - 120, 300), y: 14, text: '市立醫院', color: '#2a4a6a', size: 9 });
+  signs.push({ x: Math.min(W - 120, 420), y: B - fl - 20, text: '市立醫院', color: '#2a4a6a', size: 12 });
   sidewalkTrim(p, W);
 }
 
-/** 警察局：藍灰色兩層樓、藍色腰帶、窗加鐵條、旗桿 */
+/** 警察局：藍色腰帶、窗加鐵條、台階入口、旗桿 */
 function facadePolice(p: Painter, W: number, _t: LocationTheme, rnd: Phaser.Math.RandomDataGenerator, signs: Sign[]): void {
-  for (let x0 = 0; x0 < W; x0 += 460) {
-    const w = Math.min(420, W - x0);
-    p.box(x0, B - 110, w, 110, 0x8a909a);
-    p.rect(x0 + 1, B - 64, w - 2, 10, 0x2a4a9a);
-    p.rect(x0 + 1, B - 54, w - 2, 2, 0xf0f0f0);
-    signs.push({ x: x0 + w / 2, y: B - 59, text: '警察局 POLICE', color: '#ffffff', size: 8 });
-    for (let wx = x0 + 10; wx < x0 + w - 24; wx += 30) {
-      p.window(wx, B - 100, 20, 26, { bars: true, blinds: true, lit: rnd.frac() < 0.06 });
-      if (Math.abs(wx - (x0 + w / 2)) > 30) p.window(wx, B - 44, 20, 26, { bars: true, broken: rnd.frac() < 0.3 });
+  p.box(0, 0, W, B, 0x8a909a, { outline: null });
+  const fl = FLOOR_H;
+  p.rect(0, B - fl - 2, W, 26, 0x2a4a9a);
+  p.rect(0, B - fl + 24, W, 3, 0xf0f0f0);
+  for (let x0 = 0; x0 < W; x0 += 520) {
+    signs.push({ x: x0 + 260, y: B - fl + 11, text: '警察局 POLICE', color: '#ffffff', size: 12 });
+    for (let wx = x0 + 20; wx < x0 + 500; wx += 64) {
+      p.window(wx, B - fl - 72, 41, 56, { bars: true, blinds: true, lit: rnd.frac() < 0.06 });
+      if (Math.abs(wx - (x0 + 240)) > 50) p.window(wx, B - 74, 41, 50, { bars: true, broken: rnd.frac() < 0.3 });
     }
-    // 入口與台階
-    const ex = x0 + w / 2 - 20;
-    p.rect(ex, B - 48, 40, 48, OUTLINE);
-    p.rect(ex + 1, B - 47, 38, 47, 0x14181c);
-    p.rect(ex - 6, B - 4, 52, 4, 0xa8aca8);
-    p.rect(ex + 20, B - 50, 1, 2, 0xff3030);
-    // 旗桿
-    p.rect(x0 + 14, B - 150, 2, 150, 0x9aa0a6);
-    p.rect(x0 + 16, B - 148, 20, 12, 0x8a2a22);
-    p.dither(x0 + 16, B - 148, 20, 12, 0x2a1a1a, 0.4);
+    // 入口：雙開門 2.4m、台階
+    const ex = x0 + 222;
+    p.rect(ex - 6, B - 92, 80, 4, 0x6a7078);
+    p.rect(ex, B - 82, 68, 78, OUTLINE);
+    p.rect(ex + 1, B - 81, 33, 77, 0x14181c);
+    p.rect(ex + 35, B - 81, 32, 77, 0x14181c);
+    p.rect(ex - 10, B - 4, 88, 4, 0xa8aca8);
+    p.rect(ex + 32, B - 88, 4, 4, 0xff3030);
   }
   sidewalkTrim(p, W);
 }
 
-/** 軍方檢查站：水泥 T 牆、鐵絲網＋蛇籠、探照燈、沙包 */
+/** 軍方檢查站：3.6m 高的水泥 T 牆、蛇籠鐵絲網、探照燈、沙包工事 */
 function facadeMilitary(p: Painter, W: number, t: LocationTheme, rnd: Phaser.Math.RandomDataGenerator): void {
-  for (let x = 0; x < W; x += 34) {
-    const h = 56 + (x % 68 === 0 ? 4 : 0);
-    p.box(x, B - h, 32, h, 0x8a8678, { light: 0.12 });
-    p.rect(x + 4, B - h + 6, 24, 1, 0x6a665a);
-    if (rnd.frac() < 0.2) p.rect(x + 8, B - h + 14, 14, 6, 0xd8c890);
-    if (rnd.frac() < 0.25) p.dither(x + 2, B - h + 2, 28, 20, 0x2a2420, 0.25);
+  const h = Math.round(3.6 * M);
+  for (let x = 0; x < W; x += 52) {
+    p.box(x, B - h, 50, h, 0x8a8678, { light: 0.12 });
+    p.rect(x + 6, B - h + 10, 38, 2, 0x6a665a);
+    p.rect(x + 22, B - h - 4, 6, 6, 0x5a564a);
+    if (rnd.frac() < 0.2) p.rect(x + 10, B - h + 30, 28, 12, 0xd8c890);
+    if (rnd.frac() < 0.3) p.dither(x + 2, B - h + 2, 46, 40, 0x2a2420, 0.25);
   }
   // 蛇籠鐵絲網
-  for (let x = 0; x < W; x += 8) {
-    p.circle(x + 4, B - 64, 4, 0x8a9098, 0.7);
-    p.circle(x + 4, B - 64, 3, mix(t.sky[1], 0x000000, 0.5), 1);
+  for (let x = 0; x < W; x += 12) {
+    p.circle(x + 6, B - h - 8, 6, 0x8a9098, 0.7);
+    p.circle(x + 6, B - h - 8, 5, mix(t.sky[1], 0x000000, 0.5), 1);
   }
   // 探照燈塔
-  for (let x = 160; x < W; x += 380) {
-    p.rect(x, B - 120, 3, 64, 0x3a3f46);
-    p.box(x - 6, B - 128, 14, 10, 0x2a2e34);
-    p.rect(x - 4, B - 125, 10, 4, 0xfff0b0);
+  for (let x = 200; x < W; x += 480) {
+    p.rect(x, 0, 5, B - h, 0x3a3f46);
+    p.box(x - 10, 6, 24, 16, 0x2a2e34);
+    p.rect(x - 7, 10, 18, 8, 0xfff0b0);
   }
-  // 沙包工事
-  for (let x = 60; x < W; x += 260) {
-    for (let r = 0; r < 3; r++) for (let i = 0; i < 5 - r; i++) p.box(x + i * 13 + r * 6, B - 8 - r * 7, 14, 8, 0x8d7a54);
+  // 沙包工事（1m 高）
+  for (let x = 80; x < W; x += 340) {
+    for (let r = 0; r < 4; r++) for (let i = 0; i < 6 - r; i++) sandbagAt(p, x + i * 22 + r * 11, B - 9 - r * 8);
   }
   sidewalkTrim(p, W, 0x5a5444);
 }
 
-/** 國小：三層樓走廊式校舍、欄杆、教室窗、圍牆 */
+function sandbagAt(p: Painter, x: number, y: number): void {
+  p.box(x, y, 23, 9, 0x8d7a54, { light: 0.2 });
+}
+
+/** 國小：走廊式校舍（一樓走廊、教室門窗、二樓欄杆）、前面 1.8m 的圍牆 */
 function facadeSchool(p: Painter, W: number, _t: LocationTheme, rnd: Phaser.Math.RandomDataGenerator, signs: Sign[]): void {
-  p.box(0, B - 132, W, 132, 0xd8c8a0, { outline: null });
-  for (let f = 0; f < 3; f++) {
-    const fy = B - 132 + f * 40;
-    p.rect(0, fy + 34, W, 6, 0xb8a880);
-    // 走廊欄杆
-    for (let x = 0; x < W; x += 4) p.rect(x, fy + 26, 1, 8, 0x6a7a8a);
-    p.rect(0, fy + 26, W, 1, 0x6a7a8a);
-    for (let x = 12; x < W - 30; x += 64) {
-      p.rect(x, fy + 6, 14, 28, 0x3a5a7a);
-      p.window(x + 20, fy + 6, 34, 18, { glass: 0x2a3a48, broken: rnd.frac() < 0.2, lit: rnd.frac() < 0.04 });
-    }
+  const fl = Math.round(3.6 * M);
+  p.box(0, 0, W, B, 0xd8c8a0, { outline: null });
+  // 一樓走廊（暗）＋教室
+  p.rect(0, B - fl + 10, W, fl - 10, 0x8a7a5a);
+  for (let x = 20; x < W - 120; x += 240) {
+    p.rect(x, B - 74, 34, 72, 0x3a5a7a);
+    p.rect(x + 3, B - 70, 28, 22, 0x2a3a48);
+    p.window(x + 50, B - 96, 150, 50, { glass: 0x2a3a48, broken: rnd.frac() < 0.2 });
+    signs.push({ x: x + 17, y: B - 84, text: `${rnd.between(1, 6)}年${rnd.between(1, 5)}班`, color: '#2a2a2a', size: 7 });
   }
-  // 大鐘
-  const cx = Math.min(W - 60, 420);
-  p.circle(cx, B - 150, 10, OUTLINE);
-  p.circle(cx, B - 150, 9, 0xf0f0e8);
-  p.rect(cx, B - 157, 1, 7, OUTLINE);
-  p.rect(cx, B - 150, 5, 1, OUTLINE);
-  p.box(cx - 30, B - 160, 60, 22, 0xd8c8a0, { outline: null });
-  p.circle(cx, B - 150, 9, 0xf0f0e8);
-  p.rect(cx, B - 157, 1, 7, OUTLINE);
-  p.rect(cx, B - 150, 5, 1, OUTLINE);
-  signs.push({ x: cx + 80, y: B - 120, text: '光明國小', color: '#8a2a22', size: 9 });
-  // 前面的圍牆
-  for (let x = 0; x < W; x += 50) {
-    p.box(x, B - 22, 50, 22, 0xc8b898, { light: 0.1 });
-    p.rect(x + 1, B - 22, 48, 3, 0x9a2a22);
-    p.rect(x + 22, B - 32, 6, 32, 0xb8a880);
+  // 走廊柱子
+  for (let x = 0; x < W; x += 120) p.box(x, B - fl + 10, 14, fl - 10, 0xd8c8a0, { light: 0.1 });
+  // 二樓：欄杆＋教室窗
+  p.rect(0, B - fl, W, 12, 0xb8a880);
+  for (let x = 0; x < W; x += 5) p.rect(x, B - fl - 34, 1, 34, 0x6a7a8a);
+  p.rect(0, B - fl - 34, W, 2, 0x6a7a8a);
+  for (let x = 30; x < W - 160; x += 240) p.window(x + 50, B - fl - 80, 150, 40, { glass: 0x2a3a48, broken: rnd.frac() < 0.2 });
+  signs.push({ x: Math.min(W - 120, 520), y: B - fl - 60, text: '光明國小', color: '#8a2a22', size: 14 });
+  // 圍牆（1.8m）與鐵欄
+  const wallH = Math.round(1.2 * M);
+  for (let x = 0; x < W; x += 102) {
+    p.box(x, B - wallH, 102, wallH, 0xc8b898, { light: 0.1 });
+    p.rect(x + 1, B - wallH, 100, 4, 0x9a2a22);
+    p.box(x + 44, B - wallH - 22, 14, wallH + 22, 0xb8a880);
   }
+  for (let x = 0; x < W; x += 6) p.rect(x, B - wallH - 20, 2, 20, 0x3a4a5a);
+  p.rect(0, B - wallH - 20, W, 2, 0x3a4a5a);
   sidewalkTrim(p, W);
 }
 
@@ -734,6 +738,23 @@ function drawGround(scene: Phaser.Scene, style: FloorStyle, t: LocationTheme, W:
 
 // ───────────────────── 室內 ─────────────────────
 
+/** 室內天花板高度（腳底 y = GROUND_Y 往上幾公尺）：住家 2.8m、倉庫 6m… */
+const CEIL_M: Record<InteriorStyle, number> = {
+  store: 3.4,
+  ward: 3,
+  precinct: 3,
+  house: 2.8,
+  garage: 4.5,
+  bunker: 2.6,
+  warehouse: 5.8,
+  lobby: 4.2,
+};
+
+/** 這種室內的天花板 y（日光燈掛在這裡） */
+export function ceilingY(style: InteriorStyle): number {
+  return GROUND_Y - Math.round(CEIL_M[style] * M);
+}
+
 function drawInterior(
   scene: Phaser.Scene,
   style: InteriorStyle,
@@ -744,121 +765,124 @@ function drawInterior(
   signs: Sign[],
 ): void {
   layer(scene, `int-${uid}`, W, GROUND_Y + 2, 0, 1, -70, (p) => {
-    const CEIL = 28;
-    // 天花板：輕鋼架或水泥樑
-    p.rect(0, 0, W, CEIL, 0x14161a);
-    if (style === 'warehouse' || style === 'garage' || style === 'bunker') {
-      for (let x = 0; x < W; x += 60) {
-        p.rect(x, 0, 4, CEIL, 0x24272c);
-        p.line(x, CEIL - 2, x + 30, 2, 0x24272c);
-        p.line(x + 30, 2, x + 60, CEIL - 2, 0x24272c);
+    const top = Math.max(0, ceilingY(style));
+    // 天花板：從畫面頂端到天花板線，輕鋼架格子或鋼構
+    p.rect(0, 0, W, top, 0x24272d);
+    if (top > 4) {
+      if (style === 'garage' || style === 'bunker') {
+        for (let x = 0; x < W; x += 68) p.rect(x, 0, 5, top, 0x24272c);
+        p.rect(0, Math.max(0, top - 8), W, 5, 0x2a2e34);
+      } else {
+        for (let x = 0; x < W; x += 40) p.rect(x, 0, 1, top, 0x34383f);
+        for (let y = top - 6; y > 0; y -= 14) p.rect(0, y, W, 1, 0x34383f);
+        for (let x = 80; x < W; x += 260) p.box(x, Math.max(0, top - 14), 28, 12, 0x6a6e74);
       }
-      p.rect(0, 6, W, 4, 0x3a3e44);
-    } else {
-      for (let x = 0; x < W; x += 32) p.rect(x, 0, 1, CEIL, 0x24272c);
-      p.rect(0, 13, W, 1, 0x24272c);
-      // 空調出風口
-      for (let x = 50; x < W; x += 210) p.box(x, 8, 18, 10, 0x6a6e74);
+      p.rect(0, top - 2, W, 2, 0x0a0b0d);
     }
-    p.rect(0, CEIL, W, 2, 0x0a0b0d);
-    const top = CEIL + 2;
+    const lowerH = (m: number) => B - Math.round(m * M);
     switch (style) {
       case 'store':
-        wallTwoTone(p, W, top, 0xd8d4c8, 0xa8a090, 0.55);
-        for (let x = 40; x < W; x += 150) {
-          p.rect(x + 20, top, 1, 10, 0x2a2a2a);
-          p.box(x, top + 10, 42, 12, rnd.pick([0x2a8a4a, 0xc83a2a, 0x2a6ac8]));
-          signs.push({ x: x + 21, y: top + 16, text: rnd.pick(['生鮮', '飲料', '零食', '日用品', '冷凍', '泡麵']), color: '#ffffff', size: 7 });
+        wallTwoTone(p, W, top, 0xd8d4c8, 0xa8a090, lowerH(1));
+        // 走道吊牌（從天花板吊下來）
+        for (let x = 60; x < W; x += 220) {
+          p.rect(x + 30, top, 1, 10, 0x2a2a2a);
+          p.box(x, top + 10, 62, 18, rnd.pick([0x2a8a4a, 0xc83a2a, 0x2a6ac8]));
+          signs.push({ x: x + 31, y: top + 19, text: rnd.pick(['生鮮', '飲料', '零食', '日用品', '冷凍', '泡麵']), color: '#ffffff', size: 9 });
         }
         break;
-      case 'ward':
-        // 上白下綠磁磚、扶手、房號
-        wallTwoTone(p, W, top, 0xd0d8d0, 0x5a8a78, 0.5);
-        for (let x = 0; x < W; x += 6) p.rect(x, top + Math.floor((B - top) * 0.5), 1, B - top, tone(0x5a8a78, -0.12));
-        for (let y = top + Math.floor((B - top) * 0.5); y < B; y += 6) p.rect(0, y, W, 1, tone(0x5a8a78, -0.12));
-        p.rect(0, B - 48, W, 3, 0x9aa0a6);
-        for (let x = 60; x < W; x += 140) {
-          p.box(x, top + 70, 16, 8, 0x2a4a6a);
-          signs.push({ x: x + 8, y: top + 74, text: `${rnd.between(2, 4)}0${rnd.between(1, 9)}`, color: '#ffffff', size: 6 });
+      case 'ward': {
+        // 上白下綠磁磚（1.2m）、0.9m 扶手、房號牌
+        const split = lowerH(1.2);
+        wallTwoTone(p, W, top, 0xd0d8d0, 0x5a8a78, split);
+        for (let x = 0; x < W; x += 8) p.rect(x, split, 1, B - split, tone(0x5a8a78, -0.12));
+        for (let y = split; y < B; y += 8) p.rect(0, y, W, 1, tone(0x5a8a78, -0.12));
+        p.box(0, lowerH(0.9), W, 4, 0x9aa0a6, { outline: null });
+        for (let x = 70; x < W; x += 200) {
+          p.box(x, lowerH(2.4), 26, 12, 0x2a4a6a);
+          signs.push({ x: x + 13, y: lowerH(2.4) + 6, text: `${rnd.between(2, 4)}0${rnd.between(1, 9)}`, color: '#ffffff', size: 8 });
         }
-        // 拖行的血跡
-        for (let x = rnd.between(0, 200); x < W; x += rnd.between(240, 400)) p.dither(x, B - 30, rnd.between(20, 40), 4, 0x5a0a08, 0.4);
+        for (let x = rnd.between(0, 200); x < W; x += rnd.between(260, 420)) p.dither(x, B - 40, rnd.between(30, 60), 6, 0x5a0a08, 0.4);
         break;
-      case 'precinct':
-        wallTwoTone(p, W, top, 0x7a8494, 0x5a3e28, 0.62);
-        for (let x = 0; x < W; x += 10) p.rect(x, top + Math.floor((B - top) * 0.62), 1, B, tone(0x5a3e28, -0.2));
-        p.rect(0, top + Math.floor((B - top) * 0.62) - 2, W, 2, 0x3a2a1c);
-        for (let x = 30; x < W; x += 180) p.window(x, top + 14, 34, 40, { blinds: true, glass: 0x2a3440 });
-        for (let x = 120; x < W; x += 360) {
-          p.box(x, top + 20, 30, 20, 0x2a4a9a);
-          p.circle(x + 15, top + 30, 6, 0xd0a030);
+      }
+      case 'precinct': {
+        const split = lowerH(1);
+        wallTwoTone(p, W, top, 0x7a8494, 0x5a3e28, split);
+        for (let x = 0; x < W; x += 14) p.rect(x, split, 1, B - split, tone(0x5a3e28, -0.2));
+        p.rect(0, split - 3, W, 3, 0x3a2a1c);
+        for (let x = 40; x < W; x += 240) p.window(x, lowerH(2.4), 48, 42, { blinds: true, glass: 0x2a3440 });
+        for (let x = 150; x < W; x += 480) {
+          p.box(x, lowerH(2.5), 40, 26, 0x2a4a9a);
+          p.circle(x + 20, lowerH(2.5) + 13, 8, 0xd0a030);
         }
         break;
-      case 'house':
-        wallTwoTone(p, W, top, 0xb8a88a, 0x6a4a30, 0.75);
-        // 壁紙花紋
-        for (let y = top + 4; y < B - 50; y += 8) for (let x = (y / 8) % 2 ? 4 : 0; x < W; x += 8) p.px(x, y, tone(0xb8a88a, -0.15));
-        for (let x = 40; x < W; x += rnd.between(140, 220)) {
-          // 相框、月曆、窗簾
+      }
+      case 'house': {
+        const split = lowerH(0.9);
+        wallTwoTone(p, W, top, 0xb8a88a, 0x6a4a30, split);
+        for (let y = top + 4; y < split - 4; y += 10) for (let x = (y / 10) % 2 ? 5 : 0; x < W; x += 10) p.px(x, y, tone(0xb8a88a, -0.15));
+        for (let x = 40; x < W; x += rnd.between(160, 240)) {
           const k = rnd.frac();
-          if (k < 0.4) {
-            p.box(x, top + 30, 16, 20, 0x5a3e28);
-            p.rect(x + 3, top + 33, 10, 14, rnd.pick([0x6a8a9a, 0x8a7a6a]));
+          if (k < 0.35) {
+            // 相框
+            p.box(x, lowerH(2), 22, 26, 0x5a3e28);
+            p.rect(x + 3, lowerH(2) + 3, 16, 20, rnd.pick([0x6a8a9a, 0x8a7a6a]));
           } else if (k < 0.7) {
-            p.window(x, top + 22, 36, 34, { glass: 0x2a3440 });
-            p.rect(x - 4, top + 18, 10, 44, 0x8a2a32);
-            p.rect(x + 30, top + 18, 10, 44, 0x8a2a32);
-            p.rect(x - 6, top + 17, 50, 2, 0x5a3e28);
+            // 窗戶＋窗簾（1.2m）
+            p.window(x, lowerH(2.2), 41, 41, { glass: 0x2a3440 });
+            p.rect(x - 6, lowerH(2.35), 12, 54, 0x8a2a32);
+            p.rect(x + 35, lowerH(2.35), 12, 54, 0x8a2a32);
+            p.rect(x - 8, lowerH(2.35) - 2, 58, 2, 0x5a3e28);
           } else {
-            p.box(x, top + 30, 14, 18, 0xf0f0e8);
-            p.rect(x + 1, top + 31, 12, 4, 0xc83020);
+            // 月曆
+            p.box(x, lowerH(2), 18, 24, 0xf0f0e8);
+            p.rect(x + 1, lowerH(2) + 1, 16, 6, 0xc83020);
           }
         }
         break;
+      }
       case 'garage':
-        // 鐵皮牆、工具板、油漬
+        // 鐵皮牆、工具板、高窗
         p.rect(0, top, W, B - top, 0x5a5e62);
         for (let x = 0; x < W; x += 4) p.rect(x, top, 1, B - top, x % 8 === 0 ? 0x6a6e72 : 0x4a4e52);
-        for (let x = 60; x < W; x += 260) {
-          p.box(x, top + 30, 50, 30, 0x8a6a4a);
-          for (let i = 0; i < 6; i++) p.rect(x + 5 + i * 7, top + 36, 2, rnd.between(8, 18), rnd.pick([0xc83020, 0x9aa0a6, 0x2a2a2a]));
+        for (let x = 80; x < W; x += 320) {
+          p.box(x, lowerH(2), 80, 40, 0x8a6a4a);
+          for (let i = 0; i < 9; i++) p.rect(x + 6 + i * 8, lowerH(2) + 6, 3, rnd.between(10, 26), rnd.pick([0xc83020, 0x9aa0a6, 0x2a2a2a]));
         }
-        for (let x = 30; x < W; x += 300) {
-          p.window(x + 150, top + 8, 60, 14, { glass: 0x2a3440 });
-        }
+        for (let x = 180; x < W; x += 360) p.window(x, top + 8, 90, 22, { glass: 0x2a3440 });
         break;
       case 'bunker':
         p.rect(0, top, W, B - top, 0x6a665a);
-        for (let n = 0; n < W / 30; n++) p.line(rnd.between(0, W), top + rnd.between(0, 40), rnd.between(0, W), top + rnd.between(40, 80), 0x4a463c, 0.6);
-        for (let x = 0; x < W; x += 14) for (let r = 0; r < 4; r++) p.box(x + (r % 2) * 7, B - 8 - r * 7, 15, 8, 0x8d7a54);
-        for (let x = 80; x < W; x += 300) {
-          p.box(x, top + 20, 60, 40, 0xd8c8a0);
-          p.line(x + 6, top + 30, x + 40, top + 50, 0xc83020);
-          p.rect(x + 10, top + 40, 20, 1, 0x3a6a3a);
+        for (let n = 0; n < W / 30; n++) p.line(rnd.between(0, W), top + rnd.between(0, 30), rnd.between(0, W), top + rnd.between(30, 60), 0x4a463c, 0.6);
+        // 1m 高的沙包牆
+        for (let x = 0; x < W; x += 23) for (let r = 0; r < 4; r++) sandbagAt(p, x + (r % 2) * 11, B - 9 - r * 8);
+        for (let x = 100; x < W; x += 360) {
+          p.box(x, top + 8, 70, 44, 0xd8c8a0);
+          p.line(x + 8, top + 18, x + 50, top + 42, 0xc83020);
+          p.rect(x + 12, top + 30, 26, 1, 0x3a6a3a);
         }
         break;
       case 'warehouse':
         p.rect(0, top, W, B - top, 0x4a4e52);
         for (let x = 0; x < W; x += 5) p.rect(x, top, 1, B - top, 0x3e4246);
-        // 高架貨架
-        for (let x = 10; x < W; x += 120) {
-          p.rect(x, top + 10, 3, B - top - 10, 0xd8a020);
-          p.rect(x + 90, top + 10, 3, B - top - 10, 0xd8a020);
-          for (let y = top + 30; y < B; y += 40) {
-            p.rect(x, y, 93, 3, 0x2a5a9a);
-            for (let k = x + 4; k < x + 86; k += 22) if (rnd.frac() < 0.7) p.box(k, y - 18, 20, 18, rnd.pick([0xa8804a, 0x9a7a4a, 0x4a5a32]));
+        // 5m 高的貨架（每層 1.2m）
+        for (let x = 20; x < W; x += 200) {
+          const rh = Math.round(5 * M);
+          p.rect(x, B - rh, 4, rh, 0xd8a020);
+          p.rect(x + 150, B - rh, 4, rh, 0xd8a020);
+          for (let y = B - 8; y > B - rh; y -= Math.round(1.25 * M)) {
+            p.rect(x, y, 154, 4, 0x2a5a9a);
+            for (let k = x + 6; k < x + 144; k += 36) if (rnd.frac() < 0.75) p.box(k, y - 32, 32, 32, rnd.pick([0xa8804a, 0x9a7a4a, 0x4a5a32]));
           }
         }
-        for (let x = 50; x < W; x += 240) p.window(x, top + 2, 40, 10, { glass: 0x3a4a58 });
         break;
       case 'lobby':
-      default:
-        wallTwoTone(p, W, top, 0xa8a49a, 0x7a766c, 0.3);
-        for (let x = 0; x < W; x += 80) {
-          p.box(x, top, 16, B - top, 0xc8c4b8, { light: 0.15 });
-        }
-        for (let x = 24; x < W; x += 160) p.window(x, top + 20, 50, 80, { glass: 0x2a3440 });
+      default: {
+        wallTwoTone(p, W, top, 0xa8a49a, 0x7a766c, lowerH(0.6));
+        // 柱子＋整片落地窗
+        for (let x = 0; x < W; x += 160) p.box(x, top, 24, B - top, 0xc8c4b8, { light: 0.15 });
+        for (let x = 44; x < W; x += 320) p.window(x, lowerH(3.2), 96, 90, { glass: 0x2a3440 });
         break;
+      }
     }
     // 踢腳板
     p.rect(0, B - 4, W, 4, 0x2a2a2a);
@@ -867,11 +891,9 @@ function drawInterior(
 }
 
 function wallTwoTone(p: Painter, W: number, top: number, upper: number, lower: number, split: number): void {
-  const sy = top + Math.floor((B - top) * split);
-  p.rect(0, top, W, sy - top, upper);
-  p.rect(0, sy, W, B - sy, lower);
-  p.rect(0, sy - 1, W, 2, tone(lower, -0.3));
-  // 汙漬
+  p.rect(0, top, W, split - top, upper);
+  p.rect(0, split, W, B - split, lower);
+  p.rect(0, split - 1, W, 2, tone(lower, -0.3));
   for (let x = 0; x < W; x += 37) p.dither(x, top + ((x * 7) % 40), 10 + (x % 20), 6, tone(upper, -0.25), 0.15);
 }
 
