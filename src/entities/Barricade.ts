@@ -52,7 +52,46 @@ export class Barricade {
     this.scene.tweens.add({ targets: seg, angle: Phaser.Math.FloatBetween(-3, 3), duration: 50, yoyo: true });
     if (!this.alive) {
       for (const s of this.segments) fx?.woodChips(s.x, s.y - s.displayHeight / 2, s.y, 6);
-      this.scene.tweens.add({ targets: this.segments, alpha: 0, scaleY: 0.2, duration: 250 });
+      this.scene.tweens.add({ targets: this.segments, alpha: 0.18, scaleY: 0.2, duration: 250 });
+    }
+  }
+
+  /**
+   * 直接設定耐久（白天修理／強化、從存檔還原）。
+   * 從 0 修回來時把倒下的柵欄重新立起來。
+   */
+  setHp(hp: number, maxHp = this.maxHp): void {
+    this.maxHp = maxHp;
+    this.hp = Phaser.Math.Clamp(hp, 0, maxHp);
+    for (const s of this.segments) {
+      this.scene.tweens.killTweensOf(s);
+      s.setScale(1).setAngle(0);
+    }
+    this.refreshLook();
+  }
+
+  /** 選取時讓整道柵欄亮一下 */
+  setHighlight(on: boolean): void {
+    for (const s of this.segments) {
+      if (on) s.setTint(0xfff3b0);
+      else s.clearTint();
+    }
+  }
+
+  /** 依耐久切換損壞階段的影格（ProceduralArt 用程式畫的 3 格），沒有影格時改用透明度 */
+  private refreshLook(): void {
+    const ratio = this.maxHp > 0 ? this.hp / this.maxHp : 0;
+    for (const s of this.segments) {
+      if (!this.alive) {
+        s.setAlpha(0.18);
+        continue;
+      }
+      if (s.texture.frameTotal > BARRICADE_FRAMES) {
+        s.setAlpha(1);
+        s.setFrame(Math.min(BARRICADE_FRAMES - 1, Math.floor((1 - ratio) * BARRICADE_FRAMES)));
+      } else {
+        s.setAlpha(0.35 + 0.65 * ratio);
+      }
     }
   }
 
@@ -63,18 +102,6 @@ export class Barricade {
     this.hp = Math.min(this.maxHp, this.hp + amount);
     this.refreshLook();
     return this.hp - before;
-  }
-
-  /** 依耐久切換損壞階段的影格（ProceduralArt 用程式畫的 3 格），沒有影格時改用透明度 */
-  private refreshLook(): void {
-    const ratio = this.hp / this.maxHp;
-    for (const s of this.segments) {
-      if (s.texture.frameTotal > BARRICADE_FRAMES) {
-        s.setFrame(Math.min(BARRICADE_FRAMES - 1, Math.floor((1 - ratio) * BARRICADE_FRAMES)));
-      } else {
-        s.setAlpha(0.35 + 0.65 * ratio);
-      }
-    }
   }
 
   private segmentNear(y: number): Phaser.GameObjects.Image {

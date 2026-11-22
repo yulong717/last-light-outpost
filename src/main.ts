@@ -4,7 +4,9 @@ import { BootScene } from './scenes/BootScene';
 import { MenuScene } from './scenes/MenuScene';
 import { DefenseScene } from './scenes/DefenseScene';
 import { UIScene } from './scenes/UIScene';
+import { BuildUIScene } from './scenes/BuildUIScene';
 import { GameOverScene } from './scenes/GameOverScene';
+import { GameState } from './state/GameState';
 import { AudioManager } from './audio/AudioManager';
 
 // 音效：第一次點擊／按鍵時解鎖（手機瀏覽器的自動播放限制），M 鍵靜音
@@ -27,8 +29,8 @@ const game = new Phaser.Game({
     default: 'arcade',
     arcade: { debug: false },
   },
-  scene: [BootScene, MenuScene, DefenseScene, UIScene, GameOverScene],
+  scene: [BootScene, MenuScene, DefenseScene, UIScene, BuildUIScene, GameOverScene],
 });
 
-// 開發模式下把 game 掛到 window，方便在主控台或自動測試裡檢查狀態
-if (import.meta.env.DEV) (window as unknown as { __game: Phaser.Game }).__game = game;
+// 開發模式下掛到 window，方便在主控台或自動化測試裡操作場景
+if (import.meta.env.DEV) Object.assign(window, { __game: game, __state: GameState });

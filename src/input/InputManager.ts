@@ -30,7 +30,7 @@ export function registerUIRect(rect: Rect): () => void {
   return () => uiRects.delete(rect);
 }
 
-function isOverUI(x: number, y: number): boolean {
+export function isOverUI(x: number, y: number): boolean {
   for (const r of uiRects) {
     if (x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h) return true;
   }

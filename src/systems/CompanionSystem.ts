@@ -66,6 +66,8 @@ const FOLLOW_OFFSET = [
 export class CompanionSystem {
   readonly companions: Companion[] = [];
   order: CompanionOrder = 'hold';
+  /** 入夜才接受指令（白天只是站在據點裡） */
+  active = false;
   private healTimers = new Map<Companion, number>();
   /** 修理量累積，每 0.5 秒發一次 barricade:repair 事件 */
   private repairAcc = 0;
@@ -92,7 +94,7 @@ export class CompanionSystem {
   }
 
   toggleOrder(): void {
-    if (this.companions.every((c) => !c.alive)) return;
+    if (!this.active || this.companions.every((c) => !c.alive)) return;
     this.order = this.order === 'hold' ? 'follow' : 'hold';
     GameEvents.of(this.scene).emit('ally:order', { order: this.order });
     const lead = this.companions.find((c) => c.alive);

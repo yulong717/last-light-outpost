@@ -9,6 +9,9 @@ import {
   PLACEHOLDER_COLORS,
   WORLD_WIDTH,
 } from '../config';
+import { BuildMode } from '../build/BuildMode';
+import { Outpost } from '../build/Outpost';
+import { ECONOMY } from '../data/buildings';
 import { ENEMIES } from '../data/enemies';
 import { NIGHT_ONE } from '../data/waves';
 import { WEAPONS } from '../data/weapons';
@@ -29,7 +32,13 @@ import { GameState } from '../state/GameState';
 import { WaveSpawner } from '../systems/WaveSpawner';
 import { WeaponSystem } from '../systems/WeaponSystem';
 import { CompanionSystem, type CompanionHud, type CompanionOrder } from '../systems/CompanionSystem';
+import type { BuildUIData } from './BuildUIScene';
 import type { GameOverData } from './GameOverScene';
+
+/** 從結算畫面進來時帶的資料：newDay 代表撐過一夜、進入新的一天 */
+export interface DefenseSceneData {
+  newDay?: boolean;
+}
 
 /** 給 UIScene 讀的 HUD 資料 */
 export interface HudData {
@@ -52,11 +61,12 @@ export interface HudData {
 }
 
 const BASE_X = 44;
-const PLAYER_X = 92;
+const PLAYER_X = 80;
 const BARRICADE_X = 160;
 const PLAYER_MAX_HP = 100;
 
 /**
+ * 一天的流程：先是白天布置（在槽位上蓋建築、修理路障），按「開始夜晚」後進入夜晚防守。
  * 夜晚防守：2.5D 帶狀戰場。主角可在地面帶上前後左右移動，
  * 也能翻出路障外迎擊（風險自負）；鏡頭跟著主角水平捲動。
  */
@@ -73,6 +83,12 @@ export class DefenseScene extends Phaser.Scene {
   private ended = false;
   private fx!: Fx;
   private wasReloading = false;
+  private phase: 'day' | 'night' = 'day';
+  private outpost!: Outpost;
+  private build!: BuildMode;
+  private dusk?: Phaser.GameObjects.Rectangle;
+  /** 今晚賺到的廢料（擊殺＋撐過的獎勵），結算畫面顯示 */
+  private scrapEarned = 0;
   private camFeel!: CameraFeel;
   private crosshair!: Crosshair;
   private screenFx!: ScreenFeedback;
@@ -81,11 +97,13 @@ export class DefenseScene extends Phaser.Scene {
     super('Defense');
   }
 
-  create(): void {
+  create(data: DefenseSceneData = {}): void {
     this.zombies = [];
     this.kills = 0;
     this.headshots = 0;
     this.ended = false;
+    this.phase = 'day';
+    this.scrapEarned = 0;
 
     // 先設好世界範圍：Fx 的地面血跡畫布依鏡頭範圍決定大小
     this.cameras.main.setBounds(0, 0, WORLD_WIDTH, GAME_HEIGHT);
@@ -97,6 +115,9 @@ export class DefenseScene extends Phaser.Scene {
 
     const st = GameState.data;
     this.barricade = new Barricade(this, BARRICADE_X, st.barricadeMaxHp);
+    // 據點建築與路障耐久從 GameState 還原（跨夜保留）
+    this.outpost = new Outpost(this, this.barricade);
+    this.build = new BuildMode(this, this.outpost, { barricadeX: BARRICADE_X, baseX: BASE_X });
     this.player = new Player(this, PLAYER_X, (LANE_TOP + LANE_BOTTOM) / 2, PLAYER_MAX_HP);
 
     // 戰場比畫面寬：鏡頭跟著主角水平捲動，中間留一段不跟的死區
@@ -106,25 +127,61 @@ export class DefenseScene extends Phaser.Scene {
     cam.setFollowOffset(-90, 0);
     this.fx.attachShadow(this.player.sprite, 22);
 
-    this.crosshair = new Crosshair(this);
     this.screenFx = new ScreenFeedback(this);
     this.wireFeedback();
     // 音效：訂閱 GameEvents，依鏡頭位置做左右聲道（見 src/audio/、docs/AUDIO.md）
     attachAudio(this);
 
+    // NPC 夥伴：白天就站在固守位置，入夜才開始行動
     this.companions = new CompanionSystem(this, {
       minX: BASE_X + 14,
       maxX: WORLD_WIDTH - 16,
       barricadeX: BARRICADE_X,
     });
-
-    this.input2 = new InputManager(this);
     this.weapons = new WeaponSystem(this, WEAPONS);
     this.spawner = new WaveSpawner(this, NIGHT_ONE, (id) => this.spawnZombie(id));
-    this.spawner.start();
 
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.scene.stop('UI');
+      this.scene.stop('BuildUI');
+    });
+    this.startDay(!!data.newDay);
+  }
+
+  /** 白天：布置據點。新的一天先入帳白天搜刮的廢料 */
+  private startDay(newDay: boolean): void {
+    this.phase = 'day';
+    // 黃昏的暖色濾鏡，入夜時淡掉
+    this.dusk = this.add.rectangle(0, 0, GAME_WIDTH, GAME_HEIGHT, 0xff9a4a, 0.1).setOrigin(0).setScrollFactor(0).setDepth(89);
+    this.build.enter();
+    const data: BuildUIData = { mode: this.build, onStartNight: () => this.startNight() };
+    this.scene.launch('BuildUI', data);
+    if (newDay) {
+      GameState.data.scrap += ECONOMY.dailySalvage;
+      // 白天探索做好之前，用固定收入代替搜刮
+      this.time.delayedCall(300, () => {
+        this.fx.popText(PLAYER_X, LANE_TOP - 40, `白天搜刮 +${ECONOMY.dailySalvage} 廢料`, '#f5d76e');
+        this.build.events.emit('changed');
+      });
+    }
+  }
+
+  /** 入夜：收起布置介面，開始出怪 */
+  private startNight(): void {
+    if (this.phase === 'night' || this.ended) return;
+    this.phase = 'night';
+    this.build.exit();
+    this.outpost.persist();
+    GameState.save();
+    this.scene.stop('BuildUI');
+    if (this.dusk) this.tweens.add({ targets: this.dusk, alpha: 0, duration: 800, onComplete: () => this.dusk?.destroy() });
+    // 輸入在入夜時才接上，白天點槽位不會變成第一發子彈
+    this.input2 = new InputManager(this);
+    // 準星會隱藏滑鼠游標，白天要點槽位，所以入夜才建立
+    this.crosshair = new Crosshair(this);
+    this.spawner.start();
+    this.companions.active = true;
     this.scene.launch('UI');
-    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.scene.stop('UI'));
   }
 
   private drawBackdrop(): void {
@@ -174,7 +231,7 @@ export class DefenseScene extends Phaser.Scene {
     this.zombies.push(new Zombie(this, x, y, def));
   }
 
-  /** 霧屍要攻擊的擋路線：路障還在就是路障，否則是據點外牆 */
+  /** 霧屍要攻擊的擋路線：路障還在就是路障，否則是據點外牆；前面有沙包牆時先拆沙包 */
   private zombieContext(): ZombieContext {
     const blocker = this.barricade.alive
       ? {
@@ -194,8 +251,11 @@ export class DefenseScene extends Phaser.Scene {
             GameEvents.of(this).emit('base:hit', { damage: d, hp: st.baseHp, maxHp: st.baseMaxHp, x: BASE_X });
           },
         };
+    const minFront = blocker.blockX;
     return {
       ...blocker,
+      blockerFor: (x, y) => this.outpost.blockerFor(x, y, minFront),
+      speedMul: (x, y) => this.outpost.speedMul(x, y),
       player: { x: this.player.footX, y: this.player.footY, alive: this.player.alive },
       // 受擊回饋（震動、紅邊、卡肉）在 wireFeedback() 裡訂閱 player:hurt
       hitPlayer: (d, fromX, fromY) => this.player.takeDamage(d, fromX, fromY),
@@ -207,6 +267,10 @@ export class DefenseScene extends Phaser.Scene {
     if (this.ended) return;
     // 卡肉（hit-stop）期間 timeScale 為 0，整個戰場停頓一下
     const dt = Math.min(deltaMs / 1000, 0.05) * this.fx.timeScale;
+    if (this.phase === 'day') {
+      this.build.update(dt);
+      return;
+    }
     const inp = this.input2.update();
 
     // 武器
@@ -258,6 +322,9 @@ export class DefenseScene extends Phaser.Scene {
     // 敵人
     const ctx = this.zombieContext();
     for (const z of this.zombies) z.update(dt, ctx);
+    // 陷阱與砲塔
+    this.kills += this.outpost.update(dt, this.zombies);
+    this.collectScrap();
     this.zombies = this.zombies.filter((z) => z.active && !z.dead);
     for (let i = 0; i < this.zombies.length; i++) {
       for (let j = i + 1; j < this.zombies.length; j++) Zombie.separate(this.zombies[i], this.zombies[j]);
@@ -270,6 +337,18 @@ export class DefenseScene extends Phaser.Scene {
     if (GameState.data.baseHp <= 0) this.finish(false, 'base');
     else if (!this.player.alive) this.finish(false, 'player');
     else if (this.spawner.done && this.zombies.length === 0) this.finish(true);
+  }
+
+  /** 這一幀倒下的霧屍掉落廢料（不論是誰打死的），在屍體上方跳字 */
+  private collectScrap(): void {
+    for (const z of this.zombies) {
+      if (!z.dead) continue;
+      const n = ECONOMY.killScrap[z.def.id] ?? 0;
+      if (n <= 0) continue;
+      GameState.data.scrap += n;
+      this.scrapEarned += n;
+      this.fx.popText(z.footX, z.footY - 56 * (z.def.scale ?? 1), `+${n}`, '#f5d76e');
+    }
   }
 
   /** 換彈開始時播放換彈影格，長度對齊武器的換彈時間；換完回到射擊圖 */
@@ -354,12 +433,21 @@ export class DefenseScene extends Phaser.Scene {
 
   private finish(survived: boolean, reason: GameOverData['reason'] = 'base'): void {
     this.ended = true;
+    this.outpost.persist();
     GameEvents.of(this).emit('game:over', { survived });
     if (survived) {
+      GameState.data.scrap += ECONOMY.nightBonus;
+      this.scrapEarned += ECONOMY.nightBonus;
       GameState.data.day += 1;
       GameState.save();
     }
-    const data: GameOverData = { survived, reason, kills: this.kills, headshots: this.headshots };
+    const data: GameOverData = {
+      survived,
+      reason,
+      kills: this.kills,
+      headshots: this.headshots,
+      scrapEarned: this.scrapEarned,
+    };
     this.time.delayedCall(800, () => this.scene.start('GameOver', data));
   }
 }
