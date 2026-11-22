@@ -5,6 +5,10 @@ import { MenuScene } from './scenes/MenuScene';
 import { DefenseScene } from './scenes/DefenseScene';
 import { UIScene } from './scenes/UIScene';
 import { GameOverScene } from './scenes/GameOverScene';
+import { AudioManager } from './audio/AudioManager';
+
+// 音效：第一次點擊／按鍵時解鎖（手機瀏覽器的自動播放限制），M 鍵靜音
+AudioManager.install();
 
 new Phaser.Game({
   type: Phaser.AUTO,
