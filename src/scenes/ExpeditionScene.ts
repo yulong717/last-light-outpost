@@ -3,7 +3,7 @@ import { GAME_HEIGHT, GAME_WIDTH } from '../config';
 import { AudioManager } from '../audio/AudioManager';
 import { COMPANION_ROLES } from '../data/companions';
 import { getZone, MEDKIT_HEAL, NOISE, SUPPLIES, type EventOption, type ExploreEvent, type Outcome } from '../data/explore';
-import { Expedition, PLAYER_EXPLORE_HP, describeLoot, type Resolution } from '../explore/Expedition';
+import { Expedition, playerExploreHp, describeLoot, type Resolution } from '../explore/Expedition';
 import { uiBar, uiButton, uiPanel } from '../explore/ui';
 import { GameState } from '../state/GameState';
 import type { Chapter } from '../data/story';
@@ -88,7 +88,7 @@ export class ExpeditionScene extends Phaser.Scene {
 
   private refreshHud(): void {
     const e = this.exp;
-    this.setHp(e.hp / PLAYER_EXPLORE_HP);
+    this.setHp(e.hp / playerExploreHp());
     this.hpText.setText(`${e.hp}`);
     this.setNoise(e.noise / NOISE.max);
     this.noiseText.setText(e.noise >= NOISE.max ? '屍潮！' : `${e.noise}`);
@@ -160,7 +160,7 @@ export class ExpeditionScene extends Phaser.Scene {
     const meds = GameState.data.supplies.medkit;
     this.card.add(
       uiButton(this, CARD_X + 22 + bw, by, bw, 28, `用醫療包（${meds}）`, () => this.useMedkit(), {
-        enabled: meds > 0 && e.hp < PLAYER_EXPLORE_HP,
+        enabled: meds > 0 && e.hp < playerExploreHp(),
         sub: `+${MEDKIT_HEAL} 生命`,
       }),
     );
@@ -169,7 +169,7 @@ export class ExpeditionScene extends Phaser.Scene {
 
   private useMedkit(): void {
     if (!GameState.useSupply('medkit')) return;
-    this.exp.hp = Math.min(PLAYER_EXPLORE_HP, this.exp.hp + MEDKIT_HEAL);
+    this.exp.hp = Math.min(playerExploreHp(), this.exp.hp + MEDKIT_HEAL);
     AudioManager.ui('confirm');
     this.showApproach();
   }

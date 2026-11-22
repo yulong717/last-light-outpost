@@ -165,11 +165,13 @@ export class ArmoryScene extends Phaser.Scene {
     this.bar(x, y, w, '單發傷害', (d.damage * d.pellets) / MAX.dmg, per);
     this.bar(x, y + 14, w, '持續火力', dps(d) / MAX.dps, `${Math.round(dps(d))}/秒`);
     this.bar(x, y + 28, w, '穿甲', d.penetration, `穿 ${d.pierce} 隻`);
-    this.bar(x, y + 42, w, '有效射程', Math.min(d.range, d.falloffEnd) / MAX.range, '');
-    this.bar(x, y + 56, w, '操控', control(d), '');
-    this.bar(x, y + 70, w, '機動', (d.moveMul - 0.7) / 0.3, `換槍 ${d.swapTime}s`);
-    y += 90;
-    const reserve = d.infiniteReserve ? '無限' : `${st.armory.ammo[d.ammo]}`;
+    // 制動性：和穿透相反，越高擊退越遠、越能把抓住你的霧屍打開
+    this.bar(x, y + 42, w, '制動', d.stopping, d.stopping >= 0.5 ? '可打開糾纏' : d.stopping >= 0.35 ? '中' : '低');
+    this.bar(x, y + 56, w, '有效射程', Math.min(d.range, d.falloffEnd) / MAX.range, '');
+    this.bar(x, y + 70, w, '操控', control(d), '');
+    this.bar(x, y + 84, w, '機動', (d.moveMul - 0.7) / 0.3, `換槍 ${d.swapTime}s`);
+    y += 102;
+    const reserve = d.infiniteReserve && !st.armory.finitePistol ? '無限' : `${st.armory.ammo[d.ammo]}`;
     const rpm = d.action === 'auto' ? `${Math.round(d.fireRate * 60)} 發/分` : `${d.fireRate} 發/秒`;
     this.text(x, y, `${ACTION_NAME[d.action]}　${rpm}　彈匣 ${d.magazine}${d.chamber && d.reload === 'magazine' ? '+1' : ''}`, 8, '#e8e8e8');
     const rl = d.reload === 'single' ? `每發 ${d.perRound}s${d.clip ? `／橋夾 ${d.clip} 發` : ''}` : `${fullReloadTime(d, 1)}s${d.reloadEmptyTime !== d.reloadTime ? `（打空 ${d.reloadEmptyTime}s）` : ''}`;
@@ -266,12 +268,12 @@ export class ArmoryScene extends Phaser.Scene {
     const st = GameState.data;
     const x = PX + 12;
     const w = PW - 24;
-    this.text(x, PY + 32, 'M1911 備彈無限。其他槍的子彈要在這裡買，彈匣裡剩的天亮會退回備彈。', 8, '#90a4ae');
+    this.text(x, PY + 32, st.armory.finitePistol ? '你的 M1911 是撿來的，子彈要自己買。彈匣裡剩的天亮會退回備彈。' : 'M1911 備彈無限。其他槍的子彈要在這裡買，彈匣裡剩的天亮會退回備彈。', 8, '#90a4ae');
     (Object.keys(AMMO) as AmmoType[]).forEach((t, i) => {
       const a = AMMO[t];
       const y = PY + 52 + i * 34;
       const have = st.armory.ammo[t];
-      const users = FIREARMS.filter((d) => d.ammo === t && !d.infiniteReserve).map((d) => d.name);
+      const users = FIREARMS.filter((d) => d.ammo === t && (!d.infiniteReserve || st.armory.finitePistol)).map((d) => d.name);
       this.root.add(this.add.rectangle(x, y, w, 30, 0x1a1d24, 0.9).setOrigin(0));
       this.text(x + 8, y + 3, a.name, 9, '#ffffff');
       this.text(x + 8, y + 17, users.join('、'), 7, '#90a4ae');

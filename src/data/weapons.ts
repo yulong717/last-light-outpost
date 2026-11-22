@@ -89,8 +89,14 @@ export interface FirearmDef {
   range: number;
   /** 爆頭倍率 */
   headshotMul: number;
-  /** 每顆命中的擊退（像素） */
+  /** 每顆命中的基礎擊退（像素）；實際擊退再加上制動性 */
   knockback: number;
+  /**
+   * 制動性 0..1：子彈把能量留在目標身上的程度，和穿透相反。
+   * 越高 → 擊退越遠、硬直越久（能把抓住你的霧屍打開），但越難打穿到後面那隻。
+   * 霰彈、.45、.357 高；5.56、步槍彈低（容易貫穿）。見 stoppingKnockback() 等。
+   */
+  stopping: number;
   /** 每顆命中的硬直（秒） */
   stagger: number;
 
@@ -218,6 +224,7 @@ export const FIREARMS: FirearmDef[] = [
     damage: 13,
     penetration: 0.15,
     pierce: 1,
+    stopping: 0.55,
     falloffStart: 200,
     falloffEnd: 420,
     falloffMin: 0.6,
@@ -256,7 +263,8 @@ export const FIREARMS: FirearmDef[] = [
     ammo: '357',
     damage: 30,
     penetration: 0.45,
-    pierce: 2,
+    pierce: 1,
+    stopping: 0.65,
     pierceFalloff: 0.75,
     falloffStart: 260,
     falloffEnd: 520,
@@ -301,6 +309,7 @@ export const FIREARMS: FirearmDef[] = [
     damage: 7,
     penetration: 0.1,
     pierce: 1,
+    stopping: 0.25,
     falloffStart: 160,
     falloffEnd: 380,
     falloffMin: 0.55,
@@ -342,6 +351,7 @@ export const FIREARMS: FirearmDef[] = [
     damageType: 'buckshot',
     penetration: 0.05,
     pierce: 1,
+    stopping: 0.85,
     falloffStart: 80,
     falloffEnd: 260,
     falloffMin: 0.3,
@@ -390,6 +400,7 @@ export const FIREARMS: FirearmDef[] = [
     damageType: 'buckshot',
     penetration: 0.05,
     pierce: 1,
+    stopping: 0.9,
     falloffStart: 60,
     falloffEnd: 220,
     falloffMin: 0.25,
@@ -434,6 +445,7 @@ export const FIREARMS: FirearmDef[] = [
     damage: 13,
     penetration: 0.5,
     pierce: 2,
+    stopping: 0.4,
     pierceFalloff: 0.75,
     falloffStart: 320,
     falloffEnd: 640,
@@ -475,7 +487,8 @@ export const FIREARMS: FirearmDef[] = [
     ammo: '556',
     damage: 10,
     penetration: 0.4,
-    pierce: 2,
+    pierce: 3,
+    stopping: 0.15,
     falloffStart: 300,
     falloffEnd: 640,
     falloffMin: 0.75,
@@ -517,6 +530,7 @@ export const FIREARMS: FirearmDef[] = [
     damage: 75,
     penetration: 0.85,
     pierce: 6,
+    stopping: 0.3,
     pierceFalloff: 0.85,
     falloffStart: 9999,
     falloffEnd: 10000,
@@ -568,6 +582,7 @@ export const FIREARMS: FirearmDef[] = [
     damageType: 'buckshot',
     penetration: 0.05,
     pierce: 1,
+    stopping: 0.75,
     falloffStart: 90,
     falloffEnd: 280,
     falloffMin: 0.3,
@@ -612,7 +627,8 @@ export const FIREARMS: FirearmDef[] = [
     ammo: '556',
     damage: 10,
     penetration: 0.4,
-    pierce: 2,
+    pierce: 3,
+    stopping: 0.25,
     falloffStart: 300,
     falloffEnd: 640,
     falloffMin: 0.75,
@@ -788,6 +804,22 @@ export const MELEE: MeleeDef[] = [
     swing: 'heavy',
   },
 ];
+
+/** 制動性換算：每顆命中的擊退（像素）。霰彈的每顆彈丸分攤 */
+export function stoppingKnockback(d: FirearmDef): number {
+  const k = d.knockback + d.stopping * 14;
+  return d.pellets > 1 ? (k * 3) / d.pellets : k;
+}
+
+/** 制動性換算：命中硬直（秒）。≥ 0.2 秒能讓抓住你的霧屍鬆手 */
+export function stoppingStagger(d: FirearmDef): number {
+  return Math.max(d.stagger, d.stopping * 0.4);
+}
+
+/** 制動性換算：打穿一隻後剩下的傷害比例 */
+export function stoppingCarry(d: FirearmDef): number {
+  return d.pierceFalloff * (1 - d.stopping * 0.5);
+}
 
 /** 體力（近戰用） */
 export const STAMINA = {

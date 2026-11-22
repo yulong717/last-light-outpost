@@ -156,6 +156,17 @@ export class Player {
     this.recoil = 2;
   }
 
+  /** 清掉外力（被抓住時不會被打飛） */
+  clearPush(): void {
+    this.pushX = 0;
+    this.pushY = 0;
+  }
+
+  /** 給一段無敵時間（閃身步、大難不死） */
+  grantIframes(seconds: number): void {
+    this.hurtCooldown = Math.max(this.hurtCooldown, seconds);
+  }
+
   /** 補血（醫護夥伴用），回傳實際補了多少 */
   heal(amount: number): number {
     if (!this.alive) return 0;

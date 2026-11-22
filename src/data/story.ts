@@ -1,5 +1,6 @@
 import type { CompanionRole } from './companions';
 import type { ExploreEvent, Loot } from './explore';
+import type { HeroId } from './heroes';
 
 /**
  * 主線進程：開局只有主角一人，靠白天探索一章一章找到夥伴、槍械與新區域。
@@ -43,19 +44,40 @@ export interface Chapter {
 }
 
 /** 新遊戲一開始就能去的區域 */
-export const START_ZONES = ['gas'];
 /** 新遊戲軍械庫就有賣的武器（主角身上的不用列） */
-export const START_SHOP: string[] = [];
+export const START_SHOP: string[] = ['bat'];
+/** 第一章完成後一起開放的區域（三位主角共用） */
+const AFTER_OPENING = ['gas', 'homes', 'market', 'school', 'downtown', 'nightmarket'];
 
-export const PROLOGUE = {
-  title: '殘光據點',
-  lines: [
-    '灰霧吞掉這座城市的第三週。',
-    '撤離車隊沒有等你。你把自己關進城郊這座小據點，',
-    '身上只剩一把 M1911 和一把軍用刀。',
-    '夜裡，霧屍會循著燈光過來；白天，你得出門找東西活下去。',
-    '無線電偶爾傳來沙沙聲……也許外面還有人。',
-  ],
+/** 各主角的序章 */
+export const PROLOGUES: Record<HeroId, { title: string; lines: string[] }> = {
+  student: {
+    title: '阿凱　放學後',
+    lines: [
+      '那天下午的練習賽打到一半，操場就被灰霧吞掉了。',
+      '教練、隊友……你不敢回頭看。',
+      '你抓著球棒躲進器材室，直到外面安靜下來。',
+      '現在你得殺出學校，找個能過夜的地方。',
+    ],
+  },
+  soldier: {
+    title: '馬克　爆發點',
+    lines: [
+      '霧爆發那天，你的小隊正在鬧區十字路口拉封鎖線。',
+      '十分鐘後，無線電裡只剩你一個人的呼吸聲。',
+      '一把 M4A1、一把配槍，還有三個彈匣。',
+      '城郊有座廢棄據點，先撐過今晚再說。',
+    ],
+  },
+  lucky: {
+    title: '好運姐　頭獎',
+    lines: [
+      '你在夜市口賣了二十年彩券，自己從來沒槓龜過。',
+      '霧湧進夜市那晚，整條街只有你走出來。',
+      '口袋裡是亡夫留下的 .357 左輪，還有一張沒刮的刮刮樂。',
+      '「運氣好不代表能一直好。」你對自己說。',
+    ],
+  },
 };
 
 export const EPILOGUE = {
@@ -68,46 +90,138 @@ export const EPILOGUE = {
   ],
 };
 
-export const CHAPTERS: Chapter[] = [
-  {
-    id: 'alone',
-    title: '第一章　孤身一人',
+/** 第一章：每位主角在自己的開局地點 */
+export const OPENINGS: Record<HeroId, Chapter> = {
+  student: {
+    id: 'open-school',
+    title: '第一章　殺出校園',
     minDay: 1,
-    zone: 'gas',
-    intro: ['據點裡的存糧撐不了幾天。', '公路邊的廢棄加油站離這裡最近，修車間的鐵捲門還半開著。', '先去那裡，找一把比刀更順手的東西。'],
-    objective: '搜索廢棄加油站的修車間',
+    zone: 'school',
+    intro: ['你在據點裡清點身上的東西：一根球棒、一把從警衛室撿來的手槍，只剩兩個彈匣。', '保健室還有藥，體育館的後門通往外面。', '回學校一趟，把能用的都帶出來。'],
+    objective: '回市立高中的保健室搬藥',
     finale: {
-      id: 'story-garage',
-      title: '修車間',
-      text: '修車間裡有工具牆和一台被翻倒的工具車。三隻霧屍在昏暗的升降機旁晃來晃去。',
+      id: 'story-gym',
+      title: '體育館',
+      text: '保健室就在體育館另一頭。籃球場上擠著一群穿制服的霧屍，有幾隻你認得。',
       weight: 0,
       options: [
         {
-          label: '摸黑溜進去',
-          hint: '潛入：走到最右邊的工具牆',
+          label: '衝過球場',
+          hint: '條件戰鬥：撐 20 秒（試試奔跑）',
           action: {
             type: 'field',
-            field: { mode: 'stealth', goal: 'reach', title: '溜到修車間最裡面的工具牆', zombies: 3 },
-            clean: { text: '你悄悄取下工具牆上的鋁棒，還在抽屜裡找到一個急救包。', story: true, bonus: { scrap: 8 } },
-            success: { text: '被發現了，但你還是搶到了工具牆上的鋁棒。', story: true },
+            field: { mode: 'fight', goal: 'survive', title: '撐 20 秒，衝到保健室', zombies: 4, seconds: 20 },
+            success: { text: '你撞開保健室的門，把整個藥櫃掃進背包。', story: true, noise: 10 },
           },
         },
         {
-          label: '正面清場',
-          hint: '條件戰鬥：消滅全部',
+          label: '沿著看台溜過去',
+          hint: '潛入：走到最右邊',
           action: {
             type: 'field',
-            field: { mode: 'fight', goal: 'clear', title: '清掉修車間裡的霧屍', zombies: 4 },
-            success: { text: '修車間安靜了。工具牆上掛著一根鋁棒。', story: true, noise: 10 },
+            field: { mode: 'stealth', goal: 'reach', title: '沿著看台溜到保健室', zombies: 4 },
+            clean: { text: '沒有人發現你。保健室的藥、繃帶，還有校護藏在抽屜的零錢。', story: true, bonus: { scrap: 10 } },
+            success: { text: '被發現了，但你還是搶到了藥櫃裡的東西。', story: true },
           },
         },
       ],
     },
-    reward: { weapons: ['bat'], supplies: { medkit: 1 }, scrap: 20 },
-    outro: ['回到據點，你把鋁棒靠在門邊。', '收音機突然傳來敲擊聲：住宅區那邊，好像有人在用手電筒打信號。'],
-    openZones: ['homes', 'market'],
+    reward: { supplies: { medkit: 2 }, ammo: { '9mm': 14 }, scrap: 15 },
+    outro: ['回到據點，你把藥排在桌上。', '收音機突然傳來敲擊聲：住宅區那邊，好像有人在用手電筒打信號。'],
+    openZones: AFTER_OPENING,
     shop: ['machete'],
   },
+  soldier: {
+    title: '第一章　回到爆發點',
+    id: 'open-downtown',
+    minDay: 1,
+    zone: 'downtown',
+    intro: ['你的隊友倒在鬧區十字路口，他們身上還有彈藥和無線電。', '回去拿。不管看到什麼，都別停下來。'],
+    objective: '回鬧區爆發點取回小隊的裝備',
+    finale: {
+      id: 'story-convoy',
+      title: '翻覆的軍車',
+      text: '小隊的軍車翻在路口中央，車門被扯開。幾隻穿著迷彩的霧屍在車旁搖晃，其中一隻戴著你熟悉的臂章。',
+      weight: 0,
+      options: [
+        {
+          label: '逐一擊倒',
+          hint: '條件戰鬥：禁止開槍（用戰術擊倒）',
+          action: {
+            type: 'field',
+            field: { mode: 'fight', goal: 'clear', title: '不開槍，安靜解決軍車旁的霧屍', zombies: 4, meleeOnly: true },
+            success: { text: '你替他們闔上眼睛，取下彈藥袋和無線電。', story: true },
+          },
+        },
+        {
+          label: '火力壓制',
+          hint: '條件戰鬥：消滅全部・噪音 +30',
+          action: {
+            type: 'field',
+            field: { mode: 'fight', goal: 'clear', title: '清空十字路口', zombies: 6 },
+            success: { text: '槍聲在大樓間迴盪。你搶回彈藥袋，在更多霧屍趕到前撤離。', story: true, noise: 30 },
+          },
+        },
+      ],
+    },
+    reward: { ammo: { '556': 60 }, supplies: { grenade: 1 }, scrap: 15 },
+    outro: ['無線電的電池只剩一格。', '在一片雜訊裡，你聽到住宅區方向傳來的求救：三短、三長、三短。'],
+    openZones: AFTER_OPENING,
+    shop: ['machete'],
+  },
+  lucky: {
+    id: 'open-market',
+    title: '第一章　頭獎',
+    minDay: 1,
+    zone: 'nightmarket',
+    intro: ['彩券行的保險箱裡有你這些年存下的東西。', '還有那張沒刮的刮刮樂。', '夜市現在是霧屍的地盤，但你一向運氣很好。'],
+    objective: '回夜市彩券行打開保險箱',
+    finale: {
+      id: 'story-safe',
+      title: '彩券行保險箱',
+      text: '鐵捲門半開，霓虹燈一閃一閃。保險箱就在櫃台後面，旁邊趴著一隻正在啃東西的霧屍。',
+      weight: 0,
+      options: [
+        {
+          label: '轉開保險箱',
+          hint: 'QTE 方向鍵序列（密碼是你的生日）',
+          action: {
+            type: 'qte',
+            qte: { kind: 'sequence', prompt: '照順序轉密碼盤！', count: 5, time: 3.6 },
+            success: { text: '保險箱開了：一疊現金、一盒 .357 子彈，還有那張刮刮樂。你刮開它……又中了。', story: true },
+            fail: { text: '密碼盤卡住，喀啦聲吵醒了那隻霧屍。你只好先跑。', noise: 30 },
+          },
+        },
+        {
+          label: '先解決那隻',
+          hint: '條件戰鬥：消滅全部',
+          action: {
+            type: 'field',
+            field: { mode: 'fight', goal: 'clear', title: '清掉彩券行裡的霧屍', zombies: 4 },
+            success: { text: '你慢慢轉開保險箱。現金、子彈，還有那張刮刮樂。……又中了。', story: true, noise: 10 },
+          },
+        },
+      ],
+    },
+    reward: { ammo: { '357': 24 }, supplies: { lockpick: 1 }, scrap: 40 },
+    outro: ['頭獎兌不了現了，但你還是把彩券收進皮夾。', '回程經過住宅區時，你看到二樓窗邊有手電筒在閃。'],
+    openZones: AFTER_OPENING,
+    shop: ['machete'],
+  },
+};
+
+/** 新遊戲一開始能去的區域：只有主角自己的開局地點 */
+export function startZones(hero: HeroId): string[] {
+  return [OPENINGS[hero].zone];
+}
+
+/** 這位主角的完整主線：自己的第一章＋共用的第二到六章 */
+export function chaptersFor(hero: HeroId): Chapter[] {
+  return [OPENINGS[hero], ...CHAPTERS];
+}
+
+/** 第二章起三位主角共用 */
+export const CHAPTERS: Chapter[] = [
   {
     id: 'window',
     title: '第二章　敲窗的人',
@@ -127,7 +241,7 @@ export const CHAPTERS: Chapter[] = [
           action: {
             type: 'field',
             field: { mode: 'fight', goal: 'protect', title: '守住鐵門 20 秒，等他從二樓爬下來', zombies: 4, seconds: 20 },
-            success: { text: '他從二樓跳下來，拍拍你的肩：「我叫阿凱，以前在靶場打工。槍給我，我幫你守夜。」', story: true, noise: 10 },
+            success: { text: '他從二樓跳下來，拍拍你的肩：「我叫阿哲，以前在靶場打工。槍給我，我幫你守夜。」', story: true, noise: 10 },
           },
         },
         {
@@ -136,14 +250,14 @@ export const CHAPTERS: Chapter[] = [
           action: {
             type: 'field',
             field: { mode: 'stealth', goal: 'reach', title: '從後巷摸到透天厝後門', zombies: 4 },
-            clean: { text: '你們從後門溜了出來，一隻霧屍都沒驚動。他叫阿凱，還把藏著的左輪交給你。', story: true, bonus: { scrap: 10 } },
-            success: { text: '一路殺出後巷。他叫阿凱，喘著氣把一把左輪塞給你。', story: true },
+            clean: { text: '你們從後門溜了出來，一隻霧屍都沒驚動。他叫阿哲，還把藏著的左輪交給你。', story: true, bonus: { scrap: 10 } },
+            success: { text: '一路殺出後巷。他叫阿哲，喘著氣把一把左輪塞給你。', story: true },
           },
         },
       ],
     },
-    reward: { named: [{ role: 'shooter', name: '阿凱' }], weapons: ['python'], ammo: { '357': 24 } },
-    outro: ['阿凱說他知道社區超市後面有個倉庫，保全室裡可能還有槍。', '從今晚起，守夜的不只你一個了。'],
+    reward: { named: [{ role: 'shooter', name: '阿哲' }], weapons: ['python'], ammo: { '357': 24 } },
+    outro: ['阿哲說他知道社區超市後面有個倉庫，保全室裡可能還有槍。', '從今晚起，守夜的不只你一個了。'],
     openZones: [],
     shop: ['coach', 'axe'],
   },
@@ -152,7 +266,7 @@ export const CHAPTERS: Chapter[] = [
     title: '第三章　超市倉庫',
     minDay: 3,
     zone: 'market',
-    intro: ['阿凱說的倉庫在超市收銀台後面。', '「保全室有一把霰彈槍，」他說，「最後一次看到時，保全還抱著它。」'],
+    intro: ['阿哲說的倉庫在超市收銀台後面。', '「保全室有一把霰彈槍，」他說，「最後一次看到時，保全還抱著它。」'],
     objective: '打開社區超市倉庫的保全室',
     finale: {
       id: 'story-warehouse',

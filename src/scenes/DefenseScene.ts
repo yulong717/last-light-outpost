@@ -39,7 +39,9 @@ import type { BuildUIData } from './BuildUIScene';
 import type { GameOverData } from './GameOverScene';
 import { EXPLORE_TIME, getZone } from '../data/explore';
 import { crewReady } from '../data/companions';
-import { PROLOGUE } from '../data/story';
+import { HeroSystem, type HeroHud } from '../systems/HeroSystem';
+import { LUCK } from '../data/heroes';
+import { PROLOGUES } from '../data/story';
 import type { StoryData } from './StoryScene';
 import { throwGrenade, useMedkit } from '../explore/Supplies';
 
@@ -77,12 +79,13 @@ export interface HudData {
   kills: number;
   companions: CompanionHud[];
   companionOrder: CompanionOrder;
+  /** 主角技能與糾纏狀態 */
+  hero?: HeroHud;
 }
 
 const BASE_X = 44;
 const PLAYER_X = 80;
 const BARRICADE_X = 160;
-const PLAYER_MAX_HP = 100;
 
 /**
  * 一天的流程：先是白天布置（在槽位上蓋建築、修理路障），按「開始夜晚」後進入夜晚防守。
@@ -93,6 +96,7 @@ export class DefenseScene extends Phaser.Scene {
   private input2!: InputManager;
   private weapons!: WeaponSystem;
   private melee!: MeleeSystem;
+  private heroSys?: HeroSystem;
   private spawner!: WaveSpawner;
   private barricade!: Barricade;
   private player!: Player;
@@ -139,7 +143,7 @@ export class DefenseScene extends Phaser.Scene {
     // 據點建築與路障耐久從 GameState 還原（跨夜保留）
     this.outpost = new Outpost(this, this.barricade);
     this.build = new BuildMode(this, this.outpost, { barricadeX: BARRICADE_X, baseX: BASE_X });
-    this.player = new Player(this, PLAYER_X, (LANE_TOP + LANE_BOTTOM) / 2, PLAYER_MAX_HP);
+    this.player = new Player(this, PLAYER_X, (LANE_TOP + LANE_BOTTOM) / 2, GameState.hero.maxHp);
 
     // 戰場比畫面寬：鏡頭跟著主角水平捲動，中間留一段不跟的死區
     const cam = this.cameras.main;
@@ -201,7 +205,7 @@ export class DefenseScene extends Phaser.Scene {
     const data: StoryData =
       intro === 'prologue'
         ? {
-            ...PROLOGUE,
+            ...PROLOGUES[GameState.data.hero],
             onClose: () => {
               GameState.markIntroSeen();
               GameState.save();
@@ -259,8 +263,11 @@ export class DefenseScene extends Phaser.Scene {
     if (this.dusk) this.tweens.add({ targets: this.dusk, alpha: 0, duration: 800, onComplete: () => this.dusk?.destroy() });
     // 武器在入夜才上膛：白天在軍械庫換的配置、買的子彈都算進去
     const armory = GameState.data.armory;
-    this.weapons = new WeaponSystem(this, armory.loadout, armory.ammo);
+    this.weapons = new WeaponSystem(this, armory.loadout, armory.ammo, !!armory.finitePistol, GameState.data.hero === 'lucky' ? LUCK.critChance : 0);
     this.melee = new MeleeSystem(this, armory.melee);
+    // 主角技能、被抓住的狀態（見 src/systems/HeroSystem.ts）
+    this.heroSys = new HeroSystem(this, this.player, this.melee, () => this.zombies);
+    this.heroSys.onKill = () => this.kills++;
     // 輸入在入夜時才接上，白天點槽位不會變成第一發子彈
     this.input2 = new InputManager(this);
     // 準星會隱藏滑鼠游標，白天要點槽位，所以入夜才建立
@@ -403,7 +410,7 @@ export class DefenseScene extends Phaser.Scene {
       speedMul: (x, y) => this.outpost.speedMul(x, y),
       player: { x: this.player.footX, y: this.player.footY, alive: this.player.alive },
       // 受擊回饋（震動、紅邊、卡肉）在 wireFeedback() 裡訂閱 player:hurt
-      hitPlayer: (d, fromX, fromY) => this.player.takeDamage(d, fromX, fromY),
+      hitPlayer: (d, fromX, fromY, src) => (this.heroSys ? this.heroSys.hitPlayer(d, fromX, fromY, src) : this.player.takeDamage(d, fromX, fromY)),
       others: this.companions.targets(),
       zombies: this.zombies,
     };
@@ -434,8 +441,9 @@ export class DefenseScene extends Phaser.Scene {
     } else if (inp.meleePressed) this.melee.trySwing(this.player);
     const meleeRes = this.melee.update(dt, this.player, this.zombies);
     this.kills += meleeRes.kills;
-    // 負重：拿機槍走得慢
-    this.player.speedMul = this.weapons.active.def.moveMul;
+    // 負重：拿機槍走得慢；奔跑變快、被抓住變超慢
+    const heroMul = this.heroSys ? this.heroSys.update(dt, inp.moveX !== 0 || inp.moveY !== 0) : 1;
+    this.player.speedMul = this.weapons.active.def.moveMul * heroMul;
 
     // 主角移動：據點外牆內側到戰場右緣
     this.player.update(dt, inp.moveX, inp.moveY, inp.aimX, { minX: BASE_X + 14, maxX: WORLD_WIDTH - 16 });
@@ -625,6 +633,7 @@ export class DefenseScene extends Phaser.Scene {
       kills: this.kills,
       companions: this.companions.hud(),
       companionOrder: this.companions.order,
+      hero: this.heroSys?.hud(),
     };
   }
 

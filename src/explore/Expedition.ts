@@ -21,7 +21,10 @@ import type { Chapter } from '../data/story';
 import { GameState } from '../state/GameState';
 import { Rng, randomSeed } from '../utils/rng';
 
-export const PLAYER_EXPLORE_HP = 100;
+/** 主角在探索中的生命上限（依主角） */
+export function playerExploreHp(): number {
+  return GameState.hero.maxHp;
+}
 
 /** 事件結算後的說明（給畫面顯示） */
 export interface Resolution {
@@ -44,7 +47,7 @@ export class Expedition {
   /** 目前在第幾站（0 起算）；等於 zone.nodes 代表走完 */
   index = 0;
   noise = 0;
-  hp = PLAYER_EXPLORE_HP;
+  hp = playerExploreHp();
   readonly crewHp = new Map<string, number>();
   readonly bag: Loot = {};
   /** 已經抽過的事件（同一趟不重複） */
@@ -201,20 +204,22 @@ export class Expedition {
     const loot: Loot = {};
     loot.scrap = Math.round(r.int(z.loot.scrap[0], z.loot.scrap[1]) * t.scrapMul * mul);
     const ammoTypes = Object.keys(z.loot.ammo) as AmmoType[];
-    for (let i = 0; i < t.ammoRolls; i++) {
+    // 好運姐的好狗運：多抽一次、武器掉落率加倍
+    const lucky = GameState.data.hero === 'lucky';
+    for (let i = 0; i < t.ammoRolls + (lucky ? 1 : 0); i++) {
       const type = r.weighted(ammoTypes, (a) => z.loot.ammo[a] ?? 0);
       if (!type) continue;
       const n = Math.max(1, Math.round(AMMO[type].box * r.float(AMMO_ROLL[0], AMMO_ROLL[1]) * mul));
       loot.ammo ??= {};
       loot.ammo[type] = (loot.ammo[type] ?? 0) + n;
     }
-    if (r.chance(t.supplyChance)) {
+    if (r.chance(Math.min(1, t.supplyChance * (lucky ? 1.4 : 1)))) {
       const ids = Object.keys(z.loot.supplies) as SupplyId[];
       const s = r.weighted(ids, (id) => z.loot.supplies[id] ?? 0);
       if (s) loot.supplies = { [s]: 1 };
     }
     // 武器：只掉還沒擁有、而且快解鎖的
-    if (r.chance(t.weaponChance * mul)) {
+    if (r.chance(t.weaponChance * mul * (lucky ? 2 : 1))) {
       const day = GameState.data.day;
       const pool = z.loot.weapons.filter((id) => {
         const def = getWeapon(id);
