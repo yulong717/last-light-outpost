@@ -1,6 +1,7 @@
 import { defaultCrew, makeCrewMember, upgradeCrewMember, type CompanionRole, type CrewMember } from '../data/companions';
 import { randomSeed } from '../utils/rng';
 import { BARRICADE_LEVELS, ECONOMY, type BuildingKind } from '../data/buildings';
+import { EXPLORE_TIME, SUPPLIES, ZONES, INTEL, type IntelKind, type Loot, type SupplyId } from '../data/explore';
 import { AMMO, MAX_GUNS, START_LOADOUT, getFirearm, getMelee, getWeapon, type AmmoType } from '../data/weapons';
 
 /**
@@ -24,6 +25,14 @@ export interface GameStateData {
   buildings: SavedBuilding[];
   /** 已經見過的霧屍職業（第一次遇到時畫面會介紹） */
   seenZombies?: string[];
+  /** 輔助用品（醫療包、手榴彈、開鎖工具、誘餌） */
+  supplies: Record<SupplyId, number>;
+  /** 今天白天還剩幾個時段可以探索 */
+  dayTime: number;
+  /** 今天已經去過的區域（每區一天一次） */
+  exploredToday: string[];
+  /** 今天的情報：哪一區發生了什麼 */
+  intel?: { zone: string; kind: IntelKind };
 }
 
 export interface ArmoryData {
@@ -69,7 +78,23 @@ function fresh(): GameStateData {
     barricadeLevel: 1,
     buildings: [],
     crew: defaultCrew(),
+    supplies: freshSupplies(),
+    dayTime: EXPLORE_TIME.slotsPerDay,
+    exploredToday: [],
+    intel: rollIntel(1),
   };
+}
+
+function freshSupplies(): Record<SupplyId, number> {
+  return Object.fromEntries(Object.values(SUPPLIES).map((s) => [s.id, s.start])) as Record<SupplyId, number>;
+}
+
+/** 每天隨機挑一個已解鎖的區域發生特殊狀況 */
+function rollIntel(day: number): GameStateData['intel'] {
+  const zones = ZONES.filter((z) => z.unlockDay <= day);
+  const kinds = Object.keys(INTEL) as IntelKind[];
+  if (zones.length === 0) return undefined;
+  return { zone: zones[Math.floor(Math.random() * zones.length)].id, kind: kinds[Math.floor(Math.random() * kinds.length)] };
 }
 
 class GameStateStore {
@@ -89,6 +114,55 @@ class GameStateStore {
     const member = makeCrewMember(id, role, seed, crew.map((c) => c.name), name);
     crew.push(member);
     return member;
+  }
+
+  // ── 白天探索 ──────────────────────────────────────
+
+  /** 新的一天：時段補滿、換情報、負傷隊員休養一天 */
+  startNewDay(): void {
+    const d = this.data;
+    d.dayTime = EXPLORE_TIME.slotsPerDay;
+    d.exploredToday = [];
+    d.intel = rollIntel(d.day);
+    for (const c of d.crew) if (c.injuredDays) c.injuredDays = Math.max(0, c.injuredDays - 1);
+  }
+
+  /** 把一份戰利品收進據點：彈藥、用品有上限，武器重複就換成廢料，倖存者加入隊伍 */
+  addLoot(loot: Loot): { recruits: CrewMember[]; overflowScrap: number } {
+    const d = this.data;
+    let overflowScrap = 0;
+    d.scrap += loot.scrap ?? 0;
+    for (const [t, n] of Object.entries(loot.ammo ?? {}) as [AmmoType, number][]) {
+      const room = AMMO[t].max - d.armory.ammo[t];
+      const got = Math.min(room, n);
+      d.armory.ammo[t] += got;
+      // 囤滿的彈藥依盒價換成廢料
+      overflowScrap += Math.floor(((n - got) / AMMO[t].box) * AMMO[t].price);
+    }
+    for (const [s, n] of Object.entries(loot.supplies ?? {}) as [SupplyId, number][]) {
+      const got = Math.min(SUPPLIES[s].max - d.supplies[s], n);
+      d.supplies[s] += got;
+      overflowScrap += (n - got) * 8;
+    }
+    for (const id of loot.weapons ?? []) {
+      const def = getWeapon(id);
+      if (!def) continue;
+      if (this.owns(id)) {
+        overflowScrap += Math.round(def.price * 0.3);
+        continue;
+      }
+      d.armory.owned.push(id);
+      if (def.kind === 'firearm' && d.armory.loadout.length < MAX_GUNS) d.armory.loadout.push(id);
+    }
+    d.scrap += overflowScrap;
+    const recruits = (loot.survivors ?? []).map((r) => this.recruit(r));
+    return { recruits, overflowScrap };
+  }
+
+  useSupply(id: SupplyId): boolean {
+    if (this.data.supplies[id] <= 0) return false;
+    this.data.supplies[id]--;
+    return true;
   }
 
   // ── 軍械庫 ──────────────────────────────────────────
@@ -165,6 +239,11 @@ class GameStateStore {
       if (!Array.isArray(parsed.crew)) parsed.crew = defaultCrew();
       // 舊隊員沒有外觀與能力：用 id 固定種子補上
       parsed.crew = parsed.crew.map((c) => upgradeCrewMember(c));
+      // 探索模式之前的存檔：補上用品、時段
+      parsed.supplies ??= freshSupplies();
+      for (const s of Object.keys(SUPPLIES) as SupplyId[]) parsed.supplies[s] ??= 0;
+      parsed.dayTime ??= EXPLORE_TIME.slotsPerDay;
+      parsed.exploredToday ??= [];
       this.data = parsed;
       return true;
     } catch {

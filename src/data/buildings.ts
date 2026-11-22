@@ -123,8 +123,8 @@ export const ECONOMY = {
   startScrap: 80,
   /** 撐過一夜的獎勵 */
   nightBonus: 20,
-  /** 每天白天固定入帳（白天探索做好之前的暫代收入） */
-  dailySalvage: 25,
+  /** 每天白天固定入帳（據點附近的零星撿拾；主要收入來自白天探索） */
+  dailySalvage: 10,
   // 擊殺掉落的廢料改在 src/data/zombies.ts（各職業的 scrap ＋ 變異加成）
   /** 拆除退還比例（以投入的總花費計） */
   refundRatio: 0.5,

@@ -97,6 +97,13 @@ export interface CrewMember {
   traits: string[];
   /** 之後可配發武器系統裡的槍；沒有就用職業預設槍 */
   weaponId?: string;
+  /** 探索中倒下：還要休養幾天（> 0 時不能出戰、不能探索） */
+  injuredDays?: number;
+}
+
+/** 這位隊員現在能不能出戰／探索 */
+export function crewReady(m: CrewMember): boolean {
+  return !(m.injuredDays && m.injuredDays > 0);
 }
 
 /** 依職業與種子產生一位完整的隊員 */

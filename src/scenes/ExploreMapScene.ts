@@ -1,0 +1,228 @@
+import Phaser from 'phaser';
+import { GAME_HEIGHT, GAME_WIDTH } from '../config';
+import { AudioManager } from '../audio/AudioManager';
+import { ensureCrewTexture } from '../art/CrewArt';
+import { COMPANION_ROLES, crewReady, type CrewMember } from '../data/companions';
+import { EXPLORE_TIME, INTEL, SUPPLIES, ZONES, type SupplyId, type ZoneDef } from '../data/explore';
+import { Expedition } from '../explore/Expedition';
+import { stars, uiButton, uiPanel } from '../explore/ui';
+import { GameState } from '../state/GameState';
+import { pixelText } from '../utils/text';
+import type { DefenseSceneData } from './DefenseScene';
+
+const MAP_X = 8;
+const MAP_Y = 32;
+const MAP_W = 392;
+const MAP_H = 320;
+const PANEL_X = 408;
+const PANEL_W = GAME_WIDTH - PANEL_X - 8;
+
+/**
+ * 城市地圖：選一個區域、挑同行隊員，然後出發。
+ * 近區花 1 個時段、遠區 2 個；每區一天只能去一次。
+ */
+export class ExploreMapScene extends Phaser.Scene {
+  private selected: ZoneDef | null = null;
+  private squad: string[] = [];
+  private panel!: Phaser.GameObjects.Container;
+  private markers = new Map<string, Phaser.GameObjects.Container>();
+
+  constructor() {
+    super('ExploreMap');
+  }
+
+  create(): void {
+    this.selected = null;
+    this.squad = [];
+    this.markers.clear();
+    AudioManager.setMood('menu');
+    const st = GameState.data;
+
+    this.add.rectangle(0, 0, GAME_WIDTH, GAME_HEIGHT, 0x111318).setOrigin(0);
+    this.drawMap();
+
+    // 上方資訊列
+    this.add.rectangle(0, 0, GAME_WIDTH, 26, 0x000000, 0.6).setOrigin(0);
+    pixelText(this, 8, 6, `第 ${st.day} 天・白天　城市地圖`, 9, '#f5d76e');
+    const slots = '●'.repeat(st.dayTime) + '○'.repeat(Math.max(0, EXPLORE_TIME.slotsPerDay - st.dayTime));
+    pixelText(this, 190, 6, `剩餘時段 ${slots}`, 9, st.dayTime > 0 ? '#e8e8e8' : '#ff8a80');
+    pixelText(this, 340, 7, this.suppliesLine(), 8, '#b0bec5');
+    uiButton(this, GAME_WIDTH - 92, 2, 88, 22, '◀ 返回據點', () => this.back(), { fill: 0x3a3f4a });
+    this.input.keyboard?.once('keydown-ESC', () => this.back());
+
+    this.panel = this.add.container(0, 0).setDepth(100);
+    this.refresh();
+  }
+
+  private suppliesLine(): string {
+    const s = GameState.data.supplies;
+    return (Object.keys(SUPPLIES) as SupplyId[]).map((id) => `${SUPPLIES[id].name}${s[id]}`).join(' ');
+  }
+
+  private back(): void {
+    AudioManager.ui('back');
+    const d: DefenseSceneData = {};
+    this.scene.start('Defense', d);
+  }
+
+  private toMap(z: ZoneDef): { x: number; y: number } {
+    return { x: MAP_X + 24 + (z.mapX / 600) * (MAP_W - 48), y: MAP_Y + 10 + ((z.mapY - 90) / 190) * (MAP_H - 50) };
+  }
+
+  /** 手繪風的城市：街區、道路、霧，據點在左下 */
+  private drawMap(): void {
+    const g = this.add.graphics();
+    g.fillStyle(0x1a1e24).fillRect(MAP_X, MAP_Y, MAP_W, MAP_H);
+    const rng = new Phaser.Math.RandomDataGenerator(['city-map']);
+    // 街區
+    for (let bx = MAP_X + 6; bx < MAP_X + MAP_W - 10; bx += 34) {
+      for (let by = MAP_Y + 6; by < MAP_Y + MAP_H - 10; by += 30) {
+        if (rng.frac() < 0.25) continue;
+        g.fillStyle(rng.pick([0x232831, 0x262b33, 0x20252c])).fillRect(bx, by, 26 + rng.between(-4, 2), 22 + rng.between(-4, 2));
+      }
+    }
+    // 主要道路：從據點連到每一區
+    const base = { x: MAP_X + 26, y: MAP_Y + MAP_H - 26 };
+    g.lineStyle(3, 0x3a3f48, 1);
+    for (const z of ZONES) {
+      const p = this.toMap(z);
+      g.beginPath();
+      g.moveTo(base.x, base.y);
+      g.lineTo(p.x, base.y - (base.y - p.y) * 0.3);
+      g.lineTo(p.x, p.y);
+      g.strokePath();
+    }
+    // 霧（越遠越濃）
+    for (let i = 0; i < 4; i++) {
+      this.add.rectangle(MAP_X + MAP_W * (0.55 + i * 0.12), MAP_Y, MAP_W * 0.5, MAP_H, 0x9aa3ad, 0.035).setOrigin(0);
+    }
+    g.lineStyle(1, 0xf5d76e, 0.4).strokeRect(MAP_X, MAP_Y, MAP_W, MAP_H);
+    // 據點
+    this.add.rectangle(base.x, base.y, 14, 14, 0x4caf50).setStrokeStyle(1, 0xffffff, 0.8);
+    pixelText(this, base.x + 10, base.y - 4, '據點', 8, '#9ad17a');
+
+    const st = GameState.data;
+    for (const z of ZONES) {
+      const p = this.toMap(z);
+      const locked = z.unlockDay > st.day;
+      const done = st.exploredToday.includes(z.id);
+      const c = this.add.container(p.x, p.y);
+      const r = z.time === 2 ? 11 : 9;
+      const dot = this.add.circle(0, 0, r, locked ? 0x3a3d44 : z.color, done ? 0.35 : 0.95).setStrokeStyle(2, 0x000000, 0.8);
+      const ring = this.add.circle(0, 0, r + 4).setStrokeStyle(2, 0xffffff, 0.9).setVisible(false);
+      const name = pixelText(this, 0, r + 4, z.name, 8, locked ? '#6b7280' : done ? '#8a8f99' : '#ffffff').setOrigin(0.5, 0);
+      const sub = pixelText(this, 0, r + 17, locked ? `第 ${z.unlockDay} 天解鎖` : done ? '今天已去過' : stars(z.risk), 7, locked ? '#6b7280' : '#ff8a6a').setOrigin(0.5, 0);
+      c.add([ring, dot, name, sub]);
+      if (st.intel?.zone === z.id && !locked) {
+        const bang = pixelText(this, r + 2, -r - 10, '!', 12, '#ffd24a');
+        c.add(bang);
+        this.tweens.add({ targets: bang, y: bang.y - 3, duration: 500, yoyo: true, repeat: -1 });
+      }
+      c.setData('ring', ring);
+      dot.setInteractive({ useHandCursor: true }).on('pointerdown', () => {
+        AudioManager.ui('tap');
+        this.selected = z;
+        this.refresh();
+      });
+      this.markers.set(z.id, c);
+    }
+  }
+
+  private refresh(): void {
+    this.panel.removeAll(true);
+    for (const [id, c] of this.markers) (c.getData('ring') as Phaser.GameObjects.Arc).setVisible(this.selected?.id === id);
+    const add = (o: Phaser.GameObjects.GameObject | Phaser.GameObjects.GameObject[]) => this.panel.add(o);
+    const st = GameState.data;
+    const y0 = MAP_Y;
+    add(uiPanel(this, PANEL_X, y0, PANEL_W, MAP_H));
+    const z = this.selected;
+    if (!z) {
+      add(pixelText(this, PANEL_X + 10, y0 + 10, '選一個區域出發搜刮', 9, '#f5d76e'));
+      const lines = [
+        '近的區域花 1 個時段，遠的花 2 個。',
+        '沒用完的時段，入夜時換成免費修路障',
+        '和少量廢料。',
+        '',
+        '每走一站會遇到隨機事件：QTE、',
+        '無聲潛入或條件戰鬥。噪音越高越危險，',
+        '隨時可以撤退，帶著背包回家。',
+        '主角倒下的話，這趟搜到的全部丟失。',
+      ];
+      lines.forEach((l, i) => add(pixelText(this, PANEL_X + 10, y0 + 32 + i * 15, l, 8, '#c8c8c8')));
+      if (st.intel) {
+        const iz = ZONES.find((q) => q.id === st.intel!.zone);
+        const info = INTEL[st.intel.kind];
+        add(pixelText(this, PANEL_X + 10, y0 + 170, `今日情報：${iz?.name ?? ''}`, 8, '#ffd24a'));
+        add(pixelText(this, PANEL_X + 10, y0 + 184, `${info.name}　${info.desc}`, 7, '#e0c070').setWordWrapWidth(PANEL_W - 20, true));
+      }
+      return;
+    }
+
+    const locked = z.unlockDay > st.day;
+    const done = st.exploredToday.includes(z.id);
+    add(pixelText(this, PANEL_X + 10, y0 + 8, z.name, 10, '#f5d76e'));
+    add(pixelText(this, PANEL_X + PANEL_W - 10, y0 + 10, z.time === 2 ? '遠・2 時段' : '近・1 時段', 8, '#c8c8c8').setOrigin(1, 0));
+    add(pixelText(this, PANEL_X + 10, y0 + 26, z.blurb, 8, '#c8c8c8').setWordWrapWidth(PANEL_W - 20, true));
+    add(pixelText(this, PANEL_X + 10, y0 + 62, `風險 ${stars(z.risk)}`, 8, '#ff8a6a'));
+    add(pixelText(this, PANEL_X + 110, y0 + 62, `${z.nodes} 個地點`, 8, '#c8c8c8'));
+    add(pixelText(this, PANEL_X + 10, y0 + 76, `可能找到：${z.tags.join('、')}`, 8, '#9ad17a'));
+    let y = y0 + 92;
+    if (st.intel?.zone === z.id) {
+      const info = INTEL[st.intel.kind];
+      add(pixelText(this, PANEL_X + 10, y, `情報：${info.name}`, 8, '#ffd24a'));
+      add(pixelText(this, PANEL_X + 10, y + 13, info.desc, 7, '#e0c070').setWordWrapWidth(PANEL_W - 20, true));
+      y += 30;
+    }
+
+    // 同行隊員
+    add(pixelText(this, PANEL_X + 10, y, `同行隊員（最多 ${EXPLORE_TIME.maxSquad} 位）`, 8, '#f5d76e'));
+    y += 14;
+    const crew = st.crew;
+    if (crew.length === 0) add(pixelText(this, PANEL_X + 10, y, '沒有隊員，只能獨自出發。', 8, '#90a4ae'));
+    crew.slice(0, 6).forEach((m, i) => this.crewRow(m, PANEL_X + 8, y + i * 22));
+    y += Math.min(6, crew.length) * 22 + 4;
+
+    const reason = locked ? `第 ${z.unlockDay} 天解鎖` : done ? '今天已經去過' : st.dayTime < z.time ? '時段不夠' : '';
+    add(
+      uiButton(this, PANEL_X + 8, y0 + MAP_H - 34, PANEL_W - 16, 26, reason || `出發 ▶`, () => this.depart(z), {
+        enabled: !reason,
+        fill: 0x7a2a22,
+        size: 9,
+      }),
+    );
+  }
+
+  private crewRow(m: CrewMember, x: number, y: number): void {
+    const ready = crewReady(m);
+    const on = this.squad.includes(m.id);
+    const w = PANEL_W - 16;
+    const bg = this.add
+      .rectangle(x, y, w, 20, on ? 0x3a4a2a : 0x1c2029, 0.95)
+      .setOrigin(0)
+      .setStrokeStyle(1, on ? 0x9ad17a : 0xffffff, on ? 0.8 : 0.12);
+    this.panel.add(bg);
+    const key = ensureCrewTexture(this, m) ?? 'player';
+    const img = this.add.image(x - 16, y - 4, key, 0).setOrigin(0, 0).setCrop(18, 4, 26, 20);
+    if (key === 'player') img.setTint(COMPANION_ROLES[m.role].tint);
+    this.panel.add(img);
+    this.panel.add(pixelText(this, x + 36, y + 4, m.name, 8, ready ? '#ffffff' : '#6b7280'));
+    const attrs = `腳${m.attrs.agi} 手${m.attrs.hand} 膽${m.attrs.nerve}`;
+    this.panel.add(pixelText(this, x + 90, y + 4, COMPANION_ROLES[m.role].title, 8, ready ? '#c8c8c8' : '#6b7280'));
+    this.panel.add(pixelText(this, x + w - 6, y + 4, ready ? attrs : `負傷・休養 ${m.injuredDays} 天`, 7, ready ? '#b0bec5' : '#ef9a9a').setOrigin(1, 0));
+    if (!ready) return;
+    bg.setInteractive({ useHandCursor: true }).on('pointerdown', () => {
+      AudioManager.ui('tap');
+      if (on) this.squad = this.squad.filter((id) => id !== m.id);
+      else if (this.squad.length < EXPLORE_TIME.maxSquad) this.squad.push(m.id);
+      this.refresh();
+    });
+  }
+
+  private depart(z: ZoneDef): void {
+    AudioManager.ui('confirm');
+    const squad = GameState.data.crew.filter((c) => this.squad.includes(c.id));
+    Expedition.start(z, squad);
+    this.cameras.main.fadeOut(300, 0, 0, 0);
+    this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => this.scene.start('Expedition'));
+  }
+}

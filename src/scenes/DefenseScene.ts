@@ -37,6 +37,8 @@ import { WeaponSystem } from '../systems/WeaponSystem';
 import { CompanionSystem, type CompanionHud, type CompanionOrder } from '../systems/CompanionSystem';
 import type { BuildUIData } from './BuildUIScene';
 import type { GameOverData } from './GameOverScene';
+import { EXPLORE_TIME } from '../data/explore';
+import { throwGrenade, useMedkit } from '../explore/Supplies';
 
 /** 從結算畫面進來時帶的資料：newDay 代表撐過一夜、進入新的一天 */
 export interface DefenseSceneData {
@@ -169,16 +171,41 @@ export class DefenseScene extends Phaser.Scene {
     // 黃昏的暖色濾鏡，入夜時淡掉
     this.dusk = this.add.rectangle(0, 0, GAME_WIDTH, GAME_HEIGHT, 0xff9a4a, 0.1).setOrigin(0).setScrollFactor(0).setDepth(89);
     this.build.enter();
-    const data: BuildUIData = { mode: this.build, onStartNight: () => this.startNight() };
+    const data: BuildUIData = { mode: this.build, onStartNight: () => this.startNight(), onExplore: () => this.goExplore() };
     this.scene.launch('BuildUI', data);
     if (newDay) {
+      // 新的一天：探索時段補滿、換情報、負傷隊員休養一天
+      GameState.startNewDay();
       GameState.data.scrap += ECONOMY.dailySalvage;
-      // 白天探索做好之前，用固定收入代替搜刮
       this.time.delayedCall(300, () => {
-        this.fx.popText(PLAYER_X, LANE_TOP - 40, `白天搜刮 +${ECONOMY.dailySalvage} 廢料`, '#f5d76e');
+        this.fx.popText(PLAYER_X, LANE_TOP - 40, `附近撿拾 +${ECONOMY.dailySalvage} 廢料`, '#f5d76e');
         this.build.events.emit('changed');
       });
     }
+  }
+
+  /** 白天出門探索：先把據點狀態存起來，回來時從 GameState 重建 */
+  private goExplore(): void {
+    if (this.phase !== 'day' || this.ended) return;
+    this.outpost.persist();
+    GameState.save();
+    this.cameras.main.fadeOut(250, 0, 0, 0);
+    this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => this.scene.start('ExploreMap'));
+  }
+
+  /** 沒用完的探索時段：留守的人修路障、在附近撿東西 */
+  private idleBonus(): void {
+    const st = GameState.data;
+    const slots = st.dayTime;
+    if (slots <= 0) return;
+    st.dayTime = 0;
+    const repair = Math.round(this.barricade.maxHp * EXPLORE_TIME.idleRepairRatio * slots);
+    const before = this.barricade.hp;
+    if (this.barricade.alive) this.barricade.repair(repair);
+    const scrap = EXPLORE_TIME.idleScrap * slots;
+    st.scrap += scrap;
+    const fixed = this.barricade.hp - before;
+    this.fx.popText(BARRICADE_X, LANE_TOP - 50, `留守整備：路障 +${fixed}　廢料 +${scrap}`, '#9ad17a');
   }
 
   /** 入夜：收起布置介面，開始出怪 */
@@ -186,6 +213,7 @@ export class DefenseScene extends Phaser.Scene {
     if (this.phase === 'night' || this.ended) return;
     this.phase = 'night';
     this.build.exit();
+    this.idleBonus();
     this.outpost.persist();
     GameState.save();
     this.scene.stop('BuildUI');
@@ -202,6 +230,28 @@ export class DefenseScene extends Phaser.Scene {
     this.spawner.start();
     this.companions.active = true;
     this.scene.launch('UI');
+    // 輔助用品：G 手榴彈、H 醫療包（觸控在 UIScene 的按鈕）
+    this.input.keyboard?.on('keydown-G', this.nightGrenade, this);
+    this.input.keyboard?.on('keydown-H', this.nightMedkit, this);
+    this.events.on('use-grenade', this.nightGrenade, this);
+    this.events.on('use-medkit', this.nightMedkit, this);
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.input.keyboard?.off('keydown-G', this.nightGrenade, this);
+      this.input.keyboard?.off('keydown-H', this.nightMedkit, this);
+      this.events.off('use-grenade', this.nightGrenade, this);
+      this.events.off('use-medkit', this.nightMedkit, this);
+    });
+  }
+
+  private nightGrenade(): void {
+    if (this.phase !== 'night' || this.ended) return;
+    const inp = this.input2.state;
+    throwGrenade(this, this.player, inp.aimX, inp.aimY, () => this.zombies, (n) => (this.kills += n));
+  }
+
+  private nightMedkit(): void {
+    if (this.phase !== 'night' || this.ended) return;
+    useMedkit(this, this.player);
   }
 
   private drawBackdrop(): void {

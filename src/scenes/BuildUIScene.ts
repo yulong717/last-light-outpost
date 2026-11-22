@@ -10,11 +10,15 @@ import { ensureCrewTexture } from '../art/CrewArt';
 import { COMPANION_ROLES, MAX_DEPLOYED } from '../data/companions';
 import { ATTRS, TRAIT_BY_ID } from '../data/crewTraits';
 import { pixelText } from '../utils/text';
+import { EXPLORE_TIME } from '../data/explore';
+import { crewReady } from '../data/companions';
 import type { ArmoryData } from './ArmoryScene';
 
 export interface BuildUIData {
   mode: BuildMode;
   onStartNight: () => void;
+  /** 打開城市地圖出門探索 */
+  onExplore: () => void;
 }
 
 const PANEL_X = 150;
@@ -29,6 +33,7 @@ const PANEL_W = 340;
 export class BuildUIScene extends Phaser.Scene {
   private mode!: BuildMode;
   private onStartNight!: () => void;
+  private onExplore!: () => void;
   private scrapText!: Phaser.GameObjects.Text;
   private panel!: Phaser.GameObjects.Container;
   private hint!: Phaser.GameObjects.Text;
@@ -44,6 +49,7 @@ export class BuildUIScene extends Phaser.Scene {
   init(data: BuildUIData): void {
     this.mode = data.mode;
     this.onStartNight = data.onStartNight;
+    this.onExplore = data.onExplore;
   }
 
   create(): void {
@@ -52,14 +58,18 @@ export class BuildUIScene extends Phaser.Scene {
     const touch = this.sys.game.device.input.touch;
 
     this.add.rectangle(0, 0, GAME_WIDTH, 26, 0x000000, 0.55).setOrigin(0);
-    pixelText(this, 8, 6, `第 ${GameState.data.day} 天・白天　布置據點`, 9, '#f5d76e');
-    this.scrapText = pixelText(this, 300, 6, '', 9, '#e8e8e8');
+    pixelText(this, 8, 6, `第 ${GameState.data.day} 天・白天`, 9, '#f5d76e');
+    this.scrapText = pixelText(this, 96, 6, '', 9, '#e8e8e8');
     this.fixedRects.push(registerUIRect({ x: 0, y: 0, w: GAME_WIDTH, h: 26 }));
 
     this.button(GAME_WIDTH - 104, 2, 100, 22, '開始夜晚 ▶', true, () => this.onStartNight(), 0x7a2a22);
     this.button(GAME_WIDTH - 172, 2, 62, 22, `隊伍 ${GameState.data.crew.length}`, true, () => this.toggleRoster());
     // 軍械庫：買槍、買彈、配置上場武器
     this.button(GAME_WIDTH - 240, 2, 62, 22, '軍械庫', true, () => this.openArmory(), 0x3a4a2a);
+    // 白天探索：剩幾個時段就能出門幾趟（近區 1、遠區 2）
+    const left = GameState.data.dayTime;
+    const slots = '●'.repeat(left) + '○'.repeat(Math.max(0, EXPLORE_TIME.slotsPerDay - left));
+    this.button(GAME_WIDTH - 358, 2, 112, 22, `出發探索 ${slots}`, left > 0, () => this.onExplore(), 0x2a3a5a);
 
     this.hint = pixelText(
       this,
@@ -93,7 +103,8 @@ export class BuildUIScene extends Phaser.Scene {
   }
 
   private refresh(): void {
-    this.scrapText.setText(`廢料 ${GameState.data.scrap}`);
+    const s = GameState.data.supplies;
+    this.scrapText.setText(`廢料 ${GameState.data.scrap}　醫療 ${s.medkit} 手雷 ${s.grenade}`);
     this.clearPanel();
     const sel = this.mode.selection;
     if (sel) this.rosterOpen = false;
@@ -197,9 +208,10 @@ export class BuildUIScene extends Phaser.Scene {
       const img = this.add.image(cx - 10, cy, key, 0).setOrigin(0, 0).setCrop(12, 4, 40, 44);
       if (key === 'player') img.setTint(COMPANION_ROLES[m.role].tint);
       this.panel.add(img);
-      const deployed = i < MAX_DEPLOYED;
+      const ready = crewReady(m);
+      const deployed = ready && crew.filter(crewReady).indexOf(m) < MAX_DEPLOYED;
       this.text(cx + 44, cy + 3, m.name, 9, '#ffffff');
-      this.text(cx + cw - 6, cy + 4, `${COMPANION_ROLES[m.role].title}${deployed ? '・出戰' : '・待命'}`, 8, deployed ? '#f5d76e' : '#90a4ae').setOrigin(1, 0);
+      this.text(cx + cw - 6, cy + 4, `${COMPANION_ROLES[m.role].title}${!ready ? `・負傷 ${m.injuredDays} 天` : deployed ? '・出戰' : '・待命'}`, 8, !ready ? '#ef9a9a' : deployed ? '#f5d76e' : '#90a4ae').setOrigin(1, 0);
       const traits = m.traits.map((t) => TRAIT_BY_ID[t]).filter(Boolean);
       let tx = cx + 44;
       for (const t of traits) {

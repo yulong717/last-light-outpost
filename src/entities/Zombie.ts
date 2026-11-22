@@ -42,6 +42,8 @@ export interface ZombieContext {
   others?: ZombieTarget[];
   /** 場上所有霧屍（護理師的治療光環用） */
   zombies?: Zombie[];
+  /** 多近會盯上主角／夥伴（不填用預設值）；探索戰鬥設很大，霧屍會一路追過來 */
+  aggroRange?: number;
 }
 
 export interface ZombieTarget {
@@ -311,7 +313,7 @@ export class Zombie extends Phaser.GameObjects.Sprite {
     const pl = ctx.player;
     const list: ZombieTarget[] = [{ x: pl.x, y: pl.y, alive: pl.alive, hit: ctx.hitPlayer }, ...(ctx.others ?? [])];
     let best: ZombieTarget | null = null;
-    let bestD = AGGRO_RANGE;
+    let bestD = ctx.aggroRange ?? AGGRO_RANGE;
     for (const t of list) {
       if (!t.alive || t.x < ctx.blockX) continue;
       const d = Math.hypot(t.x - this.footX, (t.y - this.footY) * 1.6);
