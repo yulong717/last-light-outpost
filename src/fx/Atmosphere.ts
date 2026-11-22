@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { GAME_HEIGHT, GAME_WIDTH } from '../config';
 import { FX } from './FxTextures';
 
 export interface AtmosphereOptions {
@@ -13,7 +14,8 @@ export interface AtmosphereOptions {
  * 全部是程式產生的貼圖 + 補間動畫，不需要任何美術檔。
  */
 export function createAtmosphere(scene: Phaser.Scene, opt: AtmosphereOptions): void {
-  const { width, height } = scene.scale;
+  const width = GAME_WIDTH;
+  const height = GAME_HEIGHT;
 
   // 灰燼：慢慢落下、左右飄
   scene.add.particles(0, -4, FX.px, {

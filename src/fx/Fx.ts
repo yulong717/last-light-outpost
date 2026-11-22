@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { GAME_HEIGHT, GAME_WIDTH } from '../config';
 import { pixelText } from '../utils/text';
 import { FX, SPLAT_FRAMES } from './FxTextures';
 
@@ -65,8 +66,8 @@ export class Fx {
   private constructor(private scene: Phaser.Scene) {
     // 地上的血跡畫進一張 RenderTexture：數量再多也只是一張圖
     const cam = scene.cameras.main;
-    const w = Math.max(scene.scale.width, cam.getBounds().width || 0);
-    const h = Math.max(scene.scale.height, cam.getBounds().height || 0);
+    const w = Math.max(GAME_WIDTH, cam.getBounds().width || 0);
+    const h = Math.max(GAME_HEIGHT, cam.getBounds().height || 0);
     this.decals = scene.add.renderTexture(0, 0, w, h).setOrigin(0).setDepth(1);
 
     scene.events.on(Phaser.Scenes.Events.UPDATE, this.update, this);

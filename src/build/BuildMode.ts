@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 import { GROUND_Y, LANE_BOTTOM, LANE_TOP } from '../config';
 import { BUILDINGS, SLOTS, type BuildingKind } from '../data/buildings';
 import { Fx } from '../fx/Fx';
-import { isOverUI } from '../input/InputManager';
+import { isPointerOverUI } from '../input/InputManager';
 import type { Outpost } from './Outpost';
 
 export type Selection = { type: 'slot'; id: string } | { type: 'barricade' } | { type: 'wall' } | null;
@@ -155,7 +155,7 @@ export class BuildMode {
 
   private onMove(p: Phaser.Input.Pointer): void {
     if (!this.active || p.wasTouch) return;
-    const next = isOverUI(p.x, p.y) ? null : this.pick(p);
+    const next = isPointerOverUI(p) ? null : this.pick(p);
     if (JSON.stringify(next) === JSON.stringify(this.hover)) return;
     if (this.hover?.type === 'barricade' && this.selection?.type !== 'barricade') this.outpost.barricade.setHighlight(false);
     this.hover = next;
@@ -164,7 +164,7 @@ export class BuildMode {
   }
 
   private onDown(p: Phaser.Input.Pointer): void {
-    if (!this.active || isOverUI(p.x, p.y)) return;
+    if (!this.active || isPointerOverUI(p)) return;
     if (p.rightButtonDown()) {
       this.select(null);
       return;

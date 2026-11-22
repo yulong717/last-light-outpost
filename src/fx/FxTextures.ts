@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { GAME_HEIGHT, GAME_WIDTH } from '../config';
 
 /**
  * 特效用的小貼圖全部在這裡用程式畫出來，不需要任何美術檔案。
@@ -87,7 +88,8 @@ export function createFxTextures(scene: Phaser.Scene): void {
   });
 
   // 暗角：邊緣變暗，讓夜晚更有壓迫感；用 4 階讓它保持像素感
-  const { width, height } = scene.scale;
+  const width = GAME_WIDTH;
+  const height = GAME_HEIGHT;
   canvas(scene, FX.vignette, width, height, (ctx) => {
     const cx = width / 2;
     const cy = height / 2;

@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { toLogical } from '../render/RenderScale';
 
 /**
  * 動作抽象層：遊戲邏輯只問「要不要開槍、瞄哪裡、要不要換彈」，
@@ -32,6 +33,13 @@ export function registerUIRect(rect: Rect): () => void {
   return () => uiRects.delete(rect);
 }
 
+/** 指標是否落在 UI 上；pointer.x/y 是畫布像素，先換算成 640×360 邏輯座標。 */
+export function isPointerOverUI(p: { x: number; y: number }): boolean {
+  const l = toLogical(p.x, p.y);
+  return isOverUI(l.x, l.y);
+}
+
+/** x、y 為 640×360 邏輯座標。 */
 export function isOverUI(x: number, y: number): boolean {
   for (const r of uiRects) {
     if (x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h) return true;
@@ -111,17 +119,18 @@ export class InputManager {
     scene.input.on('pointerdown', (p: Phaser.Input.Pointer) => {
       // 滑鼠右鍵 = 近戰，不會開火
       if (!p.wasTouch && p.rightButtonDown()) {
-        if (!isOverUI(p.x, p.y)) queued.melee = true;
+        if (!isPointerOverUI(p)) queued.melee = true;
         return;
       }
-      if (p.wasTouch && this.movePointerId === null && inRect(JOYSTICK_ZONE, p.x, p.y) && !isOverUI(p.x, p.y)) {
+      const l = toLogical(p.x, p.y);
+      if (p.wasTouch && this.movePointerId === null && inRect(JOYSTICK_ZONE, l.x, l.y) && !isOverUI(l.x, l.y)) {
         this.movePointerId = p.id;
         joystick.active = true;
-        joystick.baseX = joystick.knobX = p.x;
-        joystick.baseY = joystick.knobY = p.y;
+        joystick.baseX = joystick.knobX = l.x;
+        joystick.baseY = joystick.knobY = l.y;
         return;
       }
-      if (this.firingPointerId === null && !isOverUI(p.x, p.y)) {
+      if (this.firingPointerId === null && !isOverUI(l.x, l.y)) {
         this.firingPointerId = p.id;
         this.tapQueued = { x: p.x, y: p.y };
       }
@@ -166,8 +175,9 @@ export class InputManager {
       my = (k.down.isDown || k.s.isDown ? 1 : 0) - (k.up.isDown || k.w.isDown ? 1 : 0);
     }
     if (mover) {
-      const dx = mover.x - joystick.baseX;
-      const dy = mover.y - joystick.baseY;
+      const ml = toLogical(mover.x, mover.y);
+      const dx = ml.x - joystick.baseX;
+      const dy = ml.y - joystick.baseY;
       const len = Math.hypot(dx, dy);
       const clamped = Math.min(len, JOYSTICK_RADIUS);
       const nx = len > 0 ? dx / len : 0;
