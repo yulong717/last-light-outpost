@@ -83,15 +83,27 @@ export function buildNight(day: number, rand: () => number = Math.random): WaveD
         add('basic');
         continue;
       }
-      add(chosen.id);
+      // 屍犬、屍鴉成群出現
+      for (let k = 0; k < (chosen.pack ?? 1); k++) add(chosen.id);
     }
     const speedUp = 1 + day * 0.05;
-    const groups: SpawnGroup[] = Object.entries(counts).map(([enemy, count]) => ({
-      enemy,
-      count,
-      interval: +(Math.max(0.5, PROFESSIONS[enemy].threat * 0.9) / speedUp + (enemy === 'basic' ? 0.4 : 0.8)).toFixed(2),
-      startDelay: PROFESSIONS[enemy].threat >= 5 ? 4 : PROFESSIONS[enemy].threat >= 3 ? 2 : 0,
-    }));
+    const groups: SpawnGroup[] = [];
+    for (const [enemy, count] of Object.entries(counts)) {
+      const def = PROFESSIONS[enemy];
+      if (def.pack) {
+        // 成群的動物：一群一組，群與群之間隔幾秒
+        for (let k = 0, left = count; left > 0; k++, left -= def.pack) {
+          groups.push({ enemy, count: Math.min(def.pack, left), interval: 0.35, startDelay: 3 + k * 6 });
+        }
+        continue;
+      }
+      groups.push({
+        enemy,
+        count,
+        interval: +(Math.max(0.5, def.threat * 0.9) / speedUp + (enemy === 'basic' ? 0.4 : 0.8)).toFixed(2),
+        startDelay: def.threat >= 5 ? 4 : def.threat >= 3 ? 2 : 0,
+      });
+    }
     // 平民先出、菁英最後
     groups.sort((a, b) => PROFESSIONS[a.enemy].threat - PROFESSIONS[b.enemy].threat);
     out.push({ delayBefore: w === 0 ? 2 : 5, groups });

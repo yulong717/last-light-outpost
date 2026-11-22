@@ -1,14 +1,23 @@
 import Phaser from 'phaser';
 import { composeZombie, type BodyLook } from '../art/ZombieComposer';
+import { ANIMAL_PALETTES, composeAnimal } from '../art/AnimalArt';
+import { Zombie } from '../entities/Zombie';
 import type { EnemyDef } from '../data/enemies';
 import {
+  BUILDS,
+  FEMALE,
+  HAIR_COLORS,
   HELMETS,
   MUTATIONS,
+  SKIRT_COLORS,
   PROFESSIONS,
   SKINS,
   mutationChance,
   secondMutationChance,
   type ArmorPiece,
+  type BuildDef,
+  type BuildId,
+  type BodyKind,
   type HatId,
   type MutationDef,
   type MutationId,
@@ -38,6 +47,13 @@ export interface ZombieSpec {
   fireproof: boolean;
   burst: 'big' | 'small' | null;
   regen: number;
+  /** 人形或動物 */
+  body: BodyKind;
+  /** 體型（影響數值與寬度） */
+  build: BuildDef;
+  female: boolean;
+  /** 橫向寬度倍率（體型 × 性別），Zombie 用 setScale(s × widthMul, s) */
+  widthMul: number;
   /** 身體色調（變異） */
   tint?: number;
   /** 顯示用全名，例如「狂暴的警察霧屍」 */
@@ -48,7 +64,7 @@ export interface ZombieSpec {
  * 每個職業最多保留幾組合成好的外觀；超過就從既有的裡面挑，
  * 避免一路玩下去貼圖無限增加（每組約 250KB）。頭飾、變異色調不佔名額。
  */
-const LOOKS_PER_PROFESSION = 8;
+const LOOKS_PER_PROFESSION = 6;
 const lookPool = new Map<string, string[]>();
 
 const pick = <T>(arr: readonly T[]): T => arr[Math.floor(Math.random() * arr.length)];
@@ -68,9 +84,10 @@ const HAT_COLORS = [0xc03030, 0x3050a0, 0x2a2a2a, 0x40803a, 0xd0a020, 0x808080, 
 const FIRE_HELMET_COLORS = [0xe8e0c8, 0xd83020, 0xf0c020, 0x303030];
 const BACKPACK_COLORS = [0x6a4a2a, 0x2a4a6a, 0x5a2a2a, 0x3a5a2a, 0x2a2a2a];
 
-function rollLook(scene: Phaser.Scene, p: ProfessionDef): string {
-  const pool = lookPool.get(p.id) ?? [];
-  lookPool.set(p.id, pool);
+function rollLook(scene: Phaser.Scene, p: ProfessionDef, female = false): string {
+  const poolKey = `${p.id}:${female ? 'f' : 'm'}`;
+  const pool = lookPool.get(poolKey) ?? [];
+  lookPool.set(poolKey, pool);
   // 有效的貼圖才重用（場景重開後 TextureManager 仍保留，通常都在）
   const alive = pool.filter((k) => scene.textures.exists(k));
   if (alive.length >= LOOKS_PER_PROFESSION) return pick(alive);
@@ -85,6 +102,8 @@ function rollLook(scene: Phaser.Scene, p: ProfessionDef): string {
     blood: Phaser.Math.Between(b0, b1),
     widen: +(p.widen * Phaser.Math.FloatBetween(0.95, 1.06)).toFixed(2),
     seed: Phaser.Math.Between(1, 9999),
+    hair: female ? { style: pick(['long', 'long', 'ponytail', 'bob'] as const), color: pick(HAIR_COLORS) } : null,
+    skirt: female && Math.random() < (p.skirtChance ?? 0) ? pick(SKIRT_COLORS) : null,
   };
   // 同一身制服：上衣和褲子用同一色（連身服、消防衣、手術服、迷彩）
   if (p.look.shirt === 'jumpsuit' || p.look.shirt === 'fire' || p.look.shirt === 'scrubs' || p.look.shirt === 'camo') {
@@ -104,7 +123,16 @@ export function prewarmLooks(scene: Phaser.Scene, professionIds: Iterable<string
   for (const id of new Set(professionIds)) {
     const p = PROFESSIONS[id];
     if (!p) continue;
-    for (let i = (lookPool.get(id)?.length ?? 0); i < LOOKS_PER_PROFESSION; i++) rollLook(scene, p);
+    if (p.body && p.body !== 'human') {
+      ANIMAL_PALETTES[p.body].forEach((_, v) => composeAnimal(scene, p.body as Exclude<BodyKind, 'human'>, v));
+      continue;
+    }
+    for (const female of [false, true]) {
+      if (female && (p.femaleChance ?? 0.45) <= 0) continue;
+      // 女性比例低的職業先合成少一點，其餘夜裡再補
+      const want = female ? Math.ceil(LOOKS_PER_PROFESSION * Math.min(1, (p.femaleChance ?? 0.45) * 2)) : LOOKS_PER_PROFESSION;
+      for (let i = lookPool.get(`${id}:${female ? 'f' : 'm'}`)?.length ?? 0; i < want; i++) rollLook(scene, p, female);
+    }
   }
 }
 
@@ -121,22 +149,44 @@ function rollMutations(day: number): MutationDef[] {
   return list;
 }
 
-/** 擲出一隻霧屍。professionId 不存在時退回平民。forceMutations 給圖鑑／測試用。 */
-export function rollZombie(scene: Phaser.Scene, professionId: string, day: number, forceMutations?: MutationId[]): ZombieSpec {
+/** 指定部分屬性（圖鑑、劇情、探索事件用）；沒指定的照常隨機 */
+export interface RollOptions {
+  mutations?: MutationId[];
+  female?: boolean;
+  build?: BuildId;
+}
+
+/** 擲出一隻霧屍。professionId 不存在時退回平民。 */
+export function rollZombie(scene: Phaser.Scene, professionId: string, day: number, opts: RollOptions | MutationId[] = {}): ZombieSpec {
+  const o: RollOptions = Array.isArray(opts) ? { mutations: opts } : opts;
   const p = PROFESSIONS[professionId] ?? PROFESSIONS.basic;
-  const muts = forceMutations ? forceMutations.map((id) => MUTATIONS[id]) : rollMutations(day);
+  const muts = o.mutations ? o.mutations.map((id) => MUTATIONS[id]) : rollMutations(day);
   const prod = (f: (m: MutationDef) => number | undefined) => muts.reduce((k, m) => k * (f(m) ?? 1), 1);
 
+  const body: BodyKind = p.body ?? 'human';
+  const animal = body !== 'human';
   const hat = weighted(p.hats);
   const helmetDef = HELMETS[hat];
-  const scale = +(p.scale * prod((m) => m.scaleMul) * Phaser.Math.FloatBetween(0.96, 1.05)).toFixed(3);
-  const texture = rollLook(scene, p);
+  const female = !animal && (o.female ?? Math.random() < (p.femaleChance ?? 0.45));
+  const defaultBuilds = Object.fromEntries(Object.values(BUILDS).map((b) => [b.id, b.weight])) as Record<BuildId, number>;
+  const build = BUILDS[animal ? 'average' : (o.build ?? weighted(p.builds ?? defaultBuilds))];
+  const scale = +(
+    p.scale *
+    build.scaleMul *
+    (female ? FEMALE.scaleMul : 1) *
+    prod((m) => m.scaleMul) *
+    Phaser.Math.FloatBetween(0.96, 1.05)
+  ).toFixed(3);
+  const widthMul = +(build.widthMul * (female ? FEMALE.widthMul : 1)).toFixed(3);
+  const texture = animal
+    ? composeAnimal(scene, body, Math.floor(Math.random() * ANIMAL_PALETTES[body].length))
+    : rollLook(scene, p, female);
   const def: EnemyDef = {
     id: p.id,
     name: p.name,
-    hp: Math.round(p.hp * prod((m) => m.hpMul)),
-    speed: p.speed * prod((m) => m.speedMul),
-    damage: Math.round(p.damage * prod((m) => m.damageMul)),
+    hp: Math.round(p.hp * build.hpMul * prod((m) => m.hpMul)),
+    speed: p.speed * build.speedMul * prod((m) => m.speedMul),
+    damage: Math.round(p.damage * build.damageMul * prod((m) => m.damageMul)),
     attackInterval: p.attackInterval * prod((m) => m.attackIntervalMul),
     width: 20,
     height: 44,
@@ -160,14 +210,18 @@ export function rollZombie(scene: Phaser.Scene, professionId: string, day: numbe
     helmet: helmetDef ? { ...helmetDef } : null,
     vest: p.vest ? { ...p.vest } : null,
     bodyArmor: Math.min(0.8, (p.bodyArmor ?? 0) + muts.reduce((s, m) => s + (m.bodyArmor ?? 0), 0)),
-    knockbackResist: Math.min(1, (p.knockbackResist ?? 0) + muts.reduce((s, m) => s + (m.knockbackResist ?? 0), 0)),
+    knockbackResist: Math.min(1, (p.knockbackResist ?? 0) + build.knockbackResist + muts.reduce((s, m) => s + (m.knockbackResist ?? 0), 0)),
     staggerResist: p.staggerResist ?? 0,
     structureMul: p.structureMul ?? 1,
     fireproof: !!p.fireproof,
     burst: p.ability === 'burst' ? 'big' : burstFromMut ? 'small' : null,
     regen: muts.reduce((s, m) => s + (m.regen ?? 0), 0),
     tint: tinted?.tint,
-    displayName: muts.map((m) => m.prefix).join('') + p.name,
+    body,
+    build,
+    female,
+    widthMul,
+    displayName: muts.map((m) => m.prefix).join('') + build.prefix + (female ? '女' : '') + p.name,
   };
 }
 
@@ -179,4 +233,28 @@ export function scrapFor(spec: ZombieSpec): number {
 /** 威脅點數（波次預算） */
 export function threatOf(professionId: string): number {
   return PROFESSIONS[professionId]?.threat ?? 1;
+}
+
+/**
+ * 出怪的統一入口（夜晚防守、探索模式、劇情事件都用這個）：擲出個體並放進場景。
+ * 回傳的 Zombie 需要呼叫端每幀 update(dt, ctx)，並自行放進敵人清單。
+ *
+ *   const z = spawnEnemy(scene, 'dog', x, y, { day: 4 });
+ *   const boss = spawnEnemy(scene, 'bear', x, y, { day: 9, mutations: ['frenzied'] });
+ */
+export function spawnEnemy(
+  scene: Phaser.Scene,
+  id: string,
+  x: number,
+  y: number,
+  opts: RollOptions & { day?: number } = {},
+): Zombie {
+  return new Zombie(scene, x, y, rollZombie(scene, id, opts.day ?? 1, opts));
+}
+
+/** 目前可出現的敵人 id（依天數解鎖）；body 可篩選人形或某種動物 */
+export function enemyIds(day = Infinity, body?: BodyKind): string[] {
+  return Object.values(PROFESSIONS)
+    .filter((p) => p.unlockDay <= day && (!body || (p.body ?? 'human') === body))
+    .map((p) => p.id);
 }

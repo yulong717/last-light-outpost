@@ -34,6 +34,8 @@ export interface FallOptions {
   neckRow?: number;
   /** 有倒地影格動畫時的 key；非爆頭擊殺會優先播放它 */
   deathAnim?: string;
+  /** 一律播倒地動畫、不用「轉 90 度」（動物的身體是橫的，轉了會很怪） */
+  forceAnim?: boolean;
 }
 
 const GRAVITY = 520;
@@ -96,12 +98,12 @@ export class Fx {
   // ───────────────────── 角色上的程式化動態 ─────────────────────
 
   /** 受擊擠壓：瞬間變扁變寬再彈回，配合閃白 */
-  squash(sprite: Phaser.GameObjects.Sprite, baseScale = 1, amount = 1): void {
+  squash(sprite: Phaser.GameObjects.Sprite, baseScale = 1, amount = 1, baseScaleX = baseScale): void {
     this.squashTweens.get(sprite)?.stop();
-    sprite.setScale(baseScale * (1 + 0.18 * amount), baseScale * (1 - 0.14 * amount));
+    sprite.setScale(baseScaleX * (1 + 0.18 * amount), baseScale * (1 - 0.14 * amount));
     const tw = this.scene.tweens.add({
       targets: sprite,
-      scaleX: baseScale,
+      scaleX: baseScaleX,
       scaleY: baseScale,
       duration: 110,
       ease: 'Back.easeOut',
@@ -164,7 +166,7 @@ export class Fx {
 
     // 影格動畫的倒地方向是「往背後倒」；朝左走（flipX）的霧屍就是往右倒
     const animDir = sprite.flipX ? 1 : -1;
-    if (!opt.headshot && opt.deathAnim && sc.anims.exists(opt.deathAnim) && opt.dir === animDir) {
+    if (opt.deathAnim && sc.anims.exists(opt.deathAnim) && (opt.forceAnim || (!opt.headshot && opt.dir === animDir))) {
       corpse.play(opt.deathAnim);
       // 被子彈推著往後滑一點
       sc.tweens.add({ targets: corpse, x: corpse.x + opt.dir * Phaser.Math.Between(3, 7), duration: 300, ease: 'Quad.easeOut' });
