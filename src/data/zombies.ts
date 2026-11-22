@@ -41,9 +41,16 @@ export type ProfessionAbility =
   /** 血量低於一半時暴走：更快、出手更頻繁 */
   | 'enrage';
 
+/** 身體種類：人形霧屍，或三種動物（各有自己的圖與行為） */
+export type BodyKind = 'human' | 'dog' | 'crow' | 'bear';
+
 export interface ProfessionDef {
   id: string;
   name: string;
+  /** 不填 = 人形 */
+  body?: BodyKind;
+  /** 成群出現：波次挑到牠時一次出幾隻（屍犬、屍鴉） */
+  pack?: number;
   /** 一句話介紹，圖鑑與第一次出現時顯示 */
   blurb: string;
   hp: number;
@@ -80,6 +87,12 @@ export interface ProfessionDef {
     /** 血跡多寡 0..3 */
     blood?: [number, number];
   };
+  /** 女性機率（0..1，預設 0.45） */
+  femaleChance?: number;
+  /** 女性穿裙子的機率 */
+  skirtChance?: number;
+  /** 可能的體型（權重）；不填用 BUILDS 的預設權重 */
+  builds?: Partial<Record<BuildId, number>>;
   /** 第幾天開始出現 */
   unlockDay: number;
   /** 出現權重（越大越常見） */
@@ -123,6 +136,8 @@ export const PROFESSIONS: Record<string, ProfessionDef> = {
     widen: 1,
     hats: { none: 6, cap: 2, beanie: 2, bandana: 1 },
     look: { shirts: CIVIL_SHIRTS, pants: CIVIL_PANTS, shirt: 'plain', backpack: 0.2, blood: [0, 2] },
+    femaleChance: 0.5,
+    skirtChance: 0.4,
     unlockDay: 1,
     weight: 10,
     threat: 1,
@@ -145,6 +160,8 @@ export const PROFESSIONS: Record<string, ProfessionDef> = {
       shirt: 'tank',
       blood: [1, 3],
     },
+    femaleChance: 0.5,
+    builds: { thin: 5, average: 3, tall: 1 },
     unlockDay: 1,
     weight: 4,
     threat: 1.5,
@@ -176,6 +193,8 @@ export const PROFESSIONS: Record<string, ProfessionDef> = {
       shirt: 'tank',
       blood: [1, 3],
     },
+    femaleChance: 0.3,
+    builds: { average: 3, tall: 1 },
     unlockDay: 1,
     weight: 1.5,
     threat: 6,
@@ -194,6 +213,8 @@ export const PROFESSIONS: Record<string, ProfessionDef> = {
     structureMul: 2.5,
     hats: { hard_hat: 7, none: 2, beanie: 1 },
     look: { shirts: [0xf07a18, 0xe0d020], pants: [0x2f4a78, 0x3a3a3a], shirt: 'hivis', blood: [0, 2] },
+    femaleChance: 0.2,
+    builds: { average: 4, stocky: 4, tall: 1, thin: 1 },
     unlockDay: 2,
     weight: 4,
     threat: 2.5,
@@ -212,6 +233,7 @@ export const PROFESSIONS: Record<string, ProfessionDef> = {
     vest: { armor: 0.45, hp: 60 },
     hats: { police_cap: 6, riot_helmet: 3, none: 1 },
     look: { shirts: [0x4a6aa8, 0x5a7ab8], pants: [0x1c2438, 0x242c40], shirt: 'police', blood: [0, 2] },
+    femaleChance: 0.35,
     unlockDay: 2,
     weight: 3,
     threat: 3,
@@ -230,6 +252,8 @@ export const PROFESSIONS: Record<string, ProfessionDef> = {
     ability: 'heal_aura',
     hats: { nurse_cap: 5, none: 3 },
     look: { shirts: [0x6cc4c0, 0x8ab8e0, 0xe8a0c0], pants: [0x6cc4c0, 0x8ab8e0, 0xe8a0c0], shirt: 'scrubs', blood: [1, 3] },
+    femaleChance: 0.7,
+    skirtChance: 0.3,
     unlockDay: 3,
     weight: 2,
     threat: 3,
@@ -252,6 +276,8 @@ export const PROFESSIONS: Record<string, ProfessionDef> = {
     fireproof: true,
     hats: { fire_helmet: 8, none: 1 },
     look: { shirts: [0xb89a5a, 0x2a2a2a], pants: [0xb89a5a, 0x2a2a2a], shirt: 'fire', pantsPattern: 'fire', blood: [0, 1] },
+    femaleChance: 0.2,
+    builds: { average: 4, stocky: 4, tall: 2 },
     unlockDay: 3,
     weight: 1.5,
     threat: 5,
@@ -270,6 +296,7 @@ export const PROFESSIONS: Record<string, ProfessionDef> = {
     ability: 'enrage',
     hats: { none: 6, bandana: 2, beanie: 1 },
     look: { shirts: [0xe8701c, 0xd86018], pants: [0xe8701c, 0xd86018], shirt: 'jumpsuit', blood: [1, 3] },
+    femaleChance: 0.3,
     unlockDay: 4,
     weight: 2,
     threat: 3.5,
@@ -290,12 +317,135 @@ export const PROFESSIONS: Record<string, ProfessionDef> = {
     staggerResist: 0.3,
     hats: { army_helmet: 9, none: 1 },
     look: { shirts: [0x5a6a3a, 0x6a6040], pants: [0x5a6a3a, 0x6a6040], shirt: 'camo', pantsPattern: 'camo', backpack: 0.5, blood: [0, 2] },
+    femaleChance: 0.2,
+    builds: { average: 5, stocky: 3, tall: 2 },
     unlockDay: 5,
     weight: 1,
     threat: 7,
     scrap: 10,
   },
 };
+
+// ───────────────────────── 動物 ─────────────────────────
+
+const NO_LOOK: ProfessionDef['look'] = { shirts: [0], pants: [0], shirt: 'plain' };
+
+/**
+ * 動物霧屍。和人形共用波次、廢料、變異系統，只是外觀（src/art/AnimalArt.ts）與行為
+ * （Zombie.updateCrow／撲咬／衝撞）不同。沒有頭盔、背心、體型、性別。
+ */
+export const ANIMALS: Record<string, ProfessionDef> = {
+  dog: {
+    id: 'dog',
+    name: '屍犬',
+    blurb: '成群奔襲，會撲上來咬；身形低矮，瞄低一點。',
+    body: 'dog',
+    pack: 3,
+    hp: 22,
+    speed: 62,
+    damage: 4,
+    attackInterval: 0.55,
+    scale: 1,
+    widen: 1,
+    structureMul: 0.5,
+    hats: { none: 1 },
+    look: NO_LOOK,
+    femaleChance: 0,
+    builds: { average: 1 },
+    unlockDay: 2,
+    weight: 1.6,
+    threat: 2,
+    scrap: 3,
+  },
+  crow: {
+    id: 'crow',
+    name: '屍鴉',
+    blurb: '飛過路障直接俯衝啄人，一槍就落，但要抬高槍口。',
+    body: 'crow',
+    pack: 3,
+    hp: 8,
+    speed: 58,
+    damage: 3,
+    attackInterval: 1.4,
+    scale: 1,
+    widen: 1,
+    hats: { none: 1 },
+    look: NO_LOOK,
+    femaleChance: 0,
+    builds: { average: 1 },
+    unlockDay: 3,
+    weight: 1.2,
+    threat: 1.5,
+    scrap: 2,
+  },
+  bear: {
+    id: 'bear',
+    name: '屍熊',
+    blurb: '巨大又耐打，靠近路障時會衝撞，第一下特別重。',
+    body: 'bear',
+    hp: 320,
+    speed: 12,
+    damage: 26,
+    attackInterval: 2.0,
+    scale: 1.2,
+    widen: 1,
+    structureMul: 2,
+    knockbackResist: 0.9,
+    staggerResist: 0.8,
+    hats: { none: 1 },
+    look: NO_LOOK,
+    femaleChance: 0,
+    builds: { average: 1 },
+    unlockDay: 6,
+    weight: 0.6,
+    threat: 12,
+    scrap: 20,
+  },
+};
+Object.assign(PROFESSIONS, ANIMALS);
+
+/** 屍鴉：巡航高度、俯衝到的高度、啄完拉開的時間 */
+export const CROW = { cruiseAlt: 70, strikeAlt: 20, diveSpeed: 110, retreatTime: 1.1 };
+/** 屍犬撲咬：距離、冷卻、速度、傷害倍率 */
+export const POUNCE = { range: 56, cooldown: 2.2, speed: 170, time: 0.32, damageMul: 1.5, aggro: 200 };
+/** 屍熊衝撞：離擋路線多遠開始衝、速度倍率、第一下傷害倍率 */
+export const CHARGE = { from: 130, speedMul: 2.4, impactMul: 2 };
+
+// ───────────────────────── 體型與性別 ─────────────────────────
+
+export type BuildId = 'thin' | 'average' | 'stocky' | 'tall';
+
+export interface BuildDef {
+  id: BuildId;
+  /** 名稱前綴（普通體型不加） */
+  prefix: string;
+  /** 預設出現權重 */
+  weight: number;
+  hpMul: number;
+  speedMul: number;
+  damageMul: number;
+  /** 橫向寬度倍率（畫面上變胖／變瘦，命中框跟著變） */
+  widthMul: number;
+  /** 整體大小倍率（高大） */
+  scaleMul: number;
+  knockbackResist: number;
+}
+
+/** 體型會影響數值：瘦的快而脆、壯的慢而耐打、高大的打得痛 */
+export const BUILDS: Record<BuildId, BuildDef> = {
+  thin: { id: 'thin', prefix: '瘦弱', weight: 3, hpMul: 0.8, speedMul: 1.12, damageMul: 0.9, widthMul: 0.86, scaleMul: 0.98, knockbackResist: 0 },
+  average: { id: 'average', prefix: '', weight: 5, hpMul: 1, speedMul: 1, damageMul: 1, widthMul: 1, scaleMul: 1, knockbackResist: 0 },
+  stocky: { id: 'stocky', prefix: '壯碩', weight: 2, hpMul: 1.3, speedMul: 0.88, damageMul: 1.15, widthMul: 1.18, scaleMul: 1.02, knockbackResist: 0.15 },
+  tall: { id: 'tall', prefix: '高大', weight: 1.5, hpMul: 1.15, speedMul: 1, damageMul: 1.1, widthMul: 1.02, scaleMul: 1.1, knockbackResist: 0.05 },
+};
+
+/**
+ * 女性霧屍：外觀差異（長髮／馬尾／短鮑伯、可能穿裙子、身形略纖細），數值和男性相同；
+ * 能力差異交給職業與體型。
+ */
+export const FEMALE = { widthMul: 0.92, scaleMul: 0.95 };
+export const HAIR_COLORS = [0x2a2018, 0x4a3020, 0x6a4a28, 0xc8a050, 0x8a3018, 0x9a9a9a, 0x1a1a22];
+export const SKIRT_COLORS = [0x3a3a4a, 0x7a2a3a, 0x2a4a6a, 0x5a4a3a, 0x8a8a7a];
 
 // ───────────────────────── 變異 ─────────────────────────
 
