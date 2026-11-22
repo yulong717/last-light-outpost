@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>倖存者產生器</title>
+    <style>
+      body { margin: 0; background: #1a1d24; color: #e8e8e8; font: 13px/1.4 system-ui, sans-serif; }
+      header { padding: 10px 16px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+      button { background: #7a2a22; color: #fff; border: 0; padding: 6px 12px; border-radius: 4px; cursor: pointer; }
+      #grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 10px; padding: 0 16px 16px; }
+      .card { background: #252a33; border-radius: 6px; padding: 8px; }
+      .card canvas { image-rendering: pixelated; display: block; margin: 0 auto; background: #3a3f48; border-radius: 4px; }
+      .name { font-weight: 700; font-size: 15px; }
+      .role { color: #90a4ae; margin-left: 6px; font-weight: 400; font-size: 12px; }
+      .perk { color: #a5d6a7; } .flaw { color: #ef9a9a; }
+      .attrs { font-family: monospace; font-size: 11px; color: #cfd8dc; white-space: pre; }
+      .gear { color: #9aa3ad; font-size: 11px; }
+    </style>
+  </head>
+  <body>
+    <header>
+      <b>倖存者產生器</b>
+      <button id="again">重新產生</button>
+      <span style="color:#9aa3ad">開發用頁面：npm run dev 後開 /crew-lab.html</span>
+    </header>
+    <div id="grid"></div>
+    <script type="module" src="/src/lab/crewLab.ts"></script>
+  </body>
+</html>
