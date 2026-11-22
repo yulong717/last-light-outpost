@@ -19,6 +19,14 @@ export class UIScene extends Phaser.Scene {
   private killText!: Phaser.GameObjects.Text;
   private rotateHint!: Phaser.GameObjects.Container;
   private unregister: (() => void)[] = [];
+  /** 夥伴名單：每列一個色塊＋名字職業＋血條＋狀態 */
+  private crewRows: {
+    mark: Phaser.GameObjects.Rectangle;
+    label: Phaser.GameObjects.Text;
+    bar: Phaser.GameObjects.Rectangle;
+    status: Phaser.GameObjects.Text;
+  }[] = [];
+  private orderLabel?: Phaser.GameObjects.Text;
 
   constructor() {
     super('UI');
@@ -52,6 +60,9 @@ export class UIScene extends Phaser.Scene {
 
     this.button(GAME_WIDTH - 38, GAME_HEIGHT - 38, '換彈', () => queueAction('reload'));
     this.button(GAME_WIDTH - 76, GAME_HEIGHT - 38, '換槍', () => queueAction('next'));
+
+    this.crewRows = [];
+    this.orderLabel = undefined;
 
     this.buildRotateHint();
     this.scale.on(Phaser.Scale.Events.ORIENTATION_CHANGE, this.checkOrientation, this);
@@ -114,7 +125,56 @@ export class UIScene extends Phaser.Scene {
     g.fillStyle(0xffffff, a * 0.8).fillCircle(kx, ky, 10);
   }
 
+  /** 第一次收到 HUD 資料時才建夥伴名單（人數依存檔而定）；沒有夥伴就不顯示 */
+  private buildCrew(count: number): void {
+    const defense = this.scene.get('Defense');
+    for (let i = 0; i < count; i++) {
+      const y = 54 + i * 14;
+      const mark = this.add.rectangle(8, y + 4, 5, 5, 0xffffff).setOrigin(0).setStrokeStyle(1, 0x000000);
+      const label = pixelText(this, 16, y, '', 8);
+      this.add.rectangle(72, y + 3, 32, 4, 0x000000).setOrigin(0);
+      const bar = this.add.rectangle(73, y + 4, 30, 2, 0x81c784).setOrigin(0);
+      const status = pixelText(this, 108, y, '', 8, '#b0bec5');
+      this.crewRows.push({ mark, label, bar, status });
+    }
+    // 指令按鈕：切換固守／跟隨（鍵盤 F）
+    const x = GAME_WIDTH - 114;
+    const y = GAME_HEIGHT - 38;
+    const size = 32;
+    const bg = this.add
+      .rectangle(x, y, size, size, 0x000000, 0.45)
+      .setOrigin(0)
+      .setStrokeStyle(1, 0xfff59d, 0.6)
+      .setInteractive();
+    this.orderLabel = pixelText(this, x + size / 2, y + size / 2, '', 8, '#fff59d').setOrigin(0.5);
+    if (!this.touchUI) pixelText(this, x + size / 2, y - 2, 'F', 7, '#90a4ae').setOrigin(0.5, 1);
+    bg.on('pointerdown', () => {
+      bg.setFillStyle(0xffffff, 0.3);
+      defense.events.emit('companion-order');
+    });
+    bg.on('pointerup', () => bg.setFillStyle(0x000000, 0.45));
+    bg.on('pointerout', () => bg.setFillStyle(0x000000, 0.45));
+    this.unregister.push(registerUIRect({ x, y, w: size, h: size }));
+  }
+
+  private updateCrew(h: HudData): void {
+    if (h.companions.length === 0) return;
+    if (this.crewRows.length === 0) this.buildCrew(h.companions.length);
+    h.companions.forEach((c, i) => {
+      const row = this.crewRows[i];
+      if (!row) return;
+      const ratio = c.hp / c.maxHp;
+      row.mark.setFillStyle(c.alive ? c.color : 0x555555);
+      row.label.setText(`${c.name} ${c.title}`).setColor(c.alive ? '#e8e8e8' : '#757575');
+      row.bar.width = 30 * ratio;
+      row.bar.setFillStyle(ratio > 0.5 ? 0x81c784 : ratio > 0.25 ? 0xffd54f : 0xe57373);
+      row.status.setText(c.status).setColor(c.alive ? '#b0bec5' : '#ef5350');
+    });
+    this.orderLabel?.setText(h.companionOrder === 'hold' ? '固守' : '跟隨');
+  }
+
   private onHud(h: HudData): void {
+    this.updateCrew(h);
     this.playerBar.width = 78 * (h.playerHp / h.playerMaxHp);
     this.baseBar.width = 78 * (h.baseHp / h.baseMaxHp);
     this.barricadeBar.width = 78 * (h.barricadeHp / h.barricadeMaxHp);

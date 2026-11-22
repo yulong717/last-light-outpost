@@ -38,6 +38,18 @@ export interface GameEventMap {
   'enemy:death': { enemyId: string; x: number; y: number; headshot: boolean };
   'wave:start': { wave: number; total: number };
   'game:over': { survived: boolean };
+  /** NPC 夥伴開了一槍 */
+  'ally:shoot': { role: string; x: number; y: number; angle: number };
+  /** 夥伴真的被扣血 */
+  'ally:hurt': { name: string; role: string; amount: number; hp: number; maxHp: number; x: number; y: number };
+  /** 夥伴陣亡（永久離隊） */
+  'ally:death': { name: string; role: string; x: number; y: number };
+  /** 醫護補了一次血 */
+  'ally:heal': { amount: number; x: number; y: number };
+  /** 全隊指令切換 */
+  'ally:order': { order: 'hold' | 'follow' };
+  /** 工兵修路障：修理中每 0.5 秒一次（敲槌子的節奏） */
+  'barricade:repair': { amount: number; hp: number; maxHp: number };
 }
 
 export type GameEventName = keyof GameEventMap;

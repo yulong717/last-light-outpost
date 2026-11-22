@@ -95,6 +95,15 @@ export class Barricade {
     }
   }
 
+  /** 修理（工兵用）。路障已被打爛就修不回來，回傳實際修了多少。 */
+  repair(amount: number): number {
+    if (!this.alive || this.hp >= this.maxHp) return 0;
+    const before = this.hp;
+    this.hp = Math.min(this.maxHp, this.hp + amount);
+    this.refreshLook();
+    return this.hp - before;
+  }
+
   private segmentNear(y: number): Phaser.GameObjects.Image {
     let best = this.segments[0];
     for (const s of this.segments) if (Math.abs(s.y - y) < Math.abs(best.y - y)) best = s;

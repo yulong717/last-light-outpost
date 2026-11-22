@@ -88,6 +88,16 @@ export function attachAudio(scene: Phaser.Scene): void {
     .on('barricade:hit', (e) => play('barricade_hit', e.x))
     .on('barricade:break', (e) => play('barricade_break', e.x))
     .on('base:hit', (e) => play('base_hit', e.x))
+    // NPC 夥伴：沿用現有音色，調音高／音量區分（之後可換專屬配方）
+    .on('ally:shoot', (e) => {
+      play('shot_pistol', e.x, { volume: 0.55, semitones: e.role === 'shooter' ? -1 : 1.5 });
+      play('shell_drop', e.x, { delay: 0.3 + Math.random() * 0.12, volume: 0.5 });
+    })
+    .on('ally:hurt', (e) => play('player_hurt', e.x, { volume: 0.6, semitones: 3 }))
+    .on('ally:death', (e) => play('player_death', e.x, { semitones: 2 }))
+    .on('ally:heal', (e) => play('ui_confirm', e.x, { volume: 0.4, semitones: 5 }))
+    .on('ally:order', () => play('ui_tap'))
+    .on('barricade:repair', () => play('barricade_hit', undefined, { volume: 0.3, semitones: 6 }))
     .on('wave:start', () => play('wave_horn'))
     .on('game:over', (e) => {
       AudioManager.setMood('off');

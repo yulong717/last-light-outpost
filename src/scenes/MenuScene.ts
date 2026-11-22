@@ -16,8 +16,8 @@ export class MenuScene extends Phaser.Scene {
 
     const touch = this.sys.game.device.input.touch;
     const hint = touch
-      ? '點畫面瞄準射擊　右下按鈕：換彈／換槍'
-      : '滑鼠瞄準、左鍵射擊　R 換彈　1／2 或 Q 換槍　M 靜音';
+      ? '點畫面瞄準射擊　右下按鈕：換彈／換槍／夥伴指令'
+      : '滑鼠瞄準、左鍵射擊　R 換彈　1／2 或 Q 換槍　F 夥伴固守／跟隨　M 靜音';
     pixelText(this, cx, 212, hint, 8, '#c8c8c8').setOrigin(0.5);
 
     const start = pixelText(this, cx, 264, touch ? '點擊開始：白天布置據點，晚上守住它' : '點擊或按空白鍵開始：白天布置據點，晚上守住它', 10, '#ffffff').setOrigin(0.5);

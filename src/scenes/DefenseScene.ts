@@ -31,6 +31,7 @@ import { InputManager } from '../input/InputManager';
 import { GameState } from '../state/GameState';
 import { WaveSpawner } from '../systems/WaveSpawner';
 import { WeaponSystem } from '../systems/WeaponSystem';
+import { CompanionSystem, type CompanionHud, type CompanionOrder } from '../systems/CompanionSystem';
 import type { BuildUIData } from './BuildUIScene';
 import type { GameOverData } from './GameOverScene';
 
@@ -55,6 +56,8 @@ export interface HudData {
   wave: number;
   totalWaves: number;
   kills: number;
+  companions: CompanionHud[];
+  companionOrder: CompanionOrder;
 }
 
 const BASE_X = 44;
@@ -73,6 +76,7 @@ export class DefenseScene extends Phaser.Scene {
   private spawner!: WaveSpawner;
   private barricade!: Barricade;
   private player!: Player;
+  private companions!: CompanionSystem;
   private zombies: Zombie[] = [];
   private kills = 0;
   private headshots = 0;
@@ -127,6 +131,13 @@ export class DefenseScene extends Phaser.Scene {
     this.wireFeedback();
     // 音效：訂閱 GameEvents，依鏡頭位置做左右聲道（見 src/audio/、docs/AUDIO.md）
     attachAudio(this);
+
+    // NPC 夥伴：白天就站在固守位置，入夜才開始行動
+    this.companions = new CompanionSystem(this, {
+      minX: BASE_X + 14,
+      maxX: WORLD_WIDTH - 16,
+      barricadeX: BARRICADE_X,
+    });
     this.weapons = new WeaponSystem(this, WEAPONS);
     this.spawner = new WaveSpawner(this, NIGHT_ONE, (id) => this.spawnZombie(id));
 
@@ -169,6 +180,7 @@ export class DefenseScene extends Phaser.Scene {
     // 準星會隱藏滑鼠游標，白天要點槽位，所以入夜才建立
     this.crosshair = new Crosshair(this);
     this.spawner.start();
+    this.companions.active = true;
     this.scene.launch('UI');
   }
 
@@ -247,6 +259,7 @@ export class DefenseScene extends Phaser.Scene {
       player: { x: this.player.footX, y: this.player.footY, alive: this.player.alive },
       // 受擊回饋（震動、紅邊、卡肉）在 wireFeedback() 裡訂閱 player:hurt
       hitPlayer: (d, fromX, fromY) => this.player.takeDamage(d, fromX, fromY),
+      others: this.companions.targets(),
     };
   }
 
@@ -287,6 +300,24 @@ export class DefenseScene extends Phaser.Scene {
     const aimDist = Phaser.Math.Distance.Between(muzzleX, muzzleY, inp.aimX, inp.aimY);
     this.crosshair.update(realDt, inp.aimX, inp.aimY, this.weapons.spreadNow(p.moveFactor), aimDist, p.alive);
     this.screenFx.update(realDt, p.hp, p.maxHp);
+
+    // NPC 夥伴
+    const ally = this.companions.update(
+      dt,
+      {
+        footX: p.footX,
+        footY: p.footY,
+        facing: p.facing,
+        alive: p.alive,
+        hp: p.hp,
+        maxHp: p.maxHp,
+        heal: (a) => p.heal(a),
+      },
+      this.zombies,
+      this.barricade,
+    );
+    this.kills += ally.kills;
+    this.headshots += ally.headshots;
 
     // 敵人
     const ctx = this.zombieContext();
@@ -395,6 +426,8 @@ export class DefenseScene extends Phaser.Scene {
       wave: Math.max(1, this.spawner.waveIndex + 1),
       totalWaves: this.spawner.totalWaves,
       kills: this.kills,
+      companions: this.companions.hud(),
+      companionOrder: this.companions.order,
     };
   }
 

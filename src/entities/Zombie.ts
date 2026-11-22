@@ -27,6 +27,16 @@ export interface ZombieContext {
   blockerFor?: (x: number, y: number) => { blockX: number; hit: (damage: number, y: number) => void } | null;
   /** 地面效果的速度倍率（陷阱、照明燈），1 代表不影響 */
   speedMul?: (x: number, y: number) => number;
+  /** 其他可被盯上的目標（NPC 夥伴）；和主角一樣，只有站在擋路線外側才會被追 */
+  others?: ZombieTarget[];
+}
+
+export interface ZombieTarget {
+  x: number;
+  y: number;
+  alive: boolean;
+  /** fromX/fromY 是霧屍腳底 */
+  hit: (damage: number, fromX: number, fromY: number) => void;
 }
 
 /** 主角離多近會被盯上（以地面距離計，y 方向加權） */
@@ -123,18 +133,16 @@ export class Zombie extends Phaser.GameObjects.Sprite {
     const hitBlock = blk ? blk.hit : ctx.hitBlock;
     const minX = blockX + 18 * this.s;
     const speed = this.def.speed * this.speedJitter * (ctx.speedMul?.(this.footX, this.footY) ?? 1);
-    const p = ctx.player;
-
-    // 主角在擋路線外側、而且夠近 → 改追主角（2D 追擊）
-    const dx = p.x - this.footX;
-    const dy = p.y - this.footY;
-    const chasing = p.alive && p.x >= ctx.blockX && Math.hypot(dx, dy * 1.6) < AGGRO_RANGE;
+    // 主角或夥伴在擋路線外側、而且夠近 → 改追最近的那個（2D 追擊）
+    const p = this.pickTarget(ctx);
+    const dx = p ? p.x - this.footX : 0;
+    const dy = p ? p.y - this.footY : 0;
 
     let moved = false;
-    if (chasing) {
+    if (p) {
       if (Math.abs(dx) <= REACH_X && Math.abs(dy) <= REACH_Y) {
         this.setFlipX(dx < 0);
-        this.attack(dt, () => ctx.hitPlayer(this.def.damage, this.footX, this.footY), Math.sign(dx) || -1);
+        this.attack(dt, () => p.hit(this.def.damage, this.footX, this.footY), Math.sign(dx) || -1);
       } else {
         // 站到主角的左邊或右邊，而不是疊在主角身上
         const side = dx >= 0 ? -1 : 1;
@@ -171,6 +179,23 @@ export class Zombie extends Phaser.GameObjects.Sprite {
       this.setFrame(0);
     }
     this.sync(moved ? 1 : 0, dt);
+  }
+
+  /** 擋路線外側、仇恨範圍內最近的目標；沒有就回傳 null */
+  private pickTarget(ctx: ZombieContext): ZombieTarget | null {
+    const pl = ctx.player;
+    const list: ZombieTarget[] = [{ x: pl.x, y: pl.y, alive: pl.alive, hit: ctx.hitPlayer }, ...(ctx.others ?? [])];
+    let best: ZombieTarget | null = null;
+    let bestD = AGGRO_RANGE;
+    for (const t of list) {
+      if (!t.alive || t.x < ctx.blockX) continue;
+      const d = Math.hypot(t.x - this.footX, (t.y - this.footY) * 1.6);
+      if (d < bestD) {
+        bestD = d;
+        best = t;
+      }
+    }
+    return best;
   }
 
   private attack(dt: number, hit: () => void, dir: number): void {
