@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { PLACEHOLDER_COLORS } from '../config';
 import { ENEMIES } from '../data/enemies';
 import { createBarricadeTexture, registerHeadFrames } from '../art/ProceduralArt';
+import { createBuildingTextures } from '../art/BuildingArt';
 import { ZOMBIE_NECK_ROW, ZOMBIE_SHEETS } from '../art/sprites';
 import { createFxTextures } from '../fx/FxTextures';
 
@@ -30,6 +31,7 @@ export class BootScene extends Phaser.Scene {
   create(): void {
     createFxTextures(this);
     createBarricadeTexture(this);
+    createBuildingTextures(this);
     this.placeholder('player', 20, 44, PLACEHOLDER_COLORS.player, true);
     this.placeholder('barricade', 16, 56, PLACEHOLDER_COLORS.barricade);
     for (const e of Object.values(ENEMIES)) {
