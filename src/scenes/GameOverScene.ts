@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { GAME_HEIGHT, GAME_WIDTH } from '../config';
 import { pixelText } from '../utils/text';
+import { AudioManager } from '../audio/AudioManager';
 
 export interface GameOverData {
   survived: boolean;
@@ -23,9 +24,13 @@ export class GameOverScene extends Phaser.Scene {
     pixelText(this, cx, 266, '（白天探索與據點升級會在 M2 加入）', 8, '#9aa3ad').setOrigin(0.5);
     const again = pixelText(this, cx, 266, '點擊回到標題', 10, '#ffffff').setOrigin(0.5);
     this.tweens.add({ targets: again, alpha: 0.3, duration: 700, yoyo: true, repeat: -1 });
+    const back = () => {
+      AudioManager.ui('back');
+      this.scene.start('Menu');
+    };
     this.time.delayedCall(500, () => {
-      this.input.once('pointerdown', () => this.scene.start('Menu'));
-      this.input.keyboard?.once('keydown-SPACE', () => this.scene.start('Menu'));
+      this.input.once('pointerdown', back);
+      this.input.keyboard?.once('keydown-SPACE', back);
     });
   }
 }
