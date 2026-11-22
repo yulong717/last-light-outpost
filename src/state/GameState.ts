@@ -1,4 +1,5 @@
-import { DEFAULT_CREW, randomCrewName, type CompanionRole, type CrewMember } from '../data/companions';
+import { defaultCrew, makeCrewMember, upgradeCrewMember, type CompanionRole, type CrewMember } from '../data/companions';
+import { randomSeed } from '../utils/rng';
 import { BARRICADE_LEVELS, ECONOMY, type BuildingKind } from '../data/buildings';
 import { AMMO, MAX_GUNS, START_LOADOUT, getFirearm, getMelee, getWeapon, type AmmoType } from '../data/weapons';
 
@@ -65,7 +66,7 @@ function fresh(): GameStateData {
     barricadeHp: BARRICADE_LEVELS[0].maxHp,
     barricadeLevel: 1,
     buildings: [],
-    crew: DEFAULT_CREW.map((c) => ({ ...c })),
+    crew: defaultCrew(),
   };
 }
 
@@ -79,13 +80,11 @@ class GameStateStore {
   /**
    * 招募一位倖存者加入隊伍（白天探索救出時呼叫）。回傳新隊員。
    */
-  recruit(role: CompanionRole, name?: string): CrewMember {
+  recruit(role: CompanionRole, name?: string, seed = randomSeed()): CrewMember {
     const crew = this.data.crew;
-    const member: CrewMember = {
-      id: `crew-${Date.now().toString(36)}-${Math.floor(Math.random() * 1e4)}`,
-      name: name ?? randomCrewName(crew.map((c) => c.name)),
-      role,
-    };
+    const id = `crew-${Date.now().toString(36)}-${Math.floor(Math.random() * 1e4)}`;
+    // 長相、屬性、特質都由種子隨機產生
+    const member = makeCrewMember(id, role, seed, crew.map((c) => c.name), name);
     crew.push(member);
     return member;
   }
@@ -161,7 +160,9 @@ class GameStateStore {
       // 之後新增的彈種：補 0
       for (const t of Object.keys(AMMO) as AmmoType[]) parsed.armory.ammo[t] ??= 0;
       // 舊存檔沒有隊伍欄位：補上預設小隊
-      if (!Array.isArray(parsed.crew)) parsed.crew = DEFAULT_CREW.map((c) => ({ ...c }));
+      if (!Array.isArray(parsed.crew)) parsed.crew = defaultCrew();
+      // 舊隊員沒有外觀與能力：用 id 固定種子補上
+      parsed.crew = parsed.crew.map((c) => upgradeCrewMember(c));
       this.data = parsed;
       return true;
     } catch {

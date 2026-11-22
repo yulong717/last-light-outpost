@@ -1,6 +1,9 @@
 import Phaser from 'phaser';
 import { DEPTH_FX, clampLaneY, depthForY } from '../config';
+import { crewShootAnim, ensureCrewTexture } from '../art/CrewArt';
 import type { CompanionRoleDef, CrewMember } from '../data/companions';
+import { companionGunFor } from '../data/weapons';
+import { TRAIT_TUNING, resolveCrewStats, type CrewStats } from '../data/crewTraits';
 import { Fx } from '../fx/Fx';
 import { GameEvents } from '../systems/GameEvents';
 import type { Zombie } from './Zombie';
@@ -15,6 +18,8 @@ export interface CompanionIntent {
   maxX: number;
   /** 這一幀能不能開槍（工兵修理中就不行） */
   canShoot: boolean;
+  /** 隊友鼓舞等外部射速加成 */
+  fireRateMult?: number;
   zombies: Zombie[];
 }
 
@@ -24,7 +29,8 @@ export interface CompanionShot {
 }
 
 /**
- * NPC 夥伴：和主角共用同一張圖（染色當佔位），頭上有職業顏色標記。
+ * NPC 夥伴：每人一張依外觀換裝的專屬精靈圖（src/art/CrewArt.ts），頭上有職業顏色標記。
+ * 數值 = 職業基礎 × 個人屬性 × 特質（src/data/crewTraits.ts 的 resolveCrewStats）。
  * 行為由 CompanionSystem 決定「要去哪、能不能開槍」，這裡只負責移動、自動瞄準射擊、受傷與陣亡。
  * 一樣用 footX / footY（腳底）做所有判定。
  */
@@ -32,6 +38,8 @@ export class Companion {
   readonly sprite: Phaser.GameObjects.Sprite;
   readonly member: CrewMember;
   readonly def: CompanionRoleDef;
+  /** 這位隊員實際的數值 */
+  readonly stats: CrewStats;
   footX: number;
   footY: number;
   hp: number;
@@ -49,17 +57,34 @@ export class Companion {
   /** 反應時間：剛看到目標不會立刻開槍，比較像人 */
   private aimDelay = 0;
   private lastTarget: Zombie | null = null;
+  /** 有專屬貼圖時不染色 */
+  private tint: number | null;
+  private shootAnim: string | null;
+  private baseScaleX: number;
+  /** 「命硬」這晚用掉了沒 */
+  private secondWindUsed = false;
+  /** 「膽小」或膽識低：這一幀被霧屍貼身 */
+  private panicking = false;
 
   constructor(private scene: Phaser.Scene, member: CrewMember, def: CompanionRoleDef, x: number, y: number) {
     this.member = member;
     this.def = def;
     this.footX = x;
     this.footY = clampLaneY(y);
-    this.hp = def.maxHp;
-    this.ammo = def.gun.magazine;
-    this.sprite = scene.add.sprite(x, this.footY, 'player', 0).setTint(def.tint);
-    this.sprite.setOrigin(0.5, scene.anims.exists('player_shoot') ? 63 / 64 : 1);
-    this.sprite.setScale(0.94);
+    // 配發了武器就用那把槍的基礎數值（src/data/weapons.ts 的 companionGunFor），再套個人屬性與特質
+    this.stats = resolveCrewStats(def, member, member.weaponId ? companionGunFor(member.weaponId) : def.gun);
+    this.hp = this.stats.maxHp;
+    this.ammo = this.stats.gun.magazine;
+    const key = ensureCrewTexture(scene, member);
+    this.tint = key ? null : def.tint;
+    this.shootAnim = key ? crewShootAnim(member) : scene.anims.exists('player_shoot') ? 'player_shoot' : null;
+    this.sprite = scene.add.sprite(x, this.footY, key ?? 'player', 0);
+    if (this.tint !== null) this.sprite.setTint(this.tint);
+    this.sprite.setOrigin(0.5, scene.anims.exists('player_shoot') || key ? 63 / 64 : 1);
+    // 體型：寬高略有不同
+    const build = member.look?.build ?? { w: 1, h: 1 };
+    this.baseScaleX = 0.94 * build.w;
+    this.sprite.setScale(this.baseScaleX, 0.94 * build.h);
     // 頭上的職業標記與小血條
     this.mark = scene.add.rectangle(x, 0, 5, 5, def.markColor).setStrokeStyle(1, 0x000000);
     this.hpBack = scene.add.rectangle(x, 0, 16, 3, 0x000000, 0.7);
@@ -92,7 +117,7 @@ export class Companion {
       this.reloadLeft -= dt;
       if (this.reloadLeft <= 0) {
         this.reloadLeft = 0;
-        this.ammo = this.def.gun.magazine;
+        this.ammo = this.stats.gun.magazine;
       }
     }
 
@@ -102,7 +127,7 @@ export class Companion {
     const dist = Math.hypot(dx, dy);
     let moving = false;
     if (dist > 3) {
-      const step = Math.min(dist, this.def.speed * dt);
+      const step = Math.min(dist, this.stats.speed * dt);
       this.footX += (dx / dist) * step;
       this.footY += (dy / dist) * step * 0.7;
       moving = true;
@@ -120,11 +145,12 @@ export class Companion {
     if (target) this.facing = target.footX >= this.footX ? 1 : -1;
     if (target !== this.lastTarget) {
       this.lastTarget = target;
-      this.aimDelay = 0.25;
+      this.aimDelay = this.stats.aimDelay;
     }
     this.aimDelay = Math.max(0, this.aimDelay - dt);
+    this.panicking = this.closestDistance(intent.zombies) < TRAIT_TUNING.skittishRange;
     if (target && intent.canShoot && !this.reloading && this.cooldown <= 0 && this.aimDelay <= 0) {
-      shot = this.fire(target, intent.zombies);
+      shot = this.fire(target, intent.zombies, intent.fireRateMult ?? 1);
     }
     this.sync(moving);
     return shot;
@@ -132,7 +158,7 @@ export class Companion {
 
   private nearestZombie(zombies: Zombie[]): Zombie | null {
     let best: Zombie | null = null;
-    let bestD = this.def.gun.range;
+    let bestD = this.stats.gun.range;
     for (const z of zombies) {
       if (z.dead) continue;
       const d = Math.hypot(z.footX - this.footX, (z.footY - this.footY) * 1.4);
@@ -144,11 +170,40 @@ export class Companion {
     return best;
   }
 
+  /** 最近一隻霧屍的距離（判斷有沒有被貼身） */
+  private closestDistance(zombies: Zombie[]): number {
+    let best = Infinity;
+    for (const z of zombies) {
+      if (z.dead) continue;
+      best = Math.min(best, Math.hypot(z.footX - this.footX, (z.footY - this.footY) * 1.4));
+    }
+    return best;
+  }
+
+  /** 背水一戰：血量低時觸發 */
+  get lastStand(): boolean {
+    return this.stats.hooks.has('lastStand') && this.hp / this.stats.maxHp < TRAIT_TUNING.lastStandRatio;
+  }
+
+  /** 被貼身時手抖：膽小的人特別嚴重，膽識 1～2 星的人也會受影響（冷靜不受影響） */
+  private get panicSpread(): number {
+    if (!this.panicking) return 1;
+    if (this.stats.hooks.has('skittish')) return TRAIT_TUNING.skittishSpread;
+    if ((this.member.attrs?.nerve ?? 3) <= 2 && !this.member.traits?.includes('coolhead')) return TRAIT_TUNING.lowNervePanicSpread;
+    return 1;
+  }
+
+  /** 膽小的人被貼身時會想往後退 */
+  get wantsToRetreat(): boolean {
+    return this.panicking && this.stats.hooks.has('skittish');
+  }
+
   /** 和主角一樣的即時命中射擊（只打穿一隻），命中/擊殺特效沿用 Fx */
-  private fire(target: Zombie, zombies: Zombie[]): CompanionShot {
-    const g = this.def.gun;
+  private fire(target: Zombie, zombies: Zombie[], rateMult: number): CompanionShot {
+    const g = this.stats.gun;
+    const rage = this.lastStand;
     this.ammo -= 1;
-    this.cooldown = 1 / g.fireRate;
+    this.cooldown = 1 / (g.fireRate * rateMult * (rage ? TRAIT_TUNING.lastStandFireRate : 1));
     if (this.ammo <= 0) this.reloadLeft = g.reloadTime;
 
     const r = target.getHitRect();
@@ -157,7 +212,8 @@ export class Companion {
     const fromX = this.gunX + 5 * this.facing;
     const fromY = this.gunY;
     const angle =
-      Math.atan2(aimY - fromY, target.footX - fromX) + Phaser.Math.DegToRad(Phaser.Math.FloatBetween(-g.spread, g.spread));
+      Math.atan2(aimY - fromY, target.footX - fromX) +
+      Phaser.Math.DegToRad(Phaser.Math.FloatBetween(-1, 1) * g.spread * this.panicSpread);
     const ray = new Phaser.Geom.Line(fromX, fromY, fromX + Math.cos(angle) * g.range, fromY + Math.sin(angle) * g.range);
 
     let hit: { z: Zombie; x: number; y: number; d: number } | null = null;
@@ -176,7 +232,7 @@ export class Companion {
       const head = hit.z.isHeadshot(hit.y);
       if (head) result.headshots++;
       fx?.bulletHit(hit.x, hit.y, dirX, hit.z.footY, head);
-      const dmg = g.damage * (head ? 2.5 : 1);
+      const dmg = g.damage * (head ? 2.5 : 1) * (rage ? TRAIT_TUNING.lastStandDamage : 1);
       const killed = hit.z.takeDamage(dmg, g.knockback, { headshot: head, dirX });
       if (killed) result.kills++;
       GameEvents.of(this.scene).emit('enemy:hit', { enemyId: hit.z.def.id, x: hit.x, y: hit.y, damage: dmg, headshot: head, killed });
@@ -188,7 +244,7 @@ export class Companion {
       fx.muzzleSmoke(fromX, fromY, angle);
     }
     GameEvents.of(this.scene).emit('ally:shoot', { role: this.def.role, x: fromX, y: fromY, angle, weaponId: g.weaponId });
-    if (this.scene.anims.exists('player_shoot')) this.sprite.play('player_shoot');
+    if (this.shootAnim) this.sprite.play(this.shootAnim);
     else {
       const flash = this.scene.add.circle(fromX, fromY, 3, 0xfff3a0).setDepth(DEPTH_FX + 2);
       this.scene.tweens.add({ targets: flash, scale: 0.2, alpha: 0, duration: 70, onComplete: () => flash.destroy() });
@@ -197,9 +253,9 @@ export class Companion {
   }
 
   heal(amount: number): number {
-    if (!this.alive || this.hp >= this.def.maxHp) return 0;
+    if (!this.alive || this.hp >= this.stats.maxHp) return 0;
     const before = this.hp;
-    this.hp = Math.min(this.def.maxHp, this.hp + amount);
+    this.hp = Math.min(this.stats.maxHp, this.hp + amount);
     this.sync();
     return this.hp - before;
   }
@@ -207,19 +263,37 @@ export class Companion {
   /** 回傳 true 代表這一下讓夥伴陣亡 */
   takeDamage(amount: number): boolean {
     if (!this.alive || this.hurtCooldown > 0) return false;
+    const fx = Fx.of(this.scene);
+    // 身手矯健：有機率閃開
+    if (this.stats.hooks.has('nimble') && Math.random() < TRAIT_TUNING.nimbleChance) {
+      this.hurtCooldown = 0.35;
+      fx?.popText(this.footX, this.footY - 60, '閃開！', '#b3e5fc');
+      return false;
+    }
     this.hp = Math.max(0, this.hp - amount);
     this.hurtCooldown = 0.35;
+    // 命硬：每晚一次，致命傷改為剩 1 血
+    if (this.hp <= 0 && this.stats.hooks.has('secondWind') && !this.secondWindUsed) {
+      this.secondWindUsed = true;
+      this.hp = 1;
+      this.hurtCooldown = 1.2;
+      fx?.popText(this.footX, this.footY - 66, '命硬！', '#ffcc80');
+    }
     GameEvents.of(this.scene).emit('ally:hurt', {
       name: this.member.name,
       role: this.def.role,
       amount,
       hp: this.hp,
-      maxHp: this.def.maxHp,
+      maxHp: this.stats.maxHp,
       x: this.footX,
       y: this.footY,
     });
     this.sprite.setTintFill(0xff5252);
-    this.scene.time.delayedCall(70, () => this.sprite.active && this.alive && this.sprite.setTint(this.def.tint));
+    this.scene.time.delayedCall(70, () => {
+      if (!this.sprite.active || !this.alive) return;
+      if (this.tint === null) this.sprite.clearTint();
+      else this.sprite.setTint(this.tint);
+    });
     if (this.alive) {
       this.sync();
       return false;
@@ -246,7 +320,7 @@ export class Companion {
     this.sprite.setDepth(depth);
     const top = this.footY - 56 - bob;
     this.mark.setPosition(this.footX, top - 4).setDepth(depth);
-    const ratio = this.hp / this.def.maxHp;
+    const ratio = this.hp / this.stats.maxHp;
     // 滿血時隱藏血條，畫面比較乾淨
     const showHp = ratio < 1;
     this.hpBack.setPosition(this.footX, top + 1).setDepth(depth).setVisible(showHp);
