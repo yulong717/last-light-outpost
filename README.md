@@ -29,6 +29,11 @@ npm run build    # 型別檢查 + 打包到 dist/
 - 夜晚防守：手槍、霰彈槍、爆頭判定、穿透、擊退；3 種霧屍；路障與據點耐久；3 波
 - 輸入抽象層（`src/input/InputManager.ts`），鍵鼠與觸控共用遊戲邏輯
 - 數值全部在 `src/data/`
+- 手感：開槍鏡頭後頓與 trauma 震動、連射／移動散射（準星會張開）、命中 ✕ 確認、槍口閃光照亮；
+  移動有加減速、倒退走較慢、腳步揚塵；受擊閃白轉紅、擊退、無敵閃爍、紅邊與低血量心跳、手機／手把震動。
+  數值在 `src/feel/FeelConfig.ts`（全域）與 `src/data/weapons.ts`（每把槍）
+- 遊戲事件匯流排 `src/systems/GameEvents.ts`：`player:shoot`、`enemy:hit`、`player:hurt`、`player:step` 等，
+  音效、NPC 等系統用 `GameEvents.of(scene).on(...)` 訂閱，不必改玩法程式
 
 ## 資料夾
 
@@ -36,7 +41,8 @@ npm run build    # 型別檢查 + 打包到 dist/
 src/
   scenes/    Boot, Menu, Defense, UI(HUD), GameOver
   entities/  Zombie, Barricade
-  systems/   WeaponSystem（hitscan 射擊）, WaveSpawner
+  systems/   WeaponSystem（hitscan 射擊）, WaveSpawner, GameEvents（事件匯流排）
+  feel/      手感：CameraFeel, Crosshair, ScreenFeedback, Haptics, FeelConfig
   input/     InputManager
   state/     GameState（含 localStorage 存檔）
   data/      weapons, enemies, waves

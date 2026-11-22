@@ -323,6 +323,38 @@ export class Fx {
     }
   }
 
+  /** 腳步揚塵：一兩小團灰往腳後方散開，很淡 */
+  footDust(x: number, y: number, dirX: number): void {
+    for (let i = 0; i < 2; i++) {
+      const p = this.scene.add
+        .image(x + Phaser.Math.Between(-2, 2), y - 1, FX.smoke)
+        .setScale(0.18)
+        .setAlpha(0.22)
+        .setTint(0x8a8378)
+        .setDepth(2 + y / 1000);
+      this.scene.tweens.add({
+        targets: p,
+        x: p.x - dirX * Phaser.Math.Between(3, 7),
+        y: p.y - Phaser.Math.Between(1, 4),
+        scale: 0.45,
+        alpha: 0,
+        duration: Phaser.Math.Between(260, 380),
+        onComplete: () => p.destroy(),
+      });
+    }
+  }
+
+  /** 槍口閃光照亮周圍：加色光暈一閃即逝，夜裡特別明顯 */
+  muzzleLight(x: number, y: number, size = 1): void {
+    const g = this.scene.add
+      .image(x, y, FX.glow)
+      .setBlendMode(Phaser.BlendModes.ADD)
+      .setDepth(52)
+      .setScale(0.55 * size)
+      .setAlpha(0.95);
+    this.scene.tweens.add({ targets: g, alpha: 0, scale: 0.75 * size, duration: 70, onComplete: () => g.destroy() });
+  }
+
   /** 地上留一塊血跡（畫進 RenderTexture，永久留著直到場景結束） */
   stain(x: number, y: number, scale = 1): void {
     this.decals.stamp(FX.splat, Phaser.Math.Between(0, SPLAT_FRAMES - 1), x, y, {

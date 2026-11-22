@@ -6,6 +6,7 @@ import { Companion, type CompanionShot } from '../entities/Companion';
 import type { ZombieTarget, Zombie } from '../entities/Zombie';
 import { Fx } from '../fx/Fx';
 import { GameState } from '../state/GameState';
+import { GameEvents } from './GameEvents';
 
 /** 全隊指令：固守據點（待在路障內側）或跟隨主角（可一起出擊） */
 export type CompanionOrder = 'hold' | 'follow';
@@ -66,6 +67,9 @@ export class CompanionSystem {
   readonly companions: Companion[] = [];
   order: CompanionOrder = 'hold';
   private healTimers = new Map<Companion, number>();
+  /** 修理量累積，每 0.5 秒發一次 barricade:repair 事件 */
+  private repairAcc = 0;
+  private repairTick = 0;
 
   constructor(private scene: Phaser.Scene, private layout: CompanionLayout) {
     const crew = GameState.data.crew.slice(0, MAX_DEPLOYED);
@@ -90,6 +94,7 @@ export class CompanionSystem {
   toggleOrder(): void {
     if (this.companions.every((c) => !c.alive)) return;
     this.order = this.order === 'hold' ? 'follow' : 'hold';
+    GameEvents.of(this.scene).emit('ally:order', { order: this.order });
     const lead = this.companions.find((c) => c.alive);
     if (lead) Fx.of(this.scene)?.popText(lead.footX, lead.footY - 66, this.order === 'hold' ? '固守據點！' : '跟我來！', '#fff59d');
   }
@@ -115,7 +120,13 @@ export class CompanionSystem {
         y = c.footY;
         const atSpot = Math.abs(c.footX - x) < 6;
         if (atSpot) {
-          barricade.repair(c.def.repairPerSec * dt);
+          this.repairAcc += barricade.repair(c.def.repairPerSec * dt);
+          this.repairTick += dt;
+          if (this.repairTick >= 0.5 && this.repairAcc > 0) {
+            GameEvents.of(this.scene).emit('barricade:repair', { amount: this.repairAcc, hp: barricade.hp, maxHp: barricade.maxHp });
+            this.repairAcc = 0;
+            this.repairTick = 0;
+          }
           canShoot = false;
           c.status = '修理中';
         } else {
@@ -140,6 +151,7 @@ export class CompanionSystem {
           const healed = patient.heal(h.amount);
           if (healed > 0) {
             Fx.of(this.scene)?.popText(patient.x, patient.y - 58, `+${Math.round(healed)}`, '#a5d6a7');
+            GameEvents.of(this.scene).emit('ally:heal', { amount: healed, x: patient.x, y: patient.y });
             this.healTimers.set(c, h.interval);
           }
         }

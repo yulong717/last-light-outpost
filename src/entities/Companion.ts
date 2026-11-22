@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { DEPTH_FX, clampLaneY, depthForY } from '../config';
 import type { CompanionRoleDef, CrewMember } from '../data/companions';
 import { Fx } from '../fx/Fx';
+import { GameEvents } from '../systems/GameEvents';
 import type { Zombie } from './Zombie';
 
 /** 夥伴每幀需要知道的戰場資訊（由 CompanionSystem 組好傳進來） */
@@ -175,7 +176,10 @@ export class Companion {
       const head = hit.z.isHeadshot(hit.y);
       if (head) result.headshots++;
       fx?.bulletHit(hit.x, hit.y, dirX, hit.z.footY, head);
-      if (hit.z.takeDamage(g.damage * (head ? 2.5 : 1), g.knockback, { headshot: head, dirX })) result.kills++;
+      const dmg = g.damage * (head ? 2.5 : 1);
+      const killed = hit.z.takeDamage(dmg, g.knockback, { headshot: head, dirX });
+      if (killed) result.kills++;
+      GameEvents.of(this.scene).emit('enemy:hit', { enemyId: hit.z.def.id, x: hit.x, y: hit.y, damage: dmg, headshot: head, killed });
     }
     const endX = hit ? hit.x : ray.x2;
     const endY = hit ? hit.y : ray.y2;
@@ -183,6 +187,7 @@ export class Companion {
       fx.bulletTracer(fromX, fromY, endX, endY);
       fx.muzzleSmoke(fromX, fromY, angle);
     }
+    GameEvents.of(this.scene).emit('ally:shoot', { role: this.def.role, x: fromX, y: fromY, angle });
     if (this.scene.anims.exists('player_shoot')) this.sprite.play('player_shoot');
     else {
       const flash = this.scene.add.circle(fromX, fromY, 3, 0xfff3a0).setDepth(DEPTH_FX + 2);
@@ -204,6 +209,15 @@ export class Companion {
     if (!this.alive || this.hurtCooldown > 0) return false;
     this.hp = Math.max(0, this.hp - amount);
     this.hurtCooldown = 0.35;
+    GameEvents.of(this.scene).emit('ally:hurt', {
+      name: this.member.name,
+      role: this.def.role,
+      amount,
+      hp: this.hp,
+      maxHp: this.def.maxHp,
+      x: this.footX,
+      y: this.footY,
+    });
     this.sprite.setTintFill(0xff5252);
     this.scene.time.delayedCall(70, () => this.sprite.active && this.alive && this.sprite.setTint(this.def.tint));
     if (this.alive) {
@@ -212,6 +226,7 @@ export class Companion {
     }
     // 陣亡：倒地、變暗，標記與血條消失
     this.status = '陣亡';
+    GameEvents.of(this.scene).emit('ally:death', { name: this.member.name, role: this.def.role, x: this.footX, y: this.footY });
     this.sprite.stop();
     this.sprite.setTint(0x555555);
     this.mark.destroy();
