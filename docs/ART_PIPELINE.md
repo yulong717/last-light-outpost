@@ -27,6 +27,13 @@
 所有特效貼圖都在 `src/fx/FxTextures.ts` 用程式畫，沒有額外美術檔。
 碎片和血跡都以「被打中那隻的腳底 y」當地面，所以改成上下移動的多路線後不用改。
 
+## 隊員底圖（18 個不同的人）
+
+- 來源：`art/source/crew_bases/<id>.png`，PixelLab「Image to image」以主角射擊第 0 格為參考（AI freedom 100～400、Init Image Strength 200、透明背景）。
+  這個工具會鎖住參考圖輪廓：臉、髮型、服裝會變，**胖瘦高矮不會變**，所以體型改由 `crewPaint.ts` 的加寬、啤酒肚、駝背與縮放來做。
+- `python3 tools/art/make_crew_bases.py [--preview]` 排成 `public/assets/sprites/crew_bases.png` 並自動標部位遮罩；順序要和 `src/data/crewBases.ts` 一致。
+- 免費額度有限：要加新底圖時，先把清單（id、描述、設定）寫好再一次生成，不要邊試邊改。
+
 ## 重新產生霧屍變體
 
 ```bash

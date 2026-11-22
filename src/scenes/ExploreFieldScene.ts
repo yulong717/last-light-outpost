@@ -4,6 +4,7 @@ import { attachAudio } from '../audio/AudioBridge';
 import { AudioManager } from '../audio/AudioManager';
 import { ensureCrewTexture } from '../art/CrewArt';
 import { COMPANION_ROLES, type CrewMember } from '../data/companions';
+import { crewStats } from '../data/crewLoadout';
 import { NOISE, type FieldSpec } from '../data/explore';
 import type { FirearmDef } from '../data/weapons';
 import { Player } from '../entities/Player';
@@ -749,7 +750,47 @@ export class ExploreFieldScene extends Phaser.Scene {
         continue;
       }
       f.cd -= dt;
-      const gun = COMPANION_ROLES[f.m.role].gun;
+      const st = crewStats(f.m);
+      // 近戰型：衝上去砍附近的霧屍
+      if (st.melee) {
+        const ms = st.melee;
+        let near: Zombie | null = null;
+        let nd = 70;
+        for (const z of this.zombies) {
+          if (z.dead) continue;
+          const d = Math.hypot(z.footX - f.x, (z.footY - f.y) * 2);
+          if (d < nd) {
+            nd = d;
+            near = z;
+          }
+        }
+        if (!near) continue;
+        const dir = near.footX < f.x ? -1 : 1;
+        f.img.setFlipX(dir < 0);
+        // 往目標靠近（覆蓋跟隨位置）
+        f.x += (near.footX - dir * ms.reach * 0.7 - f.x) * Math.min(1, dt * 5);
+        f.y += (near.footY - f.y) * Math.min(1, dt * 4);
+        if (nd <= ms.reach + 12 && f.cd <= 0) {
+          f.cd = ms.windup + ms.active + ms.recovery + 0.1;
+          const killed = near.takeHit({
+            amount: ms.damage,
+            type: ms.damageType,
+            penetration: ms.penetration,
+            knockback: ms.knockback,
+            stagger: ms.stagger,
+            headshot: false,
+            dirX: dir,
+            source: 'ally',
+            weaponId: ms.id,
+          });
+          this.fx.blood(near.footX - 4 * dir, near.footY - 30, dir, near.footY, 4, 0.9);
+          GameEvents.of(this).emit('ally:shoot', { role: f.m.role, x: f.x, y: f.y - 30, angle: dir > 0 ? 0 : Math.PI, weaponId: ms.id });
+          if (killed) this.kills++;
+          this.exp.addNoise(0.3);
+        }
+        continue;
+      }
+      const gun = st.gun;
       let target: Zombie | null = null;
       let bestD = gun.range;
       for (const z of this.zombies) {
@@ -763,7 +804,7 @@ export class ExploreFieldScene extends Phaser.Scene {
       if (target) f.img.setFlipX(target.footX < f.x);
       if (target && f.cd <= 0) {
         f.cd = 1 / gun.fireRate + 0.3;
-        const head = this.rng.chance(gun.headChance + (f.m.attrs.aim - 3) * 0.05);
+        const head = this.rng.chance(gun.headChance);
         const sx = f.x + (target.footX < f.x ? -12 : 12);
         const sy = f.y - 40;
         const ty2 = target.footY - (head ? 52 : 34) * (target.def.scale ?? 1);
@@ -778,6 +819,11 @@ export class ExploreFieldScene extends Phaser.Scene {
   }
 
   private hurtFollower(f: Follower, d: number): void {
+    // 閃避：瘦小、身手矯健的人比較難被打中
+    if (this.rng.chance(crewStats(f.m).dodge)) {
+      this.fx.popText(f.x, f.y - 60, '閃開！', '#b3e5fc');
+      return;
+    }
     const hp = Math.max(0, (this.exp.crewHp.get(f.m.id) ?? 0) - d);
     this.exp.crewHp.set(f.m.id, hp);
     f.img.setTintFill(0xffffff);
@@ -786,7 +832,7 @@ export class ExploreFieldScene extends Phaser.Scene {
       f.down = true;
       this.fx.popText(f.x, f.y - 60, `${f.m.name} 倒下了！`, '#ff8a80');
       this.tweens.add({ targets: f.img, angle: f.img.flipX ? 90 : -90, alpha: 0.6, duration: 300 });
-      GameEvents.of(this).emit('ally:hurt', { name: f.m.name, role: f.m.role, amount: d, hp: 0, maxHp: COMPANION_ROLES[f.m.role].maxHp, x: f.x, y: f.y });
+      GameEvents.of(this).emit('ally:hurt', { name: f.m.name, role: f.m.role, amount: d, hp: 0, maxHp: crewStats(f.m).maxHp, x: f.x, y: f.y });
     }
   }
 
