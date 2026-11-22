@@ -37,7 +37,10 @@ import { WeaponSystem } from '../systems/WeaponSystem';
 import { CompanionSystem, type CompanionHud, type CompanionOrder } from '../systems/CompanionSystem';
 import type { BuildUIData } from './BuildUIScene';
 import type { GameOverData } from './GameOverScene';
-import { EXPLORE_TIME } from '../data/explore';
+import { EXPLORE_TIME, getZone } from '../data/explore';
+import { crewReady } from '../data/companions';
+import { PROLOGUE } from '../data/story';
+import type { StoryData } from './StoryScene';
 import { throwGrenade, useMedkit } from '../explore/Supplies';
 
 /** 從結算畫面進來時帶的資料：newDay 代表撐過一夜、進入新的一天 */
@@ -159,7 +162,8 @@ export class DefenseScene extends Phaser.Scene {
       maxX: WORLD_WIDTH - 16,
       barricadeX: BARRICADE_X,
     });
-    const night = buildNight(GameState.data.day);
+    // 夜晚強度依可出戰的隊員人數縮放（單人開局比較溫和）
+    const night = buildNight(GameState.data.day, Math.random, GameState.data.crew.filter(crewReady).length);
     prewarmLooks(this, night.flatMap((w) => w.groups.map((g) => g.enemy)));
     this.spawner = new WaveSpawner(this, night, (id) => this.spawnZombie(id));
 
@@ -178,6 +182,7 @@ export class DefenseScene extends Phaser.Scene {
     this.build.enter();
     const data: BuildUIData = { mode: this.build, onStartNight: () => this.startNight(), onExplore: () => this.goExplore() };
     this.scene.launch('BuildUI', data);
+    this.showStoryIntro();
     if (newDay) {
       // 新的一天：探索時段補滿、換情報、負傷隊員休養一天
       GameState.startNewDay();
@@ -189,9 +194,37 @@ export class DefenseScene extends Phaser.Scene {
     }
   }
 
+  /** 主線：序章或新章節的開場，還沒看過就跳出來 */
+  private showStoryIntro(): void {
+    const intro = GameState.pendingIntro();
+    if (!intro) return;
+    const data: StoryData =
+      intro === 'prologue'
+        ? {
+            ...PROLOGUE,
+            onClose: () => {
+              GameState.markIntroSeen();
+              GameState.save();
+              // 序章看完，接著播第一章
+              this.time.delayedCall(150, () => this.showStoryIntro());
+            },
+          }
+        : {
+            title: intro.title,
+            lines: intro.intro,
+            objective: `${intro.objective}（${getZone(intro.zone)?.name ?? ''}・城市地圖上的★）`,
+            onClose: () => {
+              GameState.markIntroSeen();
+              GameState.save();
+            },
+          };
+    this.scene.launch('Story', data);
+    this.scene.bringToTop('Story');
+  }
+
   /** 白天出門探索：先把據點狀態存起來，回來時從 GameState 重建 */
   private goExplore(): void {
-    if (this.phase !== 'day' || this.ended) return;
+    if (this.phase !== 'day' || this.ended || this.scene.isActive('Story')) return;
     this.outpost.persist();
     GameState.save();
     this.cameras.main.fadeOut(250, 0, 0, 0);
@@ -215,7 +248,7 @@ export class DefenseScene extends Phaser.Scene {
 
   /** 入夜：收起布置介面，開始出怪 */
   private startNight(): void {
-    if (this.phase === 'night' || this.ended) return;
+    if (this.phase === 'night' || this.ended || this.scene.isActive('Story')) return;
     this.phase = 'night';
     this.build.exit();
     this.idleBonus();

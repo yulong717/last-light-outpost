@@ -55,6 +55,8 @@ export interface Loot {
   weapons?: string[];
   /** 救到的倖存者職業 */
   survivors?: CompanionRole[];
+  /** 劇情救到的具名倖存者 */
+  named?: { role: CompanionRole; name: string }[];
 }
 
 export type LootTier = 'small' | 'medium' | 'big';
@@ -288,6 +290,8 @@ export interface Outcome {
   survivor?: boolean;
   /** 付出廢料 */
   scrapCost?: number;
+  /** 主線劇情事件成功：發這章的固定獎勵，平安回家後完成這一章（見 src/data/story.ts） */
+  story?: boolean;
 }
 
 export type EventAction =

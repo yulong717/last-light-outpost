@@ -15,27 +15,34 @@ export interface WaveDef {
 }
 
 /**
- * 第一個夜晚的波次。之後會改由「天數 + 灰霧濃度」動態生成，
- * 目前先寫死，方便調整手感。
+ * 第一個夜晚的波次：開局只有主角一人（M1911＋軍用刀），
+ * 所以比照「教學夜」調得溫和，沒有重型霧屍。
  */
 export const NIGHT_ONE: WaveDef[] = [
-  { delayBefore: 2, groups: [{ enemy: 'basic', count: 8, interval: 1.4 }] },
+  { delayBefore: 2, groups: [{ enemy: 'basic', count: 6, interval: 1.8 }] },
   {
-    delayBefore: 5,
+    delayBefore: 6,
     groups: [
-      { enemy: 'basic', count: 10, interval: 1.0 },
-      { enemy: 'runner', count: 4, interval: 2.2 },
+      { enemy: 'basic', count: 8, interval: 1.3 },
+      { enemy: 'runner', count: 2, interval: 3, startDelay: 4 },
     ],
   },
   {
-    delayBefore: 5,
+    delayBefore: 6,
     groups: [
-      { enemy: 'basic', count: 12, interval: 0.8 },
-      { enemy: 'runner', count: 6, interval: 1.6 },
-      { enemy: 'brute', count: 2, interval: 8 },
+      { enemy: 'basic', count: 10, interval: 1.0 },
+      { enemy: 'runner', count: 3, interval: 2.4, startDelay: 3 },
     ],
   },
 ];
+
+/**
+ * 隊伍人數對夜晚強度的倍率：單人 0.6，三人以上 1。
+ * 開局一個人時不會被跟三人小隊一樣的屍潮淹沒，救到夥伴後才逐步拉回原本的難度。
+ */
+export function squadScale(readyCrew: number): number {
+  return Math.min(1, 0.6 + 0.14 * Math.max(0, readyCrew));
+}
 
 /**
  * 依天數產生一整夜的波次。第一夜沿用上面手調的 NIGHT_ONE；
@@ -43,10 +50,10 @@ export const NIGHT_ONE: WaveDef[] = [
  * 新解鎖的職業在解鎖當天和隔天權重加倍，讓玩家先認識牠。
  * 每一波的第一組永遠是平民霧屍，最後一波保證有一組菁英（威脅 ≥ 5）。
  */
-export function buildNight(day: number, rand: () => number = Math.random): WaveDef[] {
+export function buildNight(day: number, rand: () => number = Math.random, readyCrew = 3): WaveDef[] {
   if (day <= 1) return NIGHT_ONE;
   const waves = Math.min(6, 3 + Math.floor((day - 1) / 2));
-  const base = 10 + 5 * day;
+  const base = (10 + 5 * day) * squadScale(readyCrew);
   const out: WaveDef[] = [];
   const unlocked = Object.values(PROFESSIONS).filter((p) => p.unlockDay <= day);
   for (let w = 0; w < waves; w++) {
@@ -57,7 +64,7 @@ export function buildNight(day: number, rand: () => number = Math.random): WaveD
       budget -= PROFESSIONS[id].threat;
     };
     // 平民墊底：約三分之一預算
-    const civ = Math.max(4, Math.round((budget * 0.35) / PROFESSIONS.basic.threat));
+    const civ = Math.max(3, Math.round((budget * 0.35) / PROFESSIONS.basic.threat));
     for (let i = 0; i < civ; i++) add('basic');
     if (w === waves - 1) {
       const elites = unlocked.filter((p) => p.threat >= 5);

@@ -17,6 +17,7 @@ import {
   type ZoneDef,
 } from '../data/explore';
 import { AMMO, getWeapon, type AmmoType } from '../data/weapons';
+import type { Chapter } from '../data/story';
 import { GameState } from '../state/GameState';
 import { Rng, randomSeed } from '../utils/rng';
 
@@ -52,6 +53,10 @@ export class Expedition {
   readonly lootMul: number;
   readonly intel?: (typeof INTEL)[keyof typeof INTEL];
   kills = 0;
+  /** 這趟是主線劇情的地點：大獎換成劇情事件 */
+  readonly chapter?: Chapter;
+  /** 劇情事件已經成功（平安回家就完成這一章） */
+  storyCleared = false;
 
   constructor(
     readonly zone: ZoneDef,
@@ -64,6 +69,7 @@ export class Expedition {
     this.riskNow = zone.risk + (this.intel?.riskAdd ?? 0);
     this.lootMul = this.intel?.lootMul ?? 1;
     for (const m of squad) this.crewHp.set(m.id, COMPANION_ROLES[m.role].maxHp);
+    if (GameState.isStoryZone(zone.id)) this.chapter = GameState.chapter;
   }
 
   /** 出發：扣時段、記錄今天去過 */
@@ -92,6 +98,7 @@ export class Expedition {
   nextEvent(): ExploreEvent {
     if (this.noise >= NOISE.max) return HORDE_EVENT;
     const finale = this.isFinale;
+    if (finale && this.chapter) return this.chapter.finale;
     const pool = EVENTS.filter(
       (e) =>
         !!e.finale === finale &&
@@ -151,6 +158,11 @@ export class Expedition {
     if (o.loot) mergeLoot(res.gained, this.rollLoot(o.loot));
     if (o.bonus) mergeLoot(res.gained, o.bonus);
     if (o.survivor) mergeLoot(res.gained, { survivors: [this.rollSurvivor()] });
+    // 主線劇情成功：這章的固定獎勵（具名夥伴、關鍵武器）
+    if (o.story && this.chapter && !this.storyCleared) {
+      this.storyCleared = true;
+      mergeLoot(res.gained, this.chapter.reward);
+    }
     // 補給空投：大獎多一份
     if (this.isFinale && o.loot && this.intel?.bigBonus) mergeLoot(res.gained, this.rollLoot('medium'));
     if (this.isFinale && this.intel?.survivor && !res.gained.survivors?.length && o.loot) {
@@ -206,7 +218,8 @@ export class Expedition {
       const day = GameState.data.day;
       const pool = z.loot.weapons.filter((id) => {
         const def = getWeapon(id);
-        return def && !GameState.owns(id) && !this.bag.weapons?.includes(id) && def.unlockDay <= day + 2;
+        // 只掉軍械庫已經進貨的：主線的關鍵武器要靠劇情拿到
+        return def && !GameState.owns(id) && !this.bag.weapons?.includes(id) && GameState.inShop(id) && def.unlockDay <= day + 2;
       });
       if (pool.length) loot.weapons = [r.pick(pool)];
     }
@@ -226,12 +239,13 @@ export class Expedition {
   /**
    * 平安回到據點：背包入帳、倒下的隊員休養。回傳入帳結果。
    */
-  bank(): ReturnType<typeof GameState.addLoot> {
+  bank(): ReturnType<typeof GameState.addLoot> & { chapter?: Chapter } {
     const res = GameState.addLoot(this.bag);
+    const chapter = this.storyCleared ? GameState.completeChapter() : undefined;
     this.markInjuries();
     GameState.save();
     Expedition.current = null;
-    return res;
+    return { ...res, chapter };
   }
 
   /** 主角倒下：被隊員拖回去，背包全丟 */
@@ -265,6 +279,7 @@ export function mergeLoot(into: Loot, add: Loot): Loot {
   }
   if (add.weapons?.length) into.weapons = [...(into.weapons ?? []), ...add.weapons];
   if (add.survivors?.length) into.survivors = [...(into.survivors ?? []), ...add.survivors];
+  if (add.named?.length) into.named = [...(into.named ?? []), ...add.named];
   return into;
 }
 
@@ -275,6 +290,7 @@ export function describeLoot(l: Loot): string[] {
   for (const [k, n] of Object.entries(l.ammo ?? {})) if (n) out.push(`${AMMO[k as AmmoType].name} +${n}`);
   for (const [k, n] of Object.entries(l.supplies ?? {})) if (n) out.push(`${supplyName(k as SupplyId)} +${n}`);
   for (const id of l.weapons ?? []) out.push(`武器：${getWeapon(id)?.name ?? id}`);
+  for (const n of l.named ?? []) out.push(`${n.name}（${COMPANION_ROLES[n.role].title}）`);
   for (const r of l.survivors ?? []) out.push(`倖存者（${COMPANION_ROLES[r].title}）`);
   return out;
 }

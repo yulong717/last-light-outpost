@@ -33,7 +33,7 @@ export const AMMO: Record<AmmoType, AmmoDef> = {
   '357': { id: '357', name: '.357 麥格農', box: 12, price: 8, start: 0, max: 96 },
   '556': { id: '556', name: '5.56 步槍彈', box: 30, price: 12, start: 0, max: 400 },
   '762': { id: '762', name: '7.62 步槍彈', box: 20, price: 12, start: 0, max: 200 },
-  '12ga': { id: '12ga', name: '12 號霰彈', box: 10, price: 10, start: 24, max: 80 },
+  '12ga': { id: '12ga', name: '12 號霰彈', box: 10, price: 10, start: 0, max: 80 },
 };
 
 /**
@@ -805,7 +805,8 @@ export const STAMINA = {
 export const HEADSHOT_MULTIPLIER = 2.5;
 
 /** 開局的武器 */
-export const START_LOADOUT = { guns: ['m1911', 'r870'], melee: 'knife' };
+/** 開局只有主角身上這兩樣：其他武器靠主線與探索找到（見 src/data/story.ts） */
+export const START_LOADOUT = { guns: ['m1911'], melee: 'knife' };
 /** 最多帶幾把槍上場（1/2/3 鍵切換） */
 export const MAX_GUNS = 3;
 

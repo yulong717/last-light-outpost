@@ -12,6 +12,7 @@ import {
   type MeleeDef,
 } from '../data/weapons';
 import { registerUIRect } from '../input/InputManager';
+import { weaponUnlockHint } from '../data/story';
 import { GameState } from '../state/GameState';
 import { pixelText } from '../utils/text';
 
@@ -137,8 +138,8 @@ export class ArmoryScene extends Phaser.Scene {
       const y = PY + 32 + i * ROW_H;
       const owned = GameState.owns(d.id);
       const slot = st.armory.loadout.indexOf(d.id);
-      const locked = d.unlockDay > st.day;
-      const tag = slot >= 0 ? `上場 ${slot + 1}` : owned ? '擁有' : locked ? `第 ${d.unlockDay} 天` : `${d.price}`;
+      const locked = !GameState.inShop(d.id);
+      const tag = slot >= 0 ? `上場 ${slot + 1}` : owned ? '擁有' : locked ? '未進貨' : `${d.price}`;
       const color = slot >= 0 ? '#9ad17a' : owned ? '#c8c8c8' : locked ? '#6b7280' : st.scrap >= d.price ? '#f5d76e' : '#ff6b6b';
       this.listRow(y, d.id, d.name, tag, color, d.id === this.selected, () => {
         this.selected = d.id;
@@ -178,9 +179,9 @@ export class ArmoryScene extends Phaser.Scene {
 
     const owned = GameState.owns(d.id);
     if (!owned) {
-      const locked = d.unlockDay > st.day;
+      const locked = !GameState.inShop(d.id);
       const ok = !locked && st.scrap >= d.price;
-      this.button(x, y, w, 24, locked ? `第 ${d.unlockDay} 天才進貨` : `購買　${d.price} 廢料`, ok, () => {
+      this.button(x, y, w, 24, locked ? weaponUnlockHint(d.id) : `購買　${d.price} 廢料`, ok, () => {
         if (GameState.buyWeapon(d.id)) AudioManager.ui('confirm');
         this.changed();
       });
@@ -202,8 +203,8 @@ export class ArmoryScene extends Phaser.Scene {
     MELEE.forEach((m, i) => {
       const y = PY + 32 + i * ROW_H;
       const owned = GameState.owns(m.id);
-      const locked = m.unlockDay > st.day;
-      const tag = st.armory.melee === m.id ? '裝備中' : owned ? '擁有' : locked ? `第 ${m.unlockDay} 天` : `${m.price}`;
+      const locked = !GameState.inShop(m.id);
+      const tag = st.armory.melee === m.id ? '裝備中' : owned ? '擁有' : locked ? '未進貨' : `${m.price}`;
       const color = st.armory.melee === m.id ? '#9ad17a' : owned ? '#c8c8c8' : locked ? '#6b7280' : st.scrap >= m.price ? '#f5d76e' : '#ff6b6b';
       this.listRow(y, m.id, m.name, tag, color, m.id === this.selected, () => {
         this.selected = m.id;
@@ -241,9 +242,9 @@ export class ArmoryScene extends Phaser.Scene {
     this.text(x, y + 13, `穿甲 ${Math.round(m.penetration * 100)}%　觸及 ${m.reach}`, 8, '#b0bec5');
     y += 46;
     if (!GameState.owns(m.id)) {
-      const locked = m.unlockDay > st.day;
+      const locked = !GameState.inShop(m.id);
       const ok = !locked && st.scrap >= m.price;
-      this.button(x, y, w, 24, locked ? `第 ${m.unlockDay} 天才進貨` : `購買　${m.price} 廢料`, ok, () => {
+      this.button(x, y, w, 24, locked ? weaponUnlockHint(m.id) : `購買　${m.price} 廢料`, ok, () => {
         if (GameState.buyWeapon(m.id)) {
           GameState.equipMelee(m.id);
           AudioManager.ui('confirm');
