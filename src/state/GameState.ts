@@ -1,7 +1,9 @@
-import { defaultCrew, makeCrewMember, upgradeCrewMember, type CompanionRole, type CrewMember } from '../data/companions';
+import { makeCrewMember, upgradeCrewMember, type CompanionRole, type CrewMember } from '../data/companions';
 import { randomSeed } from '../utils/rng';
 import { BARRICADE_LEVELS, ECONOMY, type BuildingKind } from '../data/buildings';
 import { EXPLORE_TIME, SUPPLIES, ZONES, INTEL, type IntelKind, type Loot, type SupplyId } from '../data/explore';
+import { CHAPTERS, OPENINGS, START_SHOP, chaptersFor, startZones, type Chapter } from '../data/story';
+import { getHero, type HeroId } from '../data/heroes';
 import { AMMO, MAX_GUNS, START_LOADOUT, getFirearm, getMelee, getWeapon, type AmmoType } from '../data/weapons';
 
 /**
@@ -33,6 +35,35 @@ export interface GameStateData {
   exploredToday: string[];
   /** 今天的情報：哪一區發生了什麼 */
   intel?: { zone: string; kind: IntelKind };
+  /** 主線進程（見 src/data/story.ts） */
+  story: StoryProgress;
+  /** 選的主角（見 src/data/heroes.ts）；舊存檔沒有就當作馬克 */
+  hero: HeroId;
+}
+
+export interface StoryProgress {
+  /** 目前在第幾章（0 起算）；等於 CHAPTERS.length 代表主線完成 */
+  chapter: number;
+  /** 已開放的探索區域 */
+  zones: string[];
+  /** 軍械庫有進貨、可以用廢料買的武器 */
+  shop: string[];
+  /** 劇情開場播到哪：0 = 序章還沒看，1 = 看完序章，k + 2 = 第 k 章（0 起算）的開場看過了 */
+  introSeen: number;
+}
+
+function freshStory(hero: HeroId): StoryProgress {
+  return { chapter: 0, zones: startZones(hero), shop: [...START_SHOP], introSeen: 0 };
+}
+
+/** 舊存檔（主線之前）：當作主線已完成，全部開放，不打斷原本的進度 */
+function finishedStory(): StoryProgress {
+  return {
+    chapter: CHAPTERS.length + 1,
+    zones: ZONES.map((z) => z.id),
+    shop: [...START_SHOP, ...Object.values(OPENINGS).flatMap((c) => c.shop), ...CHAPTERS.flatMap((c) => c.shop)],
+    introSeen: CHAPTERS.length + 3,
+  };
 }
 
 export interface ArmoryData {
@@ -44,14 +75,23 @@ export interface ArmoryData {
   melee: string;
   /** 各口徑備彈（彈匣裡的不算） */
   ammo: Record<AmmoType, number>;
+  /** 起始手槍不是無限備彈（阿凱） */
+  finitePistol?: boolean;
 }
 
-function freshArmory(): ArmoryData {
+function freshArmory(hero?: HeroId): ArmoryData {
+  const ammo = Object.fromEntries(Object.values(AMMO).map((a) => [a.id, a.start])) as Record<AmmoType, number>;
+  if (!hero) {
+    return { owned: [...START_LOADOUT.guns, START_LOADOUT.melee], loadout: [...START_LOADOUT.guns], melee: START_LOADOUT.melee, ammo };
+  }
+  const h = getHero(hero);
+  for (const [t, n] of Object.entries(h.ammo) as [AmmoType, number][]) ammo[t] = n;
   return {
-    owned: [...START_LOADOUT.guns, START_LOADOUT.melee],
-    loadout: [...START_LOADOUT.guns],
-    melee: START_LOADOUT.melee,
-    ammo: Object.fromEntries(Object.values(AMMO).map((a) => [a.id, a.start])) as Record<AmmoType, number>,
+    owned: [...h.guns, h.melee],
+    loadout: [...h.guns],
+    melee: h.melee,
+    ammo,
+    ...(h.infinitePistol ? {} : { finitePistol: true }),
   };
 }
 
@@ -65,23 +105,29 @@ export interface SavedBuilding {
 const SAVE_KEY = 'llo-save';
 const SAVE_VERSION = 3;
 
-function fresh(): GameStateData {
+function fresh(hero: HeroId = 'soldier'): GameStateData {
+  const story = freshStory(hero);
+  const supplies = freshSupplies();
+  for (const [k, n] of Object.entries(getHero(hero).supplies) as [SupplyId, number][]) supplies[k] = n;
   return {
     version: SAVE_VERSION,
+    hero,
     day: 1,
     baseHp: 100,
     baseMaxHp: 100,
     barricadeMaxHp: BARRICADE_LEVELS[0].maxHp,
-    armory: freshArmory(),
+    armory: freshArmory(hero),
     scrap: ECONOMY.startScrap,
     barricadeHp: BARRICADE_LEVELS[0].maxHp,
     barricadeLevel: 1,
     buildings: [],
-    crew: defaultCrew(),
-    supplies: freshSupplies(),
+    // 開局只有主角一人：夥伴要靠主線與探索救回來
+    crew: [],
+    supplies,
     dayTime: EXPLORE_TIME.slotsPerDay,
     exploredToday: [],
-    intel: rollIntel(1),
+    intel: rollIntel(1, story.zones),
+    story,
   };
 }
 
@@ -90,8 +136,8 @@ function freshSupplies(): Record<SupplyId, number> {
 }
 
 /** 每天隨機挑一個已解鎖的區域發生特殊狀況 */
-function rollIntel(day: number): GameStateData['intel'] {
-  const zones = ZONES.filter((z) => z.unlockDay <= day);
+function rollIntel(day: number, open: string[]): GameStateData['intel'] {
+  const zones = ZONES.filter((z) => z.unlockDay <= day && open.includes(z.id));
   const kinds = Object.keys(INTEL) as IntelKind[];
   if (zones.length === 0) return undefined;
   return { zone: zones[Math.floor(Math.random() * zones.length)].id, kind: kinds[Math.floor(Math.random() * kinds.length)] };
@@ -100,13 +146,74 @@ function rollIntel(day: number): GameStateData['intel'] {
 class GameStateStore {
   data: GameStateData = fresh();
 
-  reset(): void {
-    this.data = fresh();
+  /** 新遊戲（選角畫面選完呼叫） */
+  reset(hero: HeroId = 'soldier'): void {
+    this.data = fresh(hero);
+  }
+
+  get hero() {
+    return getHero(this.data.hero);
+  }
+
+  /** 這位主角的完整主線 */
+  get chapters(): Chapter[] {
+    return chaptersFor(this.data.hero);
   }
 
   /**
    * 招募一位倖存者加入隊伍（白天探索救出時呼叫）。回傳新隊員。
    */
+  // ── 主線 ──────────────────────────────────────────
+
+  /** 目前進行中的章節（主線完成後為 undefined） */
+  get chapter(): Chapter | undefined {
+    return this.chapters[this.data.story.chapter];
+  }
+
+  /** 這章今天能不能觸發（天數到了沒） */
+  chapterReady(): boolean {
+    const c = this.chapter;
+    return !!c && this.data.day >= c.minDay;
+  }
+
+  /** 這一區現在是不是主線劇情的地點 */
+  isStoryZone(zoneId: string): boolean {
+    return this.chapterReady() && this.chapter!.zone === zoneId;
+  }
+
+  zoneOpen(zoneId: string): boolean {
+    return this.data.story.zones.includes(zoneId);
+  }
+
+  /** 軍械庫有沒有進這把武器（主角已擁有的也算） */
+  inShop(weaponId: string): boolean {
+    return this.data.story.shop.includes(weaponId) || this.owns(weaponId);
+  }
+
+  /** 完成目前這一章：開放區域、軍械庫進貨。回傳完成的章節 */
+  completeChapter(): Chapter | undefined {
+    const c = this.chapter;
+    if (!c) return undefined;
+    const st = this.data.story;
+    for (const z of c.openZones) if (!st.zones.includes(z)) st.zones.push(z);
+    for (const w of c.shop) if (!st.shop.includes(w)) st.shop.push(w);
+    st.chapter++;
+    return c;
+  }
+
+  /** 還沒播過的開場：序章 → 目前章節（天數到了才播） */
+  pendingIntro(): 'prologue' | Chapter | null {
+    const st = this.data.story;
+    if (st.introSeen === 0) return 'prologue';
+    if (st.introSeen <= st.chapter + 1 && this.chapterReady()) return this.chapter!;
+    return null;
+  }
+
+  markIntroSeen(): void {
+    const st = this.data.story;
+    st.introSeen = st.introSeen === 0 ? 1 : st.chapter + 2;
+  }
+
   recruit(role: CompanionRole, name?: string, seed = randomSeed()): CrewMember {
     const crew = this.data.crew;
     const id = `crew-${Date.now().toString(36)}-${Math.floor(Math.random() * 1e4)}`;
@@ -123,7 +230,7 @@ class GameStateStore {
     const d = this.data;
     d.dayTime = EXPLORE_TIME.slotsPerDay;
     d.exploredToday = [];
-    d.intel = rollIntel(d.day);
+    d.intel = rollIntel(d.day, d.story.zones);
     for (const c of d.crew) if (c.injuredDays) c.injuredDays = Math.max(0, c.injuredDays - 1);
   }
 
@@ -155,7 +262,10 @@ class GameStateStore {
       if (def.kind === 'firearm' && d.armory.loadout.length < MAX_GUNS) d.armory.loadout.push(id);
     }
     d.scrap += overflowScrap;
-    const recruits = (loot.survivors ?? []).map((r) => this.recruit(r));
+    const recruits = [
+      ...(loot.named ?? []).map((n) => this.recruit(n.role, n.name)),
+      ...(loot.survivors ?? []).map((r) => this.recruit(r)),
+    ];
     return { recruits, overflowScrap };
   }
 
@@ -175,7 +285,7 @@ class GameStateStore {
   buyWeapon(id: string): boolean {
     const def = getWeapon(id);
     const a = this.data.armory;
-    if (!def || this.owns(id) || this.data.scrap < def.price || def.unlockDay > this.data.day) return false;
+    if (!def || this.owns(id) || this.data.scrap < def.price || !this.inShop(id)) return false;
     this.data.scrap -= def.price;
     a.owned.push(id);
     if (def.kind === 'firearm' && a.loadout.length < MAX_GUNS) a.loadout.push(id);
@@ -228,15 +338,17 @@ class GameStateStore {
       // v2 → v3：舊存檔沒有軍械庫，補上起始配置
       if (parsed.version === 2) {
         delete parsed.ammoReserve;
-        parsed.armory = freshArmory();
+        parsed.armory = freshArmory('soldier');
         parsed.version = SAVE_VERSION;
       }
       if (parsed.version !== SAVE_VERSION) return false;
-      if (!parsed.armory) parsed.armory = freshArmory();
+      if (!parsed.armory) parsed.armory = freshArmory('soldier');
+      parsed.hero ??= 'soldier';
       // 之後新增的彈種：補 0
       for (const t of Object.keys(AMMO) as AmmoType[]) parsed.armory.ammo[t] ??= 0;
-      // 舊存檔沒有隊伍欄位：補上預設小隊
-      if (!Array.isArray(parsed.crew)) parsed.crew = defaultCrew();
+      if (!Array.isArray(parsed.crew)) parsed.crew = [];
+      // 主線之前的存檔：當作主線已完成
+      parsed.story ??= finishedStory();
       // 舊隊員沒有外觀與能力：用 id 固定種子補上
       parsed.crew = parsed.crew.map((c) => upgradeCrewMember(c));
       // 探索模式之前的存檔：補上用品、時段

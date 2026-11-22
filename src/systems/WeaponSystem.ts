@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import type { DamageInfo } from '../combat/Damage';
-import { fullReloadTime, getFirearm, type AmmoType, type FirearmDef } from '../data/weapons';
+import { fullReloadTime, getFirearm, stoppingCarry, stoppingKnockback, stoppingStagger, type AmmoType, type FirearmDef } from '../data/weapons';
 import type { Zombie } from '../entities/Zombie';
 import { DEPTH_FX, PLACEHOLDER_COLORS } from '../config';
 import { Fx } from '../fx/Fx';
@@ -68,6 +68,10 @@ export class WeaponSystem {
     private scene: Phaser.Scene,
     ids: string[],
     private pool: AmmoPool,
+    /** 起始手槍改成有限備彈（阿凱撿來的 M1911） */
+    private finitePistol = false,
+    /** 每顆子彈變成「幸運一擊」（必定爆頭）的機率：好運姐 */
+    private critChance = 0,
   ) {
     const defs = ids.map((id) => getFirearm(id)).filter((d): d is FirearmDef => !!d);
     if (defs.length === 0) defs.push(getFirearm('m1911')!);
@@ -103,12 +107,17 @@ export class WeaponSystem {
   }
 
   /** 這把槍的備彈（無限 = Infinity） */
+  /** 這把槍是不是無限備彈 */
+  infinite(def: FirearmDef): boolean {
+    return !!def.infiniteReserve && !this.finitePistol;
+  }
+
   reserve(def = this.active.def): number {
-    return def.infiniteReserve ? Infinity : this.pool[def.ammo] ?? 0;
+    return this.infinite(def) ? Infinity : this.pool[def.ammo] ?? 0;
   }
 
   private take(def: FirearmDef, n: number): number {
-    if (def.infiniteReserve) return n;
+    if (this.infinite(def)) return n;
     const got = Math.min(n, this.pool[def.ammo] ?? 0);
     this.pool[def.ammo] -= got;
     return got;
@@ -117,7 +126,7 @@ export class WeaponSystem {
   /** 結算時把彈匣裡的子彈退回備彈 */
   unloadAll(): void {
     for (const w of this.weapons) {
-      if (!w.def.infiniteReserve) this.pool[w.def.ammo] += w.ammo;
+      if (!this.infinite(w.def)) this.pool[w.def.ammo] += w.ammo;
       w.ammo = 0;
     }
   }
@@ -360,13 +369,16 @@ export class WeaponSystem {
     let stoppedAt = -1;
     for (let i = 0; i < chain.length; i++) {
       const h = chain[i];
-      const head = h.z.isHeadshot(h.y);
+      // 好運姐：幸運一擊必定算爆頭
+      const lucky = !h.z.isHeadshot(h.y) && this.critChance > 0 && Math.random() < this.critChance && h.z.spec.body !== 'crow';
+      const head = h.z.isHeadshot(h.y) || lucky;
+      if (lucky) Fx.of(this.scene)?.popText(h.x, h.y - 16, '幸運一擊！', '#ffd54f');
       const info: DamageInfo = {
         amount: def.damage * carry * this.falloff(def, h.dist) * (head ? def.headshotMul : 1),
         type: def.damageType,
         penetration: def.penetration,
-        knockback: def.knockback,
-        stagger: def.stagger,
+        knockback: stoppingKnockback(def),
+        stagger: stoppingStagger(def),
         headshot: head,
         dirX,
         source: 'player',
@@ -388,7 +400,8 @@ export class WeaponSystem {
       if (!fx) this.spawnHitSpark(h.x, h.y, head);
       endX = h.x;
       endY = h.y;
-      carry *= def.pierceFalloff;
+      // 制動性越高，能量越留在第一隻身上，打穿後剩下的越少
+      carry *= stoppingCarry(def);
       // 子彈被護甲擋住就不再往後穿
       if (stopped) {
         stoppedAt = i;

@@ -2,10 +2,12 @@ import Phaser from 'phaser';
 import { GAME_HEIGHT, GAME_WIDTH } from '../config';
 import { AudioManager } from '../audio/AudioManager';
 import { COMPANION_ROLES } from '../data/companions';
-import { MEDKIT_HEAL, NOISE, SUPPLIES, type EventOption, type ExploreEvent, type Outcome } from '../data/explore';
-import { Expedition, PLAYER_EXPLORE_HP, describeLoot, type Resolution } from '../explore/Expedition';
+import { getZone, MEDKIT_HEAL, NOISE, SUPPLIES, type EventOption, type ExploreEvent, type Outcome } from '../data/explore';
+import { Expedition, playerExploreHp, describeLoot, type Resolution } from '../explore/Expedition';
 import { uiBar, uiButton, uiPanel } from '../explore/ui';
 import { GameState } from '../state/GameState';
+import type { Chapter } from '../data/story';
+import { getWeapon } from '../data/weapons';
 import { pixelText } from '../utils/text';
 import type { DefenseSceneData } from './DefenseScene';
 import type { ExploreFieldData, FieldResult } from './ExploreFieldScene';
@@ -86,7 +88,7 @@ export class ExpeditionScene extends Phaser.Scene {
 
   private refreshHud(): void {
     const e = this.exp;
-    this.setHp(e.hp / PLAYER_EXPLORE_HP);
+    this.setHp(e.hp / playerExploreHp());
     this.hpText.setText(`${e.hp}`);
     this.setNoise(e.noise / NOISE.max);
     this.noiseText.setText(e.noise >= NOISE.max ? '屍潮！' : `${e.noise}`);
@@ -144,8 +146,11 @@ export class ExpeditionScene extends Phaser.Scene {
     const e = this.exp;
     this.refreshHud();
     const first = e.index === 0;
-    const title = e.isFinale ? '最後一站：大獎就在前面' : first ? `抵達${e.zone.name}` : `前往第 ${e.index + 1} 站`;
-    let text = first ? e.zone.blurb : '你們稍作休息，檢查一下裝備。要繼續深入，還是見好就收？';
+    const story = e.chapter && e.isFinale;
+    const title = story ? `最後一站：${e.chapter!.objective}` : e.isFinale ? '最後一站：大獎就在前面' : first ? `抵達${e.zone.name}` : `前往第 ${e.index + 1} 站`;
+    const who = e.squad.length ? '你們' : '你';
+    let text = first ? e.zone.blurb : `${who}稍作休息，檢查一下裝備。要繼續深入，還是見好就收？`;
+    if (e.chapter && first) text += `\n\n主線　${e.chapter.title}：${e.chapter.objective}（在最後一站）`;
     if (e.intel && first) text += `\n\n情報：${e.intel.name}。${e.intel.desc}`;
     if (e.noise >= NOISE.max) text += '\n\n四周的吼聲越來越近……噪音太大，屍潮正在逼近！';
     this.cardFrame(title, text);
@@ -155,7 +160,7 @@ export class ExpeditionScene extends Phaser.Scene {
     const meds = GameState.data.supplies.medkit;
     this.card.add(
       uiButton(this, CARD_X + 22 + bw, by, bw, 28, `用醫療包（${meds}）`, () => this.useMedkit(), {
-        enabled: meds > 0 && e.hp < PLAYER_EXPLORE_HP,
+        enabled: meds > 0 && e.hp < playerExploreHp(),
         sub: `+${MEDKIT_HEAL} 生命`,
       }),
     );
@@ -164,7 +169,7 @@ export class ExpeditionScene extends Phaser.Scene {
 
   private useMedkit(): void {
     if (!GameState.useSupply('medkit')) return;
-    this.exp.hp = Math.min(PLAYER_EXPLORE_HP, this.exp.hp + MEDKIT_HEAL);
+    this.exp.hp = Math.min(playerExploreHp(), this.exp.hp + MEDKIT_HEAL);
     AudioManager.ui('confirm');
     this.showApproach();
   }
@@ -293,7 +298,12 @@ export class ExpeditionScene extends Phaser.Scene {
 
   private showDown(res?: Resolution): void {
     AudioManager.play('stinger_lose');
-    this.cardFrame('你倒下了', '眼前一黑。等你醒來，已經被隊員拖回了據點……背包裡的東西全都丟在了路上。', '#ff6b6b');
+    const solo = this.exp.squad.length === 0;
+    this.cardFrame(
+      '你倒下了',
+      solo ? '眼前一黑。等你醒來，已經拖著身子爬回了據點……背包裡的東西全都丟在了路上。' : '眼前一黑。等你醒來，已經被隊員拖回了據點……背包裡的東西全都丟在了路上。',
+      '#ff6b6b',
+    );
     if (res) this.resultLines(res).slice(0, 5).forEach((l, i) => this.card.add(pixelText(this, CARD_X + 24, CARD_Y + 80 + i * 14, l, 8, '#ff8a80')));
     this.exp.fail();
     this.bagText.setText('背包：全部丟失').setColor('#ff8a80');
@@ -318,6 +328,22 @@ export class ExpeditionScene extends Phaser.Scene {
     const injured = e.squad.filter((m) => (e.crewHp.get(m.id) ?? 0) <= 0);
     for (const m of injured) lines.push(`${m.name} 負傷，休養 1 天`);
     lines.slice(0, 9).forEach((l, i) => this.card.add(pixelText(this, CARD_X + 24, CARD_Y + 52 + i * 13, l, 8, l.includes('負傷') ? '#ef9a9a' : '#9ad17a')));
+    const ch = res.chapter;
+    const next = ch ? () => this.showChapterDone(ch) : () => this.leave();
+    this.card.add(uiButton(this, CARD_X + 14, CARD_Y + CARD_H - 40, CARD_W - 28, 28, ch ? '繼續 ▶' : '回據點', next, { fill: 0x3a4a2a, size: 9 }));
+  }
+
+  /** 主線一章完成：收尾劇情＋開放了什麼 */
+  private showChapterDone(ch: Chapter): void {
+    AudioManager.play('stinger_win');
+    this.cardFrame(`完成　${ch.title}`, ch.outro.join('\n'), '#f5d76e');
+    const unlocked: string[] = [];
+    for (const id of ch.openZones) unlocked.push(`新區域：${getZone(id)?.name ?? id}`);
+    const guns = ch.shop.map((id) => getWeapon(id)?.name ?? id);
+    if (guns.length) unlocked.push(`軍械庫進貨：${guns.join('、')}`);
+    const nextCh = GameState.chapter;
+    if (nextCh) unlocked.push(`下一章：${nextCh.title}（第 ${nextCh.minDay} 天起）`);
+    unlocked.forEach((l, i) => this.card.add(pixelText(this, CARD_X + 24, CARD_Y + CARD_H - 50 - (unlocked.length - i) * 13, l, 8, '#9ad17a')));
     this.card.add(uiButton(this, CARD_X + 14, CARD_Y + CARD_H - 40, CARD_W - 28, 28, '回據點', () => this.leave(), { fill: 0x3a4a2a, size: 9 }));
   }
 

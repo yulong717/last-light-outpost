@@ -1,7 +1,6 @@
 import Phaser from 'phaser';
 import { GAME_HEIGHT, GAME_WIDTH } from '../config';
 import { AudioManager, type AudioSettings } from '../audio/AudioManager';
-import { GameState } from '../state/GameState';
 import { pixelText } from '../utils/text';
 
 export class MenuScene extends Phaser.Scene {
@@ -31,8 +30,8 @@ export class MenuScene extends Phaser.Scene {
       if (started) return;
       started = true;
       AudioManager.ui('confirm');
-      GameState.reset();
-      this.scene.start('Defense');
+      // 先選主角，選完才開新局
+      this.scene.start('HeroSelect');
     };
     // 點到音量按鈕時不要開始遊戲
     this.input.on('pointerdown', (_p: Phaser.Input.Pointer, over: Phaser.GameObjects.GameObject[]) => {
