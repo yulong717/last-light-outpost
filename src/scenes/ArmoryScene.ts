@@ -12,6 +12,7 @@ import {
   type MeleeDef,
 } from '../data/weapons';
 import { registerUIRect } from '../input/InputManager';
+import { weaponUnlockHint } from '../data/story';
 import { GameState } from '../state/GameState';
 import { pixelText } from '../utils/text';
 
@@ -137,8 +138,8 @@ export class ArmoryScene extends Phaser.Scene {
       const y = PY + 32 + i * ROW_H;
       const owned = GameState.owns(d.id);
       const slot = st.armory.loadout.indexOf(d.id);
-      const locked = d.unlockDay > st.day;
-      const tag = slot >= 0 ? `上場 ${slot + 1}` : owned ? '擁有' : locked ? `第 ${d.unlockDay} 天` : `${d.price}`;
+      const locked = !GameState.inShop(d.id);
+      const tag = slot >= 0 ? `上場 ${slot + 1}` : owned ? '擁有' : locked ? '未進貨' : `${d.price}`;
       const color = slot >= 0 ? '#9ad17a' : owned ? '#c8c8c8' : locked ? '#6b7280' : st.scrap >= d.price ? '#f5d76e' : '#ff6b6b';
       this.listRow(y, d.id, d.name, tag, color, d.id === this.selected, () => {
         this.selected = d.id;
@@ -164,11 +165,13 @@ export class ArmoryScene extends Phaser.Scene {
     this.bar(x, y, w, '單發傷害', (d.damage * d.pellets) / MAX.dmg, per);
     this.bar(x, y + 14, w, '持續火力', dps(d) / MAX.dps, `${Math.round(dps(d))}/秒`);
     this.bar(x, y + 28, w, '穿甲', d.penetration, `穿 ${d.pierce} 隻`);
-    this.bar(x, y + 42, w, '有效射程', Math.min(d.range, d.falloffEnd) / MAX.range, '');
-    this.bar(x, y + 56, w, '操控', control(d), '');
-    this.bar(x, y + 70, w, '機動', (d.moveMul - 0.7) / 0.3, `換槍 ${d.swapTime}s`);
-    y += 90;
-    const reserve = d.infiniteReserve ? '無限' : `${st.armory.ammo[d.ammo]}`;
+    // 制動性：和穿透相反，越高擊退越遠、越能把抓住你的霧屍打開
+    this.bar(x, y + 42, w, '制動', d.stopping, d.stopping >= 0.5 ? '可打開糾纏' : d.stopping >= 0.35 ? '中' : '低');
+    this.bar(x, y + 56, w, '有效射程', Math.min(d.range, d.falloffEnd) / MAX.range, '');
+    this.bar(x, y + 70, w, '操控', control(d), '');
+    this.bar(x, y + 84, w, '機動', (d.moveMul - 0.7) / 0.3, `換槍 ${d.swapTime}s`);
+    y += 102;
+    const reserve = d.infiniteReserve && !st.armory.finitePistol ? '無限' : `${st.armory.ammo[d.ammo]}`;
     const rpm = d.action === 'auto' ? `${Math.round(d.fireRate * 60)} 發/分` : `${d.fireRate} 發/秒`;
     this.text(x, y, `${ACTION_NAME[d.action]}　${rpm}　彈匣 ${d.magazine}${d.chamber && d.reload === 'magazine' ? '+1' : ''}`, 8, '#e8e8e8');
     const rl = d.reload === 'single' ? `每發 ${d.perRound}s${d.clip ? `／橋夾 ${d.clip} 發` : ''}` : `${fullReloadTime(d, 1)}s${d.reloadEmptyTime !== d.reloadTime ? `（打空 ${d.reloadEmptyTime}s）` : ''}`;
@@ -178,9 +181,9 @@ export class ArmoryScene extends Phaser.Scene {
 
     const owned = GameState.owns(d.id);
     if (!owned) {
-      const locked = d.unlockDay > st.day;
+      const locked = !GameState.inShop(d.id);
       const ok = !locked && st.scrap >= d.price;
-      this.button(x, y, w, 24, locked ? `第 ${d.unlockDay} 天才進貨` : `購買　${d.price} 廢料`, ok, () => {
+      this.button(x, y, w, 24, locked ? weaponUnlockHint(d.id) : `購買　${d.price} 廢料`, ok, () => {
         if (GameState.buyWeapon(d.id)) AudioManager.ui('confirm');
         this.changed();
       });
@@ -202,8 +205,8 @@ export class ArmoryScene extends Phaser.Scene {
     MELEE.forEach((m, i) => {
       const y = PY + 32 + i * ROW_H;
       const owned = GameState.owns(m.id);
-      const locked = m.unlockDay > st.day;
-      const tag = st.armory.melee === m.id ? '裝備中' : owned ? '擁有' : locked ? `第 ${m.unlockDay} 天` : `${m.price}`;
+      const locked = !GameState.inShop(m.id);
+      const tag = st.armory.melee === m.id ? '裝備中' : owned ? '擁有' : locked ? '未進貨' : `${m.price}`;
       const color = st.armory.melee === m.id ? '#9ad17a' : owned ? '#c8c8c8' : locked ? '#6b7280' : st.scrap >= m.price ? '#f5d76e' : '#ff6b6b';
       this.listRow(y, m.id, m.name, tag, color, m.id === this.selected, () => {
         this.selected = m.id;
@@ -241,9 +244,9 @@ export class ArmoryScene extends Phaser.Scene {
     this.text(x, y + 13, `穿甲 ${Math.round(m.penetration * 100)}%　觸及 ${m.reach}`, 8, '#b0bec5');
     y += 46;
     if (!GameState.owns(m.id)) {
-      const locked = m.unlockDay > st.day;
+      const locked = !GameState.inShop(m.id);
       const ok = !locked && st.scrap >= m.price;
-      this.button(x, y, w, 24, locked ? `第 ${m.unlockDay} 天才進貨` : `購買　${m.price} 廢料`, ok, () => {
+      this.button(x, y, w, 24, locked ? weaponUnlockHint(m.id) : `購買　${m.price} 廢料`, ok, () => {
         if (GameState.buyWeapon(m.id)) {
           GameState.equipMelee(m.id);
           AudioManager.ui('confirm');
@@ -265,12 +268,12 @@ export class ArmoryScene extends Phaser.Scene {
     const st = GameState.data;
     const x = PX + 12;
     const w = PW - 24;
-    this.text(x, PY + 32, 'M1911 備彈無限。其他槍的子彈要在這裡買，彈匣裡剩的天亮會退回備彈。', 8, '#90a4ae');
+    this.text(x, PY + 32, st.armory.finitePistol ? '你的 M1911 是撿來的，子彈要自己買。彈匣裡剩的天亮會退回備彈。' : 'M1911 備彈無限。其他槍的子彈要在這裡買，彈匣裡剩的天亮會退回備彈。', 8, '#90a4ae');
     (Object.keys(AMMO) as AmmoType[]).forEach((t, i) => {
       const a = AMMO[t];
       const y = PY + 52 + i * 34;
       const have = st.armory.ammo[t];
-      const users = FIREARMS.filter((d) => d.ammo === t && !d.infiniteReserve).map((d) => d.name);
+      const users = FIREARMS.filter((d) => d.ammo === t && (!d.infiniteReserve || st.armory.finitePistol)).map((d) => d.name);
       this.root.add(this.add.rectangle(x, y, w, 30, 0x1a1d24, 0.9).setOrigin(0));
       this.text(x + 8, y + 3, a.name, 9, '#ffffff');
       this.text(x + 8, y + 17, users.join('、'), 7, '#90a4ae');

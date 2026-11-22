@@ -1,7 +1,6 @@
 import Phaser from 'phaser';
 import { GAME_HEIGHT, GAME_WIDTH } from '../config';
 import { AudioManager, type AudioSettings } from '../audio/AudioManager';
-import { GameState } from '../state/GameState';
 import { pixelText } from '../utils/text';
 import { OUTPOST_MAPS } from '../data/scenery';
 import { uiButton, uiPanel } from '../explore/ui';
@@ -35,6 +34,7 @@ export class MenuScene extends Phaser.Scene {
       started = true;
       AudioManager.ui('confirm');
       start.destroy();
+      // 先選據點，再選主角，選完才開新局
       this.pickOutpost();
     };
     // 點到音量按鈕時不要開始遊戲
@@ -70,9 +70,8 @@ export class MenuScene extends Phaser.Scene {
       m.perks.forEach((p, k) => pixelText(this, x + 10, y + 100 + k * 16, `・${p}`, 8, '#9ad17a').setWordWrapWidth(w - 20, true));
       uiButton(this, x + 10, y + 190, w - 20, 28, '在這裡落腳 ▶', () => {
         AudioManager.ui('confirm');
-        GameState.reset();
-        GameState.data.outpostMap = m.id;
-        this.scene.start('Defense');
+        this.registry.set('outpostMap', m.id);
+        this.scene.start('HeroSelect');
       }, { fill: 0x7a2a22, size: 9 });
     });
   }

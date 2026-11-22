@@ -104,19 +104,25 @@ export class ExploreMapScene extends Phaser.Scene {
     const st = GameState.data;
     for (const z of ZONES) {
       const p = this.toMap(z);
-      const locked = z.unlockDay > st.day;
+      const locked = !GameState.zoneOpen(z.id);
       const done = st.exploredToday.includes(z.id);
       const c = this.add.container(p.x, p.y);
       const r = z.time === 2 ? 11 : 9;
       const dot = this.add.circle(0, 0, r, locked ? 0x3a3d44 : z.color, done ? 0.35 : 0.95).setStrokeStyle(2, 0x000000, 0.8);
       const ring = this.add.circle(0, 0, r + 4).setStrokeStyle(2, 0xffffff, 0.9).setVisible(false);
       const name = pixelText(this, 0, r + 4, z.name, 8, locked ? '#6b7280' : done ? '#8a8f99' : '#ffffff').setOrigin(0.5, 0);
-      const sub = pixelText(this, 0, r + 17, locked ? `第 ${z.unlockDay} 天解鎖` : done ? '今天已去過' : stars(z.risk), 7, locked ? '#6b7280' : '#ff8a6a').setOrigin(0.5, 0);
+      const sub = pixelText(this, 0, r + 17, locked ? '主線推進後開放' : done ? '今天已去過' : stars(z.risk), 7, locked ? '#6b7280' : '#ff8a6a').setOrigin(0.5, 0);
       c.add([ring, dot, name, sub]);
       if (st.intel?.zone === z.id && !locked) {
         const bang = pixelText(this, r + 2, -r - 10, '!', 12, '#ffd24a');
         c.add(bang);
         this.tweens.add({ targets: bang, y: bang.y - 3, duration: 500, yoyo: true, repeat: -1 });
+      }
+      // 主線劇情的地點：金色旗子
+      if (GameState.isStoryZone(z.id) && !done) {
+        const flag = pixelText(this, -r - 4, -r - 14, '★主線', 8, '#f5d76e').setOrigin(1, 0);
+        c.add(flag);
+        this.tweens.add({ targets: flag, alpha: 0.4, duration: 600, yoyo: true, repeat: -1 });
       }
       c.setData('ring', ring);
       dot.setInteractive({ useHandCursor: true }).on('pointerdown', () => {
@@ -149,6 +155,13 @@ export class ExploreMapScene extends Phaser.Scene {
         '主角倒下的話，這趟搜到的全部丟失。',
       ];
       lines.forEach((l, i) => add(pixelText(this, PANEL_X + 10, y0 + 32 + i * 15, l, 8, '#c8c8c8')));
+      const ch = GameState.chapter;
+      if (ch) {
+        const zn = ZONES.find((q) => q.id === ch.zone)?.name ?? '';
+        add(pixelText(this, PANEL_X + 10, y0 + 216, `主線　${ch.title}`, 8, '#f5d76e'));
+        const when = GameState.chapterReady() ? `到「${zn}」走完全程：${ch.objective}` : `第 ${ch.minDay} 天開始。先四處搜刮、壯大隊伍。`;
+        add(pixelText(this, PANEL_X + 10, y0 + 230, when, 7, '#e0d4a0').setWordWrapWidth(PANEL_W - 20, true));
+      }
       if (st.intel) {
         const iz = ZONES.find((q) => q.id === st.intel!.zone);
         const info = INTEL[st.intel.kind];
@@ -158,7 +171,7 @@ export class ExploreMapScene extends Phaser.Scene {
       return;
     }
 
-    const locked = z.unlockDay > st.day;
+    const locked = !GameState.zoneOpen(z.id);
     const done = st.exploredToday.includes(z.id);
     add(pixelText(this, PANEL_X + 10, y0 + 8, z.name, 10, '#f5d76e'));
     add(pixelText(this, PANEL_X + PANEL_W - 10, y0 + 10, z.time === 2 ? '遠・2 時段' : '近・1 時段', 8, '#c8c8c8').setOrigin(1, 0));
@@ -167,6 +180,12 @@ export class ExploreMapScene extends Phaser.Scene {
     add(pixelText(this, PANEL_X + 110, y0 + 62, `${z.nodes} 個地點`, 8, '#c8c8c8'));
     add(pixelText(this, PANEL_X + 10, y0 + 76, `可能找到：${z.tags.join('、')}`, 8, '#9ad17a'));
     let y = y0 + 92;
+    if (GameState.isStoryZone(z.id)) {
+      const ch = GameState.chapter!;
+      add(pixelText(this, PANEL_X + 10, y, `★主線　${ch.title}`, 8, '#f5d76e'));
+      add(pixelText(this, PANEL_X + 10, y + 13, `最後一站：${ch.objective}`, 7, '#e0d4a0').setWordWrapWidth(PANEL_W - 20, true));
+      y += 30;
+    }
     if (st.intel?.zone === z.id) {
       const info = INTEL[st.intel.kind];
       add(pixelText(this, PANEL_X + 10, y, `情報：${info.name}`, 8, '#ffd24a'));
@@ -182,7 +201,7 @@ export class ExploreMapScene extends Phaser.Scene {
     crew.slice(0, 6).forEach((m, i) => this.crewRow(m, PANEL_X + 8, y + i * 22));
     y += Math.min(6, crew.length) * 22 + 4;
 
-    const reason = locked ? `第 ${z.unlockDay} 天解鎖` : done ? '今天已經去過' : st.dayTime < z.time ? '時段不夠' : '';
+    const reason = locked ? '主線推進後開放' : done ? '今天已經去過' : st.dayTime < z.time ? '時段不夠' : '';
     add(
       uiButton(this, PANEL_X + 8, y0 + MAP_H - 34, PANEL_W - 16, 26, reason || `出發 ▶`, () => this.depart(z), {
         enabled: !reason,

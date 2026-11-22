@@ -21,6 +21,8 @@ import { Fx } from '../fx/Fx';
 import { InputManager, queueAction, registerUIRect } from '../input/InputManager';
 import { GameState } from '../state/GameState';
 import { GameEvents } from '../systems/GameEvents';
+import { HeroSystem, heroTouch } from '../systems/HeroSystem';
+import { LUCK } from '../data/heroes';
 import { MeleeSystem } from '../systems/MeleeSystem';
 import { WeaponSystem } from '../systems/WeaponSystem';
 import { prewarmLooks, spawnEnemy } from '../systems/ZombieFactory';
@@ -100,6 +102,7 @@ export class ExploreFieldScene extends Phaser.Scene {
   private player!: Player;
   private weapons!: WeaponSystem;
   private melee!: MeleeSystem;
+  private heroSys!: HeroSystem;
   /** 主角手上的武器（和夜晚一樣會換彈、拉栓、揮砍） */
   private rig!: WeaponRig;
   private input2!: InputManager;
@@ -160,7 +163,7 @@ export class ExploreFieldScene extends Phaser.Scene {
     this.camFeel = CameraFeel.attach(this);
     createAtmosphere(this, { groundY: LANE_TOP + 14 });
 
-    this.player = new Player(this, 60, (LANE_TOP + LANE_BOTTOM) / 2, 100);
+    this.player = new Player(this, 60, (LANE_TOP + LANE_BOTTOM) / 2, GameState.hero.maxHp);
     this.player.hp = Math.max(1, exp.hp);
     this.fx.attachShadow(this.player.sprite, 22);
     this.rig = new WeaponRig(this);
@@ -171,8 +174,10 @@ export class ExploreFieldScene extends Phaser.Scene {
     cam.fadeIn(250, 0, 0, 0);
 
     const armory = GameState.data.armory;
-    this.weapons = new WeaponSystem(this, armory.loadout, armory.ammo);
+    this.weapons = new WeaponSystem(this, armory.loadout, armory.ammo, !!armory.finitePistol, GameState.data.hero === 'lucky' ? LUCK.critChance : 0);
     this.melee = new MeleeSystem(this, armory.melee);
+    this.heroSys = new HeroSystem(this, this.player, this.melee, () => this.zombies);
+    this.heroSys.onKill = () => this.kills++;
     this.input2 = new InputManager(this);
     this.crosshair = new Crosshair(this);
     this.screenFx = new ScreenFeedback(this);
@@ -535,7 +540,9 @@ export class ExploreFieldScene extends Phaser.Scene {
       this.touchButton(GAME_WIDTH - 38, GAME_HEIGHT - 76, '近戰', () => queueAction('melee'));
       this.touchButton(GAME_WIDTH - 76, GAME_HEIGHT - 76, '手雷', () => this.grenade());
       this.touchButton(GAME_WIDTH - 114, GAME_HEIGHT - 38, '醫療', () => this.medkit());
-      this.touchButton(GAME_WIDTH - 114, GAME_HEIGHT - 76, '互動', () => this.interact());
+      this.touchButton(GAME_WIDTH - 38, GAME_HEIGHT - 114, '互動', () => this.interact());
+      if (GameState.data.hero === 'student') this.touchButton(GAME_WIDTH - 114, GAME_HEIGHT - 76, '奔跑', () => (heroTouch.sprint = !heroTouch.sprint));
+      if (GameState.data.hero === 'soldier') this.touchButton(GAME_WIDTH - 114, GAME_HEIGHT - 76, '擊倒', () => (heroTouch.skill = true));
     }
   }
 
@@ -569,6 +576,10 @@ export class ExploreFieldScene extends Phaser.Scene {
     const parts = [`手雷 ${s.grenade}`, `醫療 ${s.medkit}`];
     if (this.spec.seconds && this.spec.mode === 'fight') parts.unshift(`剩 ${Math.max(0, Math.ceil(this.spec.seconds - this.elapsed))} 秒`);
     else if (this.alerted) parts.unshift(`剩 ${this.zombies.length + this.toSpawn} 隻`);
+    const hh = this.heroSys?.hud();
+    if (hh?.grabbed) parts.unshift(hh.grabbed > 1 ? `被 ${hh.grabbed} 隻纏住！` : '被抓住！');
+    else if (hh?.sprinting) parts.unshift('奔跑中');
+    if (hh?.skill) parts.push(`${hh.skill} ${hh.skillReady ? '就緒' : '…'}`);
     this.infoText.setText(parts.join('　'));
   }
 
@@ -617,7 +628,9 @@ export class ExploreFieldScene extends Phaser.Scene {
     }
     const meleeRes = this.melee.update(dt, p, this.zombies);
     this.kills += meleeRes.kills;
-    if (this.alerted) p.speedMul = this.weapons.active.def.moveMul;
+    // 潛行時腳步放輕；奔跑變快、被抓住變超慢
+    const heroMul = this.heroSys.update(dt, inp.moveX !== 0 || inp.moveY !== 0);
+    p.speedMul = (this.alerted ? this.weapons.active.def.moveMul : 0.75) * heroMul;
     p.update(dt, inp.moveX, inp.moveY, inp.aimX, { minX: 20, maxX: WORLD_W - 16 });
 
     // 手上的武器先擺好姿勢，子彈從真正的槍口射出
@@ -713,7 +726,7 @@ export class ExploreFieldScene extends Phaser.Scene {
       blockX: -100000,
       hitBlock: () => {},
       player: { x: this.player.footX, y: this.player.footY, alive: this.player.alive },
-      hitPlayer: (d, fx, fy) => this.player.takeDamage(d, fx, fy),
+      hitPlayer: (d, fx, fy, src) => this.heroSys.hitPlayer(d, fx, fy, src),
       others,
       zombies: this.zombies,
       aggroRange: 4000,

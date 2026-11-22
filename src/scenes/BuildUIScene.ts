@@ -10,7 +10,7 @@ import { ensureCrewTexture } from '../art/CrewArt';
 import { COMPANION_ROLES, MAX_DEPLOYED } from '../data/companions';
 import { ATTRS, TRAIT_BY_ID } from '../data/crewTraits';
 import { pixelText } from '../utils/text';
-import { EXPLORE_TIME } from '../data/explore';
+import { EXPLORE_TIME, getZone } from '../data/explore';
 import { crewReady } from '../data/companions';
 import type { ArmoryData } from './ArmoryScene';
 
@@ -37,6 +37,7 @@ export class BuildUIScene extends Phaser.Scene {
   private scrapText!: Phaser.GameObjects.Text;
   private panel!: Phaser.GameObjects.Container;
   private hint!: Phaser.GameObjects.Text;
+  private objective?: Phaser.GameObjects.Text;
   private panelRects: (() => void)[] = [];
   private fixedRects: (() => void)[] = [];
   /** 隊伍名冊面板是否打開 */
@@ -80,6 +81,13 @@ export class BuildUIScene extends Phaser.Scene {
       '#c8c8c8',
     ).setOrigin(0.5, 0);
     this.tweens.add({ targets: this.hint, alpha: 0.4, duration: 900, yoyo: true, repeat: -1 });
+    // 主線目標
+    const ch = GameState.chapter;
+    if (ch) {
+      const zn = getZone(ch.zone)?.name ?? '';
+      const goal = GameState.chapterReady() ? `★ ${ch.title}：${ch.objective}（${zn}）` : `★ ${ch.title}　第 ${ch.minDay} 天開始`;
+      this.objective = pixelText(this, GAME_WIDTH / 2, 48, goal, 8, '#f5d76e').setOrigin(0.5, 0);
+    }
 
     this.panel = this.add.container(0, 0);
     this.mode.events.on('changed', this.refresh, this);
@@ -109,6 +117,7 @@ export class BuildUIScene extends Phaser.Scene {
     const sel = this.mode.selection;
     if (sel) this.rosterOpen = false;
     this.hint.setVisible(!sel && !this.rosterOpen);
+    this.objective?.setVisible(!sel && !this.rosterOpen);
     if (!sel) {
       if (this.rosterOpen) this.showRoster();
       return;
@@ -194,6 +203,7 @@ export class BuildUIScene extends Phaser.Scene {
     this.panel.add(bg);
     this.panelRects.push(registerUIRect({ x: x0, y: PANEL_Y, w, h }));
     this.text(x0 + 10, PANEL_Y + 7, `隊伍名冊　前 ${MAX_DEPLOYED} 位出戰`, 9, '#f5d76e');
+    if (crew.length === 0) this.text(x0 + 10, PANEL_Y + 30, '現在只有你一個人。出門探索、推進主線，就能找到願意跟你走的倖存者。', 8, '#b0bec5');
     if (crew.length === 0) {
       this.text(x0 + 10, PANEL_Y + 26, '沒有隊員。白天探索可以救回倖存者。', 8, '#c8c8c8');
       return;

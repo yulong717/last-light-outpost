@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { GAME_HEIGHT, GAME_WIDTH } from '../config';
+import { heroTouch } from '../systems/HeroSystem';
 import { JOYSTICK_RADIUS, JOYSTICK_ZONE, joystick, queueAction, registerUIRect } from '../input/InputManager';
 import { GameState } from '../state/GameState';
 import { pixelText } from '../utils/text';
@@ -19,6 +20,7 @@ export class UIScene extends Phaser.Scene {
   private reserveText!: Phaser.GameObjects.Text;
   private slotText!: Phaser.GameObjects.Text;
   private staminaBar!: Phaser.GameObjects.Rectangle;
+  private heroText!: Phaser.GameObjects.Text;
   private staminaFlash = 0;
   private waveText!: Phaser.GameObjects.Text;
   private killText!: Phaser.GameObjects.Text;
@@ -65,6 +67,8 @@ export class UIScene extends Phaser.Scene {
     pixelText(this, 6, 49, '體力', 7, '#81d4fa');
     this.add.rectangle(40, 52, 80, 4, 0x000000).setOrigin(0);
     this.staminaBar = this.add.rectangle(41, 53, 78, 2, 0x4fc3f7).setOrigin(0);
+    // 主角技能／被抓住的狀態
+    this.heroText = pixelText(this, 6, 60, '', 7, '#c8c8c8');
 
     // 左下：武器欄（觸控時搖桿在左下，武器資訊改放中下）
     const wx = this.sys.game.device.input.touch ? 210 : 6;
@@ -79,6 +83,10 @@ export class UIScene extends Phaser.Scene {
     this.button(GAME_WIDTH - 38, GAME_HEIGHT - 38, '換彈', () => queueAction('reload'));
     this.button(GAME_WIDTH - 76, GAME_HEIGHT - 38, '換槍', () => queueAction('next'));
     this.button(GAME_WIDTH - 38, GAME_HEIGHT - 76, '近戰', () => queueAction('melee'));
+    // 主角技能鍵：阿凱奔跑（切換）、馬克擊倒
+    const heroId = GameState.data.hero;
+    if (heroId === 'student') this.button(GAME_WIDTH - 114, GAME_HEIGHT - 38, '奔跑', () => (heroTouch.sprint = !heroTouch.sprint));
+    if (heroId === 'soldier') this.button(GAME_WIDTH - 114, GAME_HEIGHT - 38, '擊倒', () => (heroTouch.skill = true));
     // 探索帶回來的輔助用品（鍵盤 G／H）
     this.grenadeLabel = this.supplyButton(GAME_WIDTH - 76, GAME_HEIGHT - 76, 'G', 'use-grenade');
     this.medkitLabel = this.supplyButton(GAME_WIDTH - 114, GAME_HEIGHT - 76, 'H', 'use-medkit');
@@ -234,6 +242,16 @@ export class UIScene extends Phaser.Scene {
     // 體力見底時閃紅
     this.staminaFlash += 1;
     this.staminaBar.setFillStyle(h.stamina < 0.25 ? (this.staminaFlash % 20 < 10 ? 0xef5350 : 0x4fc3f7) : 0x4fc3f7);
+    const hh = h.hero;
+    if (hh) {
+      const parts: string[] = [];
+      if (hh.grabbed) parts.push(hh.grabbed > 1 ? `被 ${hh.grabbed} 隻纏住！` : '被抓住！打退或殺掉牠');
+      else if (hh.sprinting) parts.push('奔跑中');
+      if (hh.skill) parts.push(`${hh.skill}${this.touchUI ? '' : ' C'} ${hh.skillReady ? '就緒' : '…'}`);
+      if (hh.lastStand !== undefined) parts.push(hh.lastStand ? '大難不死 ✓' : '大難不死 ✗');
+      if (GameState.data.hero === 'student' && !hh.grabbed && !hh.sprinting) parts.push(this.touchUI ? '' : 'Shift 奔跑');
+      this.heroText.setText(parts.filter(Boolean).join('　')).setColor(hh.grabbed ? '#ff6b6b' : '#c8c8c8');
+    }
     this.waveText.setText(`第 ${GameState.data.day} 夜　第 ${h.wave} / ${h.totalWaves} 波`);
     this.killText.setText(`廢料 ${GameState.data.scrap}　擊殺 ${h.kills}`);
     const s = GameState.data.supplies;

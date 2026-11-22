@@ -47,6 +47,10 @@ export class MeleeSystem {
   private hitCount = 0;
   private dir = 1;
   private facing = 1;
+  /** 主角技能給的近戰加成（阿凱奔跑中），由 HeroSystem 每幀設定 */
+  bonus = { damageMul: 1, knockback: 0, stagger: 0 };
+  /** 這一刀起手時的加成（揮到一半停止奔跑也算數） */
+  private swingBonus = { damageMul: 1, knockback: 0, stagger: 0 };
 
   constructor(
     private scene: Phaser.Scene,
@@ -65,6 +69,14 @@ export class MeleeSystem {
 
   get busy(): boolean {
     return this.phase !== 'idle';
+  }
+
+  /** 技能耗體力（奔跑、閃身、擊倒）：扣完之後一段時間不回復。不夠就回傳 false、不扣 */
+  spend(n: number, allowPartial = false): boolean {
+    if (this.stamina < n && !allowPartial) return false;
+    this.stamina = Math.max(0, this.stamina - n);
+    this.regenWait = STAMINA.regenDelay;
+    return true;
   }
 
   get staminaRatio(): number {
@@ -89,6 +101,7 @@ export class MeleeSystem {
     this.stamina = Math.max(0, this.stamina - d.stamina);
     this.regenWait = STAMINA.regenDelay;
     this.speed = this.tired ? STAMINA.tiredSpeed : 1;
+    this.swingBonus = { ...this.bonus };
     this.combo = this.comboTimer > 0 ? this.combo + 1 : 1;
     this.phase = 'windup';
     this.t = 0;
@@ -184,13 +197,14 @@ export class MeleeSystem {
       this.hitSet.add(z);
       this.hitCount++;
       const execute = z.stunned && d.staggerBonus > 1;
-      const mul = (this.tired ? STAMINA.tiredDamage : 1) * (this.comboHit ? d.comboMul : 1) * (execute ? d.staggerBonus : 1);
+      const b = this.swingBonus;
+      const mul = (this.tired ? STAMINA.tiredDamage : 1) * (this.comboHit ? d.comboMul : 1) * (execute ? d.staggerBonus : 1) * b.damageMul;
       const info: DamageInfo = {
         amount: d.damage * mul,
         type: d.damageType,
         penetration: d.penetration,
-        knockback: d.knockback * (this.comboHit ? 1.5 : 1),
-        stagger: d.stagger * (this.tired ? 0.5 : 1),
+        knockback: d.knockback * (this.comboHit ? 1.5 : 1) + b.knockback,
+        stagger: Math.max(d.stagger * (this.tired ? 0.5 : 1), b.stagger),
         headshot: false,
         dirX: this.facing,
         source: 'player',
@@ -205,6 +219,7 @@ export class MeleeSystem {
       bus.emit('enemy:hit', { enemyId: z.def.id, x: hx, y: hy, damage: info.amount, headshot: false, killed });
       bus.emit('player:melee-hit', { weaponId: d.id, x: hx, y: hy, type: d.damageType, killed, execute });
       if (execute) fx?.popText(hx, hy - 18, '處決', '#ff8a65');
+      else if (b.damageMul > 1) fx?.popText(hx, hy - 18, '衝撞', '#80d8ff');
     }
     if (res.hits > 0) {
       // 打中才卡肉、震鏡頭：重武器頓得更久，打越多隻越重

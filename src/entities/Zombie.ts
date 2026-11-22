@@ -31,8 +31,8 @@ export interface ZombieContext {
   /** 撞到擋路線時的攻擊；y 是攻擊者的腳底 y，讓特效出現在對的那一段 */
   hitBlock: (damage: number, y: number) => void;
   player: { x: number; y: number; alive: boolean };
-  /** 打到主角；fromX/fromY 是霧屍腳底，用來決定擊退方向 */
-  hitPlayer: (damage: number, fromX: number, fromY: number) => void;
+  /** 打到主角；fromX/fromY 是霧屍腳底，用來決定擊退方向；src 是出手的霧屍（糾纏用） */
+  hitPlayer: (damage: number, fromX: number, fromY: number, src?: Zombie) => void;
   /**
    * 據點建築的阻擋（沙包牆等）：依霧屍位置回傳比 blockX 更前面的擋路線，沒有就回傳 null。
    */
@@ -51,8 +51,8 @@ export interface ZombieTarget {
   x: number;
   y: number;
   alive: boolean;
-  /** fromX/fromY 是霧屍腳底 */
-  hit: (damage: number, fromX: number, fromY: number) => void;
+  /** fromX/fromY 是霧屍腳底；src 是出手的霧屍 */
+  hit: (damage: number, fromX: number, fromY: number, src?: Zombie) => void;
   /** 誘餌（響警報的車）：距離乘上這個值，越小越吸引霧屍；預設 1 */
   lure?: number;
 }
@@ -327,7 +327,7 @@ export class Zombie extends Phaser.GameObjects.Sprite {
     if (p) {
       if (Math.abs(dx) <= REACH_X && Math.abs(dy) <= REACH_Y) {
         this.setFlipX(dx < 0);
-        this.attack(dt, () => p.hit(this.def.damage, this.footX, this.footY), Math.sign(dx) || -1);
+        this.attack(dt, () => p.hit(this.def.damage, this.footX, this.footY, this), Math.sign(dx) || -1);
       } else {
         // 站到主角的左邊或右邊，而不是疊在主角身上
         const side = dx >= 0 ? -1 : 1;
@@ -406,7 +406,7 @@ export class Zombie extends Phaser.GameObjects.Sprite {
       for (const t of this.targets(ctx)) {
         if (!t.alive || t.x < ctx.blockX) continue;
         if (Math.abs(t.x - this.footX) <= REACH_X && Math.abs(t.y - this.footY) <= REACH_Y + 4) {
-          t.hit(this.def.damage * POUNCE.damageMul, this.footX, this.footY);
+          t.hit(this.def.damage * POUNCE.damageMul, this.footX, this.footY, this);
           this.pounceHit = true;
           break;
         }

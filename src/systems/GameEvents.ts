@@ -34,6 +34,10 @@ export interface GameEventMap {
   /** 每一步落地；foot 左右腳交替，speed 0..1 */
   'player:step': { x: number; y: number; foot: 0 | 1; speed: number };
   /** 主角真的被扣血（無敵時間內不會發） */
+  /** 阿凱的閃身步閃過一次攻擊 */
+  'player:dodge': { x: number; y: number };
+  /** 被霧屍抓住（count：目前有幾隻抓著） */
+  'player:grabbed': { count: number };
   'player:hurt': { amount: number; hp: number; maxHp: number; fromX: number; fromY: number };
   /** 進入／離開低血量狀態 */
   'player:low-hp': { entering: boolean; hp: number; maxHp: number };

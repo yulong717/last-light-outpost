@@ -55,6 +55,8 @@ export interface Loot {
   weapons?: string[];
   /** 救到的倖存者職業 */
   survivors?: CompanionRole[];
+  /** 劇情救到的具名倖存者 */
+  named?: { role: CompanionRole; name: string }[];
 }
 
 export type LootTier = 'small' | 'medium' | 'big';
@@ -107,6 +109,61 @@ export interface ZoneDef {
 }
 
 export const ZONES: ZoneDef[] = [
+  // ── 主角的開局地點（只有選到那位主角時才會開放，見 src/data/heroes.ts） ──
+  {
+    id: 'school',
+    name: '市立高中',
+    blurb: '阿凱的學校。走廊上的置物櫃東倒西歪，體育館裡還困著穿制服的霧屍。',
+    time: 1,
+    risk: 1,
+    unlockDay: 1,
+    nodes: 3,
+    mapX: 50,
+    mapY: 160,
+    color: 0x5a8ae0,
+    zombies: { basic: 7, runner: 3 },
+    loot: { scrap: [10, 18], ammo: { '9mm': 3 }, supplies: { medkit: 2, decoy: 1 }, weapons: ['bat'] },
+    survivors: { medic: 1, engineer: 1 },
+    tags: ['醫療包', '廢料', '9mm'],
+    floor: 0x2e3236,
+    wall: 0x4a5058,
+  },
+  {
+    id: 'downtown',
+    name: '鬧區爆發點',
+    blurb: '霧最早湧出來的十字路口。翻覆的警車、燒毀的公車，還有成群的上班族霧屍。',
+    time: 1,
+    risk: 2,
+    unlockDay: 1,
+    nodes: 3,
+    mapX: 330,
+    mapY: 265,
+    color: 0x7a8a4a,
+    zombies: { basic: 8, runner: 3, police: 1 },
+    loot: { scrap: [14, 22], ammo: { '556': 2, '9mm': 3 }, supplies: { grenade: 1, medkit: 1 }, weapons: ['machete'] },
+    survivors: { shooter: 2, medic: 1 },
+    tags: ['5.56', '手榴彈', '9mm'],
+    floor: 0x2c2a2a,
+    wall: 0x463c38,
+  },
+  {
+    id: 'nightmarket',
+    name: '夜市彩券行',
+    blurb: '好運姐的彩券行就在夜市口。攤車翻倒一地，霓虹燈還在閃。',
+    time: 1,
+    risk: 1,
+    unlockDay: 1,
+    nodes: 3,
+    mapX: 300,
+    mapY: 95,
+    color: 0xd05a8a,
+    zombies: { basic: 8, runner: 2 },
+    loot: { scrap: [16, 24], ammo: { '357': 2, '9mm': 2 }, supplies: { lockpick: 2, medkit: 1, decoy: 1 }, weapons: ['bat'] },
+    survivors: { engineer: 1, medic: 1 },
+    tags: ['廢料', '開鎖工具', '.357'],
+    floor: 0x2e2830,
+    wall: 0x4a3a48,
+  },
   {
     id: 'gas',
     name: '廢棄加油站',
@@ -288,6 +345,8 @@ export interface Outcome {
   survivor?: boolean;
   /** 付出廢料 */
   scrapCost?: number;
+  /** 主線劇情事件成功：發這章的固定獎勵，平安回家後完成這一章（見 src/data/story.ts） */
+  story?: boolean;
 }
 
 export type EventAction =
