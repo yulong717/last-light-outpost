@@ -14,7 +14,7 @@ import { Outpost } from '../build/Outpost';
 import { ECONOMY } from '../data/buildings';
 import { buildNight } from '../data/waves';
 import { BURST } from '../data/zombies';
-import { prewarmLooks, rollZombie, scrapFor } from '../systems/ZombieFactory';
+import { prewarmLooks, scrapFor, spawnEnemy } from '../systems/ZombieFactory';
 import { pixelText } from '../utils/text';
 import type { FirearmDef } from '../data/weapons';
 import { MeleeSystem } from '../systems/MeleeSystem';
@@ -292,13 +292,14 @@ export class DefenseScene extends Phaser.Scene {
 
   private spawnZombie(id: string): void {
     if (this.ended) return;
-    // 職業＋隨機外觀＋變異（見 src/systems/ZombieFactory.ts）
-    const spec = rollZombie(this, id, GameState.data.day);
     // 在鏡頭右緣外生成，主角在據點附近時節奏不會被拉長
     const right = Math.min(WORLD_WIDTH, this.cameras.main.scrollX + GAME_WIDTH);
     const x = right + 20 + Phaser.Math.Between(0, 20);
     const y = Phaser.Math.Between(LANE_TOP, LANE_BOTTOM);
-    this.zombies.push(new Zombie(this, x, y, spec));
+    // 職業／動物＋隨機外觀、體型、性別＋變異（見 src/systems/ZombieFactory.ts）
+    const z = spawnEnemy(this, id, x, y, { day: GameState.data.day });
+    this.zombies.push(z);
+    const spec = z.spec;
     this.introduce(spec.profession.id);
   }
 

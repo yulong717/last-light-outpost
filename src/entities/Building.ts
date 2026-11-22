@@ -135,7 +135,8 @@ export class Building {
     let kills = 0;
     let stabbed = false;
     for (const z of zombies) {
-      if (z.dead || !this.covers(z.footX, z.footY)) continue;
+      // 飛在空中的（屍鴉）踩不到尖刺
+      if (z.dead || z.alt > 8 || !this.covers(z.footX, z.footY)) continue;
       stabbed = true;
       if (z.takeDamage(SPIKES.damage[this.level - 1], 0, { dirX: -1 })) kills++;
       Fx.of(this.scene)?.blood(z.footX, z.footY - 4, -1, z.footY, 2, 0.5);

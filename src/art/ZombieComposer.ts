@@ -29,7 +29,13 @@ export interface BodyLook {
   widen: number;
   /** 血跡位置等細節的亂數種子 */
   seed: number;
+  /** 頭髮（女性霧屍）；null 用原圖的短髮 */
+  hair?: { style: HairStyle; color: number } | null;
+  /** 裙子顏色：褲子上半段畫成裙子、膝蓋以下露出腿；null 一般褲子 */
+  skirt?: number | null;
 }
+
+export type HairStyle = 'long' | 'ponytail' | 'bob';
 
 /**
  * 每一格「頭頂中心」在 64×64 影格中的位置（朝右的原圖座標）。
@@ -286,6 +292,8 @@ export function lookKey(l: BodyLook): string {
     l.blood,
     l.widen.toFixed(2),
     l.seed,
+    l.hair ? `${l.hair.style}${l.hair.color.toString(16)}` : '-',
+    l.skirt == null ? '-' : l.skirt.toString(16),
   ].join('_')}`;
 }
 
@@ -342,6 +350,15 @@ export function composeZombie(scene: Phaser.Scene, look: BodyLook): string {
         }
         const t = norm(i, r);
         if (r === Region.Pants) {
+          if (look.skirt != null) {
+            // 裙子：站姿時膝蓋（褲子頂端往下 10 列）以下露出腿；倒地格整片當長裙
+            if (torso && y > info.pantsTop + 10) {
+              put(i, skinRamp(i) ?? skinFromBase(base, i));
+            } else {
+              put(i, ramp(look.skirt, t));
+            }
+            continue;
+          }
           let col = look.pants;
           if (look.pantsPattern === 'camo') {
             const n = camo(x, y, look.seed);
@@ -413,6 +430,7 @@ export function composeZombie(scene: Phaser.Scene, look: BodyLook): string {
       }
     }
     if (torso) decorate(out, W, f, torso, look);
+    if (look.hair) drawHair(out, base, W, f, look.hair);
   }
   rc.putImageData(img, 0, 0);
 
@@ -513,6 +531,98 @@ function decorate(
       }
     }
     for (let y = y0; y <= y0 + 5; y++) set(torso.l + 2, y, darken(c, 0.6), true);
+  }
+}
+
+/** 倒地格的頭部範圍（頭往後仰躺在左邊） */
+const LYING_HEADS: Record<number, { x0: number; y0: number; x1: number; y1: number }> = {
+  12: { x0: 7, y0: 19, x1: 23, y1: 29 },
+  13: { x0: 3, y0: 31, x1: 19, y1: 42 },
+  14: { x0: 2, y0: 44, x1: 16, y1: 53 },
+};
+
+/**
+ * 長髮：把頭頂（臉以外）的像素染成髮色，再在後腦（原圖朝右，所以是左邊）往下垂一段。
+ * 位置跟著 HEAD_ANCHORS，所以每格都對得上；倒地格只染後腦。
+ */
+function drawHair(
+  out: Uint8ClampedArray,
+  base: BaseData,
+  W: number,
+  f: number,
+  hair: { style: HairStyle; color: number },
+): void {
+  const at = (x: number, y: number) => (y * W + f * F + x) * 4;
+  const opaque = (x: number, y: number) => x >= 0 && x < F && y >= 0 && y < F && out[at(x, y) + 3] > 0;
+  const set = (x: number, y: number, c: [number, number, number] | number) => {
+    if (x < 0 || x >= F || y < 0 || y >= F) return;
+    const i = at(x, y);
+    const rgb = typeof c === 'number' ? rgbOf(c) : c;
+    out[i] = rgb[0];
+    out[i + 1] = rgb[1];
+    out[i + 2] = rgb[2];
+    out[i + 3] = 255;
+  };
+  const shade = (k: number) => ramp(hair.color, k);
+  const a = HEAD_ANCHORS[f];
+  if (!a) {
+    const b = LYING_HEADS[f];
+    if (!b) return;
+    const cut = b.x0 + (b.x1 - b.x0) * 0.42;
+    for (let y = b.y0; y <= b.y1; y++) {
+      for (let x = b.x0; x <= cut; x++) {
+        if (!opaque(x, y) || base.region[y * W + f * F + x] === Region.Outline) continue;
+        set(x, y, shade(0.35 + 0.4 * (((x + y) & 3) === 0 ? 1 : 0.5)));
+      }
+    }
+    return;
+  }
+  // 頭頂：錨點往下 3 列內、臉（錨點右邊 5 格以外）之外的像素都染成頭髮
+  for (let y = a.y - 4; y <= a.y + 3; y++) {
+    for (let x = a.x - 10; x <= a.x + 5; x++) {
+      if (!opaque(x, y)) continue;
+      const r = base.region[y * W + f * F + x];
+      if (r === Region.Outline) continue;
+      set(x, y, shade(y <= a.y ? 0.95 : 0.6 + (((x * 7 + y) % 3) === 0 ? 0.25 : 0)));
+    }
+  }
+  // 後腦垂下的頭髮
+  const len = hair.style === 'long' ? 15 : hair.style === 'bob' ? 9 : 0;
+  const backX = (y: number) => {
+    for (let x = 0; x < F; x++) if (opaque(x, y) && Math.abs(x - a.x) < 14) return x;
+    return a.x - 8;
+  };
+  if (len > 0) {
+    for (let k = 0; k < len; k++) {
+      const y = a.y + 1 + k;
+      const bx = backX(Math.min(y, a.y + 6)) - (k > 4 ? 1 : 0);
+      const w = hair.style === 'long' ? (k < len - 3 ? 5 : 4 - (k - (len - 3))) : 4;
+      set(bx - 1, y, OUTLINE);
+      for (let x = bx; x < bx + w; x++) set(x, y, shade(x === bx ? 0.45 : 0.75));
+      if (k === len - 1) for (let x = bx - 1; x < bx + w; x++) set(x, y + 1, OUTLINE);
+    }
+  } else {
+    // 馬尾：從後腦往左下甩
+    const sx = backX(a.y + 2);
+    const pts = [
+      [0, 2],
+      [-1, 3],
+      [-2, 4],
+      [-2, 5],
+      [-3, 6],
+      [-3, 7],
+      [-3, 8],
+      [-2, 9],
+    ];
+    for (const [dx, dy] of pts) {
+      set(sx + dx - 1, a.y + dy, OUTLINE);
+      set(sx + dx, a.y + dy, shade(0.7));
+      set(sx + dx + 1, a.y + dy, shade(0.5));
+    }
+    set(sx - 2, a.y + 10, OUTLINE);
+    set(sx - 1, a.y + 10, OUTLINE);
+    // 髮圈
+    set(sx, a.y + 2, 0xd04060);
   }
 }
 

@@ -94,7 +94,7 @@ export interface ZoneDef {
   mapX: number;
   mapY: number;
   color: number;
-  /** 戰鬥／潛入時出現的霧屍職業（權重） */
+  /** 戰鬥／潛入時出現的敵人（職業或動物 id，權重）；還沒解鎖的不會出現，動物只出現在戰鬥 */
   zombies: Record<string, number>;
   loot: LootTable;
   /** 這區救到的倖存者職業權重 */
@@ -118,7 +118,7 @@ export const ZONES: ZoneDef[] = [
     mapX: 120,
     mapY: 250,
     color: 0xe0a040,
-    zombies: { basic: 6, worker: 3, runner: 1 },
+    zombies: { basic: 6, worker: 3, runner: 1, dog: 1.5 },
     loot: { scrap: [14, 22], ammo: { '9mm': 4, '12ga': 2 }, supplies: { grenade: 1, decoy: 2, lockpick: 1 }, weapons: ['bat', 'machete'] },
     survivors: { engineer: 3, shooter: 1 },
     tags: ['廢料', '9mm', '誘餌'],
@@ -136,7 +136,7 @@ export const ZONES: ZoneDef[] = [
     mapX: 250,
     mapY: 190,
     color: 0x7ac060,
-    zombies: { basic: 6, runner: 2, worker: 1 },
+    zombies: { basic: 6, runner: 2, worker: 1, crow: 1 },
     loot: { scrap: [16, 26], ammo: { '9mm': 3, '12ga': 3, '357': 1 }, supplies: { medkit: 3, decoy: 1 }, weapons: ['bat', 'coach'] },
     survivors: { medic: 1, engineer: 1, shooter: 1 },
     tags: ['醫療包', '霰彈', '綜合'],
@@ -154,7 +154,7 @@ export const ZONES: ZoneDef[] = [
     mapX: 180,
     mapY: 110,
     color: 0x80a0e0,
-    zombies: { basic: 7, runner: 2, nurse: 1 },
+    zombies: { basic: 7, runner: 2, nurse: 1, dog: 1.5, crow: 1 },
     loot: { scrap: [12, 20], ammo: { '9mm': 2, '357': 2, '12ga': 2 }, supplies: { medkit: 2, lockpick: 2 }, weapons: ['machete', 'axe', 'python'] },
     survivors: { shooter: 2, medic: 2, engineer: 2 },
     tags: ['倖存者', '近戰武器', '.357'],
@@ -172,7 +172,7 @@ export const ZONES: ZoneDef[] = [
     mapX: 400,
     mapY: 120,
     color: 0xe06a6a,
-    zombies: { basic: 4, nurse: 3, runner: 2, brute: 1 },
+    zombies: { basic: 4, nurse: 3, runner: 2, brute: 1, dog: 1 },
     loot: { scrap: [20, 32], ammo: { '9mm': 3, '556': 1 }, supplies: { medkit: 5, grenade: 1 }, weapons: ['mp5', 'axe'] },
     survivors: { medic: 4, shooter: 1 },
     tags: ['大量醫療包', '醫護', 'MP5'],
@@ -208,7 +208,7 @@ export const ZONES: ZoneDef[] = [
     mapX: 570,
     mapY: 140,
     color: 0x9a9a50,
-    zombies: { soldier: 4, runner: 2, brute: 2, firefighter: 1 },
+    zombies: { soldier: 4, runner: 2, brute: 2, firefighter: 1, dog: 2, bear: 0.6 },
     loot: { scrap: [30, 44], ammo: { '556': 4, '762': 3, '12ga': 1 }, supplies: { grenade: 4, medkit: 2 }, weapons: ['ak47', 'm4a1', 'mosin', 'm249'] },
     survivors: { shooter: 3, engineer: 2 },
     tags: ['步槍彈', '手榴彈', '重武器'],

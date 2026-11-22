@@ -22,7 +22,8 @@ import { GameState } from '../state/GameState';
 import { GameEvents } from '../systems/GameEvents';
 import { MeleeSystem } from '../systems/MeleeSystem';
 import { WeaponSystem } from '../systems/WeaponSystem';
-import { prewarmLooks, rollZombie } from '../systems/ZombieFactory';
+import { prewarmLooks, spawnEnemy } from '../systems/ZombieFactory';
+import { PROFESSIONS } from '../data/zombies';
 import { Rng, randomSeed } from '../utils/rng';
 import { pixelText } from '../utils/text';
 
@@ -234,16 +235,29 @@ export class ExploreFieldScene extends Phaser.Scene {
     });
   }
 
-  private pickProfession(): string {
+  /** 依區域權重挑敵人：還沒解鎖的不出；潛入只挑人形（動物不會乖乖站崗） */
+  private pickProfession(humansOnly: boolean): string {
     const z = this.exp.zone.zombies;
-    return this.rng.weighted(Object.keys(z), (k) => z[k]) ?? 'basic';
+    const day = GameState.data.day;
+    const ids = Object.keys(z).filter((id) => {
+      const p = PROFESSIONS[id];
+      return p && p.unlockDay <= day && (!humansOnly || (p.body ?? 'human') === 'human');
+    });
+    return this.rng.weighted(ids, (k) => z[k]) ?? 'basic';
   }
 
-  private makeZombie(x: number, y: number): Zombie {
-    const spec = rollZombie(this, this.pickProfession(), GameState.data.day);
-    const z = new Zombie(this, x, y, spec);
-    this.zombies.push(z);
-    return z;
+  /** 生一隻（屍犬、屍鴉成群出現）；回傳第一隻 */
+  private makeZombie(x: number, y: number, humansOnly = false): Zombie {
+    const id = this.pickProfession(humansOnly);
+    const n = humansOnly ? 1 : (PROFESSIONS[id]?.pack ?? 1);
+    const day = GameState.data.day;
+    let first: Zombie | null = null;
+    for (let i = 0; i < n; i++) {
+      const z = spawnEnemy(this, id, x + i * 14 * Math.sign(x - this.player.footX || 1), clampLaneY(y + this.rng.int(-14, 14) * (i ? 1 : 0)), { day });
+      this.zombies.push(z);
+      first ??= z;
+    }
+    return first!;
   }
 
   // ── 潛入 ──
@@ -263,7 +277,7 @@ export class ExploreFieldScene extends Phaser.Scene {
     for (let i = 0; i < count; i++) {
       const x = 220 + span * (i + 0.5) + this.rng.int(-20, 20);
       const y = this.rng.int(LANE_TOP + 6, LANE_BOTTOM - 6);
-      const z = this.makeZombie(x, y);
+      const z = this.makeZombie(x, y, true);
       const range = this.rng.int(20, 70);
       const dir = this.rng.chance(0.5) ? 1 : -1;
       z.setFlipX(dir < 0);
