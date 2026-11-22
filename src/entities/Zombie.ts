@@ -3,6 +3,7 @@ import { clampLaneY, depthForY } from '../config';
 import type { EnemyDef } from '../data/enemies';
 import { Fx } from '../fx/Fx';
 import { ZOMBIE_NECK_ROW } from '../art/sprites';
+import { GameEvents } from '../systems/GameEvents';
 
 /** 受擊資訊：給程式化動畫決定怎麼反應 */
 export interface HitInfo {
@@ -47,6 +48,8 @@ export class Zombie extends Phaser.GameObjects.Sprite {
   /** 攻擊時往前撲的位移 */
   private lunge = 0;
   dead = false;
+  /** 下次低吼前的秒數（給音效用） */
+  private groanIn = 1 + Math.random() * 6;
 
   constructor(scene: Phaser.Scene, x: number, y: number, def: EnemyDef) {
     super(scene, x, y, def.texture);
@@ -73,6 +76,7 @@ export class Zombie extends Phaser.GameObjects.Sprite {
     scene.add.existing(this);
     this.sync(0);
     Fx.of(scene)?.attachShadow(this, 22 * this.s);
+    GameEvents.of(scene).emit('enemy:spawn', { enemyId: def.id, x, y: this.footY });
   }
 
   private get s(): number {
@@ -102,6 +106,11 @@ export class Zombie extends Phaser.GameObjects.Sprite {
 
   update(dt: number, ctx: ZombieContext): void {
     if (this.dead) return;
+    this.groanIn -= dt;
+    if (this.groanIn <= 0) {
+      this.groanIn = 4 + Math.random() * 8;
+      GameEvents.of(this.scene).emit('enemy:groan', { enemyId: this.def.id, x: this.footX, y: this.footY });
+    }
     this.hitLean *= Math.max(0, 1 - dt * 12);
     const minX = ctx.blockX + 18 * this.s;
     const speed = this.def.speed * this.speedJitter;
@@ -160,6 +169,7 @@ export class Zombie extends Phaser.GameObjects.Sprite {
     if (this.attackTimer >= this.def.attackInterval) {
       this.attackTimer = 0;
       hit();
+      GameEvents.of(this.scene).emit('enemy:attack', { enemyId: this.def.id, x: this.footX, y: this.footY });
       if (this.scene.anims.exists(this.attackKey)) this.play(this.attackKey);
       // 攻擊時往前撲一下
       this.lunge = 3 * dir;
@@ -223,6 +233,7 @@ export class Zombie extends Phaser.GameObjects.Sprite {
     const fx = Fx.of(this.scene);
     if (this.hp <= 0) {
       this.dead = true;
+      GameEvents.of(this.scene).emit('enemy:death', { enemyId: this.def.id, x: this.footX, y: this.footY, headshot: !!info.headshot });
       this.restoreTint();
       this.y = this.footY;
       if (fx) {

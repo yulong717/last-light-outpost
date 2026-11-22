@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { GAME_HEIGHT, GAME_WIDTH } from '../config';
 import { JOYSTICK_RADIUS, JOYSTICK_ZONE, joystick, queueAction, registerUIRect } from '../input/InputManager';
 import { pixelText } from '../utils/text';
+import { AudioManager } from '../audio/AudioManager';
 import type { HudData } from './DefenseScene';
 
 /** HUD 疊在遊戲場景上方。手機與電腦共用，按鈕至少 24×24 邏輯像素。 */
@@ -42,6 +43,7 @@ export class UIScene extends Phaser.Scene {
 
     this.waveText = pixelText(this, GAME_WIDTH / 2, 4, '', 10).setOrigin(0.5, 0);
     this.killText = pixelText(this, GAME_WIDTH - 6, 4, '', 8).setOrigin(1, 0);
+    this.buildMuteButton();
 
     this.ammoText = pixelText(this, 6, GAME_HEIGHT - 20, '', 10);
     this.add.rectangle(6, GAME_HEIGHT - 4, 60, 2, 0x000000).setOrigin(0);
@@ -64,6 +66,20 @@ export class UIScene extends Phaser.Scene {
       this.scale.off(Phaser.Scale.Events.ORIENTATION_CHANGE, this.checkOrientation, this);
       this.unregister.forEach((fn) => fn());
     });
+  }
+
+  /** 右上角喇叭：點一下靜音／取消（電腦也可按 M） */
+  private buildMuteButton(): void {
+    const size = 24;
+    const x = GAME_WIDTH - size - 6;
+    const y = 20;
+    const bg = this.add.rectangle(x, y, size, size, 0x000000, 0.35).setOrigin(0).setInteractive();
+    const icon = pixelText(this, x + size / 2, y + size / 2, '', 8).setOrigin(0.5);
+    const refresh = () => icon.setText(AudioManager.settings.muted ? '靜' : '♪').setAlpha(AudioManager.settings.muted ? 0.5 : 1);
+    refresh();
+    bg.on('pointerdown', () => AudioManager.toggleMute());
+    const off = AudioManager.onChange(refresh);
+    this.unregister.push(off, registerUIRect({ x, y, w: size, h: size }));
   }
 
   private button(x: number, y: number, label: string, onPress: () => void): void {

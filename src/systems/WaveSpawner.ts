@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import type { WaveDef } from '../data/waves';
+import { GameEvents } from './GameEvents';
 
 /**
  * 依波次資料排程出怪。只負責「什麼時候生哪種敵人」，
@@ -48,6 +49,7 @@ export class WaveSpawner {
       this.waitingNext = false;
       this.waveIndex = next;
       this.scene.events.emit('wave-start', next + 1, this.waves.length);
+      GameEvents.of(this.scene).emit('wave:start', { wave: next + 1, total: this.waves.length });
       for (const g of wave.groups) {
         this.pending += g.count;
         for (let i = 0; i < g.count; i++) {
