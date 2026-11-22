@@ -52,9 +52,11 @@ export class Player {
     this.footY = clampLaneY(y);
     this.maxHp = maxHp;
     this.hp = maxHp;
-    this.sprite = scene.add.sprite(x, this.footY, 'player', 0);
+    // 有擦掉手臂的身體圖就用它，手與武器由 WeaponRig 畫
+    const body = scene.textures.exists('player_body');
+    this.sprite = scene.add.sprite(x, this.footY, body ? 'player_body' : 'player', 0);
     // 影格腳底在 64 格中的第 63 列
-    this.sprite.setOrigin(0.5, scene.anims.exists('player_shoot') ? 63 / 64 : 1);
+    this.sprite.setOrigin(0.5, body || scene.anims.exists('player_shoot') ? 63 / 64 : 1);
     this.sync();
   }
 
@@ -78,6 +80,11 @@ export class Player {
 
   get gunY(): number {
     return this.footY - 40;
+  }
+
+  /** 走路上下顛簸（像素），WeaponRig 跟著身體動 */
+  get bob(): number {
+    return this.walkPhase > 0 ? Math.abs(Math.sin(this.walkPhase)) * 1.5 : 0;
   }
 
   update(dt: number, moveX: number, moveY: number, aimX: number, bounds: PlayerBounds): void {

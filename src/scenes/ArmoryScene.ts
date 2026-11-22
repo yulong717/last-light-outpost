@@ -140,7 +140,7 @@ export class ArmoryScene extends Phaser.Scene {
       const locked = d.unlockDay > st.day;
       const tag = slot >= 0 ? `上場 ${slot + 1}` : owned ? '擁有' : locked ? `第 ${d.unlockDay} 天` : `${d.price}`;
       const color = slot >= 0 ? '#9ad17a' : owned ? '#c8c8c8' : locked ? '#6b7280' : st.scrap >= d.price ? '#f5d76e' : '#ff6b6b';
-      this.listRow(y, d.name, tag, color, d.id === this.selected, () => {
+      this.listRow(y, d.id, d.name, tag, color, d.id === this.selected, () => {
         this.selected = d.id;
         this.redraw();
       });
@@ -154,8 +154,9 @@ export class ArmoryScene extends Phaser.Scene {
     const x = PX + LIST_W + 18;
     const w = PW - LIST_W - 28;
     let y = PY + 32;
-    this.text(x, y, d.name, 11, '#ffffff');
-    this.text(x + w, y + 3, d.model, 7, '#90a4ae').setOrigin(1, 0);
+    const nm = this.text(x, y, d.name, 11, '#ffffff');
+    this.text(x + nm.width + 6, y + 4, d.model, 7, '#90a4ae');
+    this.icon(x + w, y - 2, d.id, 2).setOrigin(1, 0);
     y += 18;
     this.text(x, y, d.desc, 8, '#c8c8c8').setWordWrapWidth(w, true);
     y += 30;
@@ -204,7 +205,7 @@ export class ArmoryScene extends Phaser.Scene {
       const locked = m.unlockDay > st.day;
       const tag = st.armory.melee === m.id ? '裝備中' : owned ? '擁有' : locked ? `第 ${m.unlockDay} 天` : `${m.price}`;
       const color = st.armory.melee === m.id ? '#9ad17a' : owned ? '#c8c8c8' : locked ? '#6b7280' : st.scrap >= m.price ? '#f5d76e' : '#ff6b6b';
-      this.listRow(y, m.name, tag, color, m.id === this.selected, () => {
+      this.listRow(y, m.id, m.name, tag, color, m.id === this.selected, () => {
         this.selected = m.id;
         this.redraw();
       });
@@ -219,8 +220,9 @@ export class ArmoryScene extends Phaser.Scene {
     const x = PX + LIST_W + 18;
     const w = PW - LIST_W - 28;
     let y = PY + 32;
-    this.text(x, y, m.name, 11, '#ffffff');
-    this.text(x + w, y + 3, m.damageType === 'blunt' ? '鈍器' : '刀刃', 7, '#90a4ae').setOrigin(1, 0);
+    const nm = this.text(x, y, m.name, 11, '#ffffff');
+    this.text(x + nm.width + 6, y + 4, m.damageType === 'blunt' ? '鈍器' : '刀刃', 7, '#90a4ae');
+    this.icon(x + w, y - 2, m.id, 2).setOrigin(1, 0);
     y += 18;
     this.text(x, y, m.desc, 8, '#c8c8c8').setWordWrapWidth(w, true);
     y += 30;
@@ -297,7 +299,16 @@ export class ArmoryScene extends Phaser.Scene {
 
   // ── 小元件 ────────────────────────────────────────────
 
-  private listRow(y: number, name: string, tag: string, tagColor: string, active: boolean, onPress: () => void): void {
+  /** 武器圖示（WeaponArt 產生的 wpn_<id>_icon），沒有圖就給個空的佔位 */
+  private icon(x: number, y: number, id: string, scale = 1): Phaser.GameObjects.Image {
+    const key = `wpn_${id}_icon`;
+    const img = this.add.image(x, y, this.textures.exists(key) ? key : '__MISSING').setScale(scale);
+    if (!this.textures.exists(key)) img.setVisible(false);
+    this.root.add(img);
+    return img;
+  }
+
+  private listRow(y: number, id: string, name: string, tag: string, tagColor: string, active: boolean, onPress: () => void): void {
     const x = PX + 8;
     const bg = this.add
       .rectangle(x, y, LIST_W, ROW_H - 2, active ? 0x3a3320 : 0x1a1d24, 0.95)
@@ -310,7 +321,9 @@ export class ArmoryScene extends Phaser.Scene {
       this.time.delayedCall(0, onPress);
     });
     this.root.add(bg);
-    this.text(x + 8, y + 4, name, 8, '#ffffff');
+    // 圖示置中在左邊 44px 的格子裡
+    this.icon(x + 26, y + (ROW_H - 2) / 2, id);
+    this.text(x + 50, y + 4, name, 8, '#ffffff');
     this.text(x + LIST_W - 8, y + 4, tag, 8, tagColor).setOrigin(1, 0);
   }
 

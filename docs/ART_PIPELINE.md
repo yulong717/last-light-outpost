@@ -21,7 +21,8 @@
 | 夜晚氣氛 | 灰燼粒子、兩層視差貼地霧、閃爍據點燈、抖色暗角 | `src/fx/Atmosphere.ts` |
 
 | 霧屍中槍倒地（9 格） | PixelLab PixMiniMax（免費帳號可用），以走路第 0 格為起始影格；非爆頭擊殺播放 | `art/source/zombie_death.png` → 腳本合併進三種霧屍 |
-| 主角換彈（9 格） | PixelLab PixMiniMax，以射擊第 0 格為起始影格；播放長度對齊武器換彈時間 | `public/assets/sprites/player_reload.png`、`DefenseScene.animateReload()` |
+| 每把槍／近戰武器的手持圖、圖示、掉落彈匣、彈殼、槍口火光 | 字串像素圖（只畫填色，外框自動），部件化（滑套、彈匣、槍管、上蓋） | `src/art/weaponMaps.ts`、`src/art/WeaponArt.ts` |
+| 主角與隊員手持武器、換彈與揮擊動作 | 角色圖擦掉手臂（`stripArms`），程式畫手臂並以握把為軸旋轉武器；5 種換彈動作 | `src/entities/WeaponRig.ts`（說明見 docs/WEAPONS.md） |
 
 所有特效貼圖都在 `src/fx/FxTextures.ts` 用程式畫，沒有額外美術檔。
 碎片和血跡都以「被打中那隻的腳底 y」當地面，所以改成上下移動的多路線後不用改。

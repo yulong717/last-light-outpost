@@ -55,6 +55,14 @@ export class MeleeSystem {
     this.def = getMelee(id) ?? getMelee('knife')!;
   }
 
+  /** 揮擊姿勢給 WeaponRig 畫手上的武器：哪一段、這段進行到幾成、這刀往哪邊揮 */
+  get pose(): { phase: 'windup' | 'active' | 'recovery'; k: number; dir: number } | null {
+    if (this.phase === 'idle') return null;
+    const d = this.def;
+    const len = (this.phase === 'windup' ? d.windup : this.phase === 'active' ? d.active : d.recovery) * this.speed;
+    return { phase: this.phase, k: Math.min(1, this.t / Math.max(0.001, len)), dir: this.dir };
+  }
+
   get busy(): boolean {
     return this.phase !== 'idle';
   }

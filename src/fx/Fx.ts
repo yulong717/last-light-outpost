@@ -230,9 +230,21 @@ export class Fx {
     }
   }
 
-  /** 拋殼：從槍膛往後上方彈出，在地上彈兩下後停住 */
-  ejectShell(x: number, y: number, floorY: number, facing = 1): void {
-    this.spawn(FX.shell, x, y, {
+  /**
+   * 掉落物：彈匣、退出的彈殼等，落地彈一下後留在地上一陣子（WeaponRig 用）。
+   */
+  drop(
+    key: string,
+    x: number,
+    y: number,
+    o: { vx: number; vy: number; floorY: number; spin?: number; life?: number; flipX?: boolean },
+  ): void {
+    this.spawn(key, x, y, { vx: o.vx, vy: o.vy, floorY: o.floorY, spin: o.spin ?? 0, bounce: 0.35, life: o.life ?? 4, onLand: 'rest', flipX: o.flipX });
+  }
+
+  /** 拋殼：從槍膛往後上方彈出，在地上彈兩下後停住；key 換成不同口徑的彈殼圖 */
+  ejectShell(x: number, y: number, floorY: number, facing = 1, key: string = FX.shell): void {
+    this.spawn(key, x, y, {
       vx: -facing * Phaser.Math.Between(30, 70),
       vy: -Phaser.Math.Between(90, 140),
       spin: Phaser.Math.Between(-900, 900),
