@@ -7,6 +7,7 @@ import { UIScene } from './scenes/UIScene';
 import { BuildUIScene } from './scenes/BuildUIScene';
 import { ArmoryScene } from './scenes/ArmoryScene';
 import { GameOverScene } from './scenes/GameOverScene';
+import { BestiaryScene } from './scenes/BestiaryScene';
 import { GameState } from './state/GameState';
 import { AudioManager } from './audio/AudioManager';
 
@@ -30,7 +31,7 @@ const game = new Phaser.Game({
     default: 'arcade',
     arcade: { debug: false },
   },
-  scene: [BootScene, MenuScene, DefenseScene, UIScene, BuildUIScene, ArmoryScene, GameOverScene],
+  scene: [BootScene, MenuScene, DefenseScene, UIScene, BuildUIScene, ArmoryScene, GameOverScene, BestiaryScene],
 });
 
 // 開發模式下掛到 window，方便在主控台或自動化測試裡操作場景

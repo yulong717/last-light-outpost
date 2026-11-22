@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { bulletStops, type DamageInfo } from '../combat/Damage';
+import type { DamageInfo } from '../combat/Damage';
 import { fullReloadTime, getFirearm, type AmmoType, type FirearmDef } from '../data/weapons';
 import type { Zombie } from '../entities/Zombie';
 import { DEPTH_FX, PLACEHOLDER_COLORS } from '../config';
@@ -372,7 +372,7 @@ export class WeaponSystem {
       result.hits++;
       // 血落在這隻霧屍腳下（2.5D：每隻的地面 y 不同）
       fx?.bulletHit(h.x, h.y, dirX, h.z.footY, head);
-      const stopped = bulletStops(info, h.z.armor);
+      const stopped = h.z.stopsBullet(info);
       const killed = h.z.takeHit(info);
       if (killed) {
         result.kills++;

@@ -53,7 +53,7 @@ export class WaveSpawner {
       for (const g of wave.groups) {
         this.pending += g.count;
         for (let i = 0; i < g.count; i++) {
-          this.scene.time.delayedCall(i * g.interval * 1000 + Phaser.Math.Between(0, 300), () => {
+          this.scene.time.delayedCall(((g.startDelay ?? 0) + i * g.interval) * 1000 + Phaser.Math.Between(0, 300), () => {
             this.pending--;
             this.spawn(g.enemy);
           });

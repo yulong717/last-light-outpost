@@ -1,18 +1,25 @@
 import Phaser from 'phaser';
 import { clampLaneY, depthForY } from '../config';
 import type { EnemyDef } from '../data/enemies';
-import { resolveDamage, type ArmorProfile, type DamageInfo, type DamageType } from '../combat/Damage';
+import { BURST, ENRAGE, HEAL_AURA, type ArmorPiece } from '../data/zombies';
 import { Fx } from '../fx/Fx';
 import { ZOMBIE_NECK_ROW } from '../art/sprites';
+import { FOOT_ROW, GEAR_TEXTURE, HAT_ART, HEAD_ANCHORS } from '../art/ZombieComposer';
 import { GameEvents } from '../systems/GameEvents';
+import { armorAfter, type DamageInfo } from '../combat/Damage';
+import type { ZombieSpec } from '../systems/ZombieFactory';
 
 /** 受擊資訊：給程式化動畫決定怎麼反應 */
 export interface HitInfo {
   headshot?: boolean;
   /** 子彈飛行方向的 x 分量（-1..1），決定血往哪噴、往哪倒、往哪退 */
   dirX?: number;
-  /** 傷害類型與穿甲（見 src/combat/Damage.ts）；沒填 = 一般子彈、不穿甲 */
-  type?: DamageType;
+  /**
+   * 傷害類型（和武器的 DamageType 對齊）：'blast' 爆炸不分頭身、護甲效果減半；
+   * 'blunt' 鈍擊對頭盔也有效（敲飛頭盔用）。不填當作子彈。
+   */
+  type?: string;
+  /** 穿甲 0..1：護甲減傷先扣掉這個值，max(0, armor − penetration) */
   penetration?: number;
 }
 
@@ -33,6 +40,8 @@ export interface ZombieContext {
   speedMul?: (x: number, y: number) => number;
   /** 其他可被盯上的目標（NPC 夥伴）；和主角一樣，只有站在擋路線外側才會被追 */
   others?: ZombieTarget[];
+  /** 場上所有霧屍（護理師的治療光環用） */
+  zombies?: Zombie[];
 }
 
 export interface ZombieTarget {
@@ -51,7 +60,10 @@ const REACH_Y = 9;
 
 export class Zombie extends Phaser.GameObjects.Sprite {
   readonly def: EnemyDef;
+  /** 這隻的職業、外觀、裝備、變異（見 ZombieFactory） */
+  readonly spec: ZombieSpec;
   hp: number;
+  readonly maxHp: number;
   /** 腳底位置，所有判定都用它（sprite 的 y 會因走路顛簸而偏移） */
   footX: number;
   footY: number;
@@ -68,29 +80,49 @@ export class Zombie extends Phaser.GameObjects.Sprite {
   /** 攻擊時往前撲的位移 */
   private lunge = 0;
   dead = false;
-  /** 個體護甲（頭盔、防彈背心……由霧屍職業／隨機配件決定），沒有就是裸身 */
-  armor?: ArmorProfile;
-  /** 抗硬直 0..1：硬直時間乘上 (1 - staggerResist) */
-  staggerResist = 0;
-  /** 硬直剩餘秒數：期間不能移動、不能攻擊 */
-  stunTimer = 0;
   /** 下次低吼前的秒數（給音效用） */
   private groanIn = 1 + Math.random() * 6;
 
-  constructor(scene: Phaser.Scene, x: number, y: number, def: EnemyDef) {
-    super(scene, x, y, def.texture);
-    this.def = def;
-    this.hp = def.hp;
+  // ── 裝備與能力 ──
+  /** 頭盔（擋爆頭，耐久歸零就被打飛） */
+  helmet: ArmorPiece | null;
+  /** 防彈背心（擋身體，耐久歸零就失效） */
+  vest: ArmorPiece | null;
+  /** 硬直剩餘秒數：期間不能移動、不能攻擊（近戰武器用 stagger() 施加） */
+  stunTimer = 0;
+  private hat: Phaser.GameObjects.Image | null = null;
+  private mark: Phaser.GameObjects.Image | null = null;
+  private enraged = false;
+  private sinceHit = 99;
+  private healTimer = Math.random() * HEAL_AURA.interval;
+
+  constructor(scene: Phaser.Scene, x: number, y: number, spec: ZombieSpec) {
+    super(scene, x, y, spec.def.texture);
+    this.spec = spec;
+    this.def = spec.def;
+    this.hp = spec.def.hp;
+    this.maxHp = spec.def.hp;
+    this.helmet = spec.helmet ? { ...spec.helmet } : null;
+    this.vest = spec.vest ? { ...spec.vest } : null;
+    const def = spec.def;
     this.footX = x;
     this.footY = clampLaneY(y);
     this.laneY = this.footY;
     this.walkKey = `${def.texture}_walk`;
     this.attackKey = `${def.texture}_attack`;
     // 走路圖的腳底在 64 格中的第 62 列
-    this.setOrigin(0.5, scene.anims.exists(this.walkKey) ? 62 / 64 : 1);
+    this.setOrigin(0.5, scene.anims.exists(this.walkKey) ? FOOT_ROW / 64 : 1);
     // 美術素材朝右繪製，霧屍預設往左走所以水平翻轉
     this.setFlipX(true);
     if (def.scale) this.setScale(def.scale);
+    if (spec.hat !== 'none' && scene.textures.exists(GEAR_TEXTURE)) {
+      const art = HAT_ART[spec.hat];
+      this.hat = scene.add.image(x, y, GEAR_TEXTURE, spec.hat);
+      this.hat.setData('ox', (art.ax + 0.5) / art.rows[0].length).setData('oy', (art.ay + 0.5) / art.rows.length);
+    }
+    if (spec.mutations.length && scene.textures.exists(GEAR_TEXTURE)) {
+      this.mark = scene.add.image(x, y, GEAR_TEXTURE, 'mark').setTint(spec.mutations[0].mark);
+    }
     this.restoreTint();
     if (scene.anims.exists(this.walkKey)) {
       this.play({ key: this.walkKey, startFrame: Phaser.Math.Between(0, 3) });
@@ -103,6 +135,24 @@ export class Zombie extends Phaser.GameObjects.Sprite {
     this.sync(0);
     Fx.of(scene)?.attachShadow(this, 22 * this.s);
     GameEvents.of(scene).emit('enemy:spawn', { enemyId: def.id, x, y: this.footY });
+    this.once(Phaser.GameObjects.Events.DESTROY, () => {
+      this.hat?.destroy();
+      this.mark?.destroy();
+    });
+  }
+
+  /** 目前的移動速度與攻擊間隔（暴走時變快） */
+  private get speedNow(): number {
+    return this.def.speed * (this.enraged ? ENRAGE.speedMul : 1);
+  }
+
+  private get attackIntervalNow(): number {
+    return this.def.attackInterval * (this.enraged ? ENRAGE.attackIntervalMul : 1);
+  }
+
+  /** 施加硬直（近戰武器用）；硬直抵抗高的職業（消防員）只會頓一下 */
+  stagger(seconds: number): void {
+    this.stunTimer = Math.max(this.stunTimer, seconds * (1 - this.spec.staggerResist));
   }
 
   private get s(): number {
@@ -110,8 +160,53 @@ export class Zombie extends Phaser.GameObjects.Sprite {
   }
 
   private restoreTint(): void {
-    if (this.def.tint) this.setTint(this.def.tint);
+    const t = this.enraged ? ENRAGE.tint : (this.spec.tint ?? this.def.tint);
+    if (t) this.setTint(t);
     else this.clearTint();
+    if (this.hat) {
+      if (this.spec.hatTint) this.hat.setTint(this.spec.hatTint);
+      else this.hat.clearTint();
+    }
+  }
+
+  /** 頭頂在世界座標的位置（跟著影格、翻轉、縮放與搖晃）；倒地影格回傳 null */
+  private headPoint(): { x: number; y: number } | null {
+    const a = HEAD_ANCHORS[Number(this.frame.name)] ?? (this.anims.isPlaying ? null : HEAD_ANCHORS[0]);
+    if (!a) return null;
+    const ox = this.originX * this.frame.width;
+    const oy = this.originY * this.frame.height;
+    let lx = (a.x + 0.5 - ox) * this.scaleX;
+    if (this.flipX) lx = -lx;
+    const ly = (a.y - oy) * this.scaleY;
+    const r = this.rotation;
+    return { x: this.x + lx * Math.cos(r) - ly * Math.sin(r), y: this.y + lx * Math.sin(r) + ly * Math.cos(r) };
+  }
+
+  /** 頭飾、變異標記跟著頭走 */
+  private syncGear(): void {
+    const hp = this.headPoint();
+    if (this.hat) {
+      if (hp) {
+        const ox = this.hat.getData('ox') as number;
+        const oy = this.hat.getData('oy') as number;
+        this.hat
+          .setVisible(true)
+          .setFlipX(this.flipX)
+          .setOrigin(this.flipX ? 1 - ox : ox, oy)
+          .setPosition(hp.x, hp.y)
+          .setScale(this.scaleX, this.scaleY)
+          .setRotation(this.rotation)
+          .setDepth(this.depth + 0.001);
+      } else this.hat.setVisible(false);
+    }
+    if (this.mark && hp) {
+      const bob = Math.sin(this.walkPhase * 0.7) * 1;
+      const pulse = this.spec.burst === 'small' ? 1 + 0.25 * Math.abs(Math.sin(this.scene.time.now / 160)) : 1;
+      this.mark
+        .setPosition(hp.x, hp.y - (this.hat ? 12 : 7) * this.s + bob)
+        .setScale(pulse)
+        .setDepth(this.depth + 0.002);
+    }
   }
 
   /**
@@ -132,25 +227,29 @@ export class Zombie extends Phaser.GameObjects.Sprite {
 
   update(dt: number, ctx: ZombieContext): void {
     if (this.dead) return;
+    this.updateAbilities(dt, ctx);
+    if (this.stunTimer > 0) {
+      // 硬直：原地晃，不走也不打
+      this.stunTimer = Math.max(0, this.stunTimer - dt);
+      this.attackTimer = 0;
+      if (this.anims.isPlaying) this.anims.pause();
+      this.sync(0, dt);
+      return;
+    }
+    if (this.anims.isPaused) this.anims.resume();
     this.groanIn -= dt;
     if (this.groanIn <= 0) {
       this.groanIn = 4 + Math.random() * 8;
       GameEvents.of(this.scene).emit('enemy:groan', { enemyId: this.def.id, x: this.footX, y: this.footY });
     }
     this.hitLean *= Math.max(0, 1 - dt * 12);
-    if (this.stunTimer > 0) {
-      // 硬直：原地搖晃，攻擊節奏重來
-      this.stunTimer = Math.max(0, this.stunTimer - dt);
-      this.attackTimer = 0;
-      this.footY = clampLaneY(this.footY);
-      this.sync(0, dt * 3);
-      return;
-    }
     const blk = ctx.blockerFor?.(this.footX, this.footY);
     const blockX = blk ? blk.blockX : ctx.blockX;
-    const hitBlock = blk ? blk.hit : ctx.hitBlock;
+    const rawHit = blk ? blk.hit : ctx.hitBlock;
+    // 工人的鐵鎚、消防員的斧頭：拆路障、建築特別快
+    const hitBlock = (d: number, y: number) => rawHit(d * this.spec.structureMul, y);
     const minX = blockX + 18 * this.s;
-    const speed = this.def.speed * this.speedJitter * (ctx.speedMul?.(this.footX, this.footY) ?? 1);
+    const speed = this.speedNow * this.speedJitter * (ctx.speedMul?.(this.footX, this.footY) ?? 1);
     // 主角或夥伴在擋路線外側、而且夠近 → 改追最近的那個（2D 追擊）
     const p = this.pickTarget(ctx);
     const dx = p ? p.x - this.footX : 0;
@@ -190,13 +289,21 @@ export class Zombie extends Phaser.GameObjects.Sprite {
     if (moved) {
       this.attackTimer = 0;
       if (this.anims.currentAnim?.key !== this.walkKey && this.scene.anims.exists(this.walkKey)) this.play(this.walkKey);
-      this.walkPhase += dt * (4 + this.def.speed * 0.12);
+      this.walkPhase += dt * (4 + this.speedNow * 0.12);
     } else if (this.anims.currentAnim?.key === this.walkKey) {
       // 停下來攻擊：不再原地踏步，回到站姿
       this.anims.stop();
       this.setFrame(0);
     }
     this.sync(moved ? 1 : 0, dt);
+  }
+
+  /** 原地走路（圖鑑用）：只更新動態與頭飾，不移動 */
+  idle(dt: number): void {
+    if (this.dead) return;
+    this.updateAbilities(dt, {} as ZombieContext);
+    this.walkPhase += dt * (4 + this.speedNow * 0.12);
+    this.sync(1, dt);
   }
 
   /** 擋路線外側、仇恨範圍內最近的目標；沒有就回傳 null */
@@ -218,7 +325,7 @@ export class Zombie extends Phaser.GameObjects.Sprite {
 
   private attack(dt: number, hit: () => void, dir: number): void {
     this.attackTimer += dt;
-    if (this.attackTimer >= this.def.attackInterval) {
+    if (this.attackTimer >= this.attackIntervalNow) {
       this.attackTimer = 0;
       hit();
       GameEvents.of(this.scene).emit('enemy:attack', { enemyId: this.def.id, x: this.footX, y: this.footY });
@@ -227,6 +334,48 @@ export class Zombie extends Phaser.GameObjects.Sprite {
       this.lunge = 3 * dir;
       this.scene.time.delayedCall(60, () => (this.lunge = 0));
     }
+  }
+
+  /** 職業能力與變異：再生、護理師光環 */
+  private updateAbilities(dt: number, ctx: ZombieContext): void {
+    this.sinceHit += dt;
+    if (this.spec.regen > 0 && this.sinceHit > 2 && this.hp < this.maxHp) {
+      this.hp = Math.min(this.maxHp, this.hp + this.spec.regen * dt);
+      if (Math.random() < dt * 3) Fx.of(this.scene)?.popText(this.footX, this.footY - 50 * this.s, '+', '#4affb0');
+    }
+    if (this.spec.profession.ability === 'heal_aura' && ctx.zombies) {
+      this.healTimer -= dt;
+      if (this.healTimer <= 0) {
+        this.healTimer = HEAL_AURA.interval;
+        let n = 0;
+        for (const z of ctx.zombies) {
+          if (z === this || z.dead || z.hp >= z.maxHp) continue;
+          if (Math.hypot(z.footX - this.footX, (z.footY - this.footY) * 1.6) > HEAL_AURA.radius) continue;
+          z.hp = Math.min(z.maxHp, z.hp + HEAL_AURA.amount);
+          Fx.of(this.scene)?.popText(z.footX, z.footY - 52 * z.s, '+', '#7aff9a');
+          n++;
+        }
+        if (n > 0) {
+          this.healPulse();
+          GameEvents.of(this.scene).emit('enemy:heal', { enemyId: this.def.id, x: this.footX, y: this.footY, targets: n });
+        }
+      }
+    }
+  }
+
+  private healPulse(): void {
+    const ring = this.scene.add
+      .ellipse(this.footX, this.footY, 8, 4)
+      .setStrokeStyle(1, 0x7aff9a, 0.8)
+      .setDepth(this.depth - 0.02);
+    this.scene.tweens.add({
+      targets: ring,
+      width: HEAL_AURA.radius * 2,
+      height: HEAL_AURA.radius * 1.25,
+      alpha: 0,
+      duration: 500,
+      onComplete: () => ring.destroy(),
+    });
   }
 
   /**
@@ -275,6 +424,72 @@ export class Zombie extends Phaser.GameObjects.Sprite {
       this.angle = Math.sin((this.walkPhase += dt * 3)) * 1.5 + this.hitLean;
     }
     this.setDepth(depthForY(this.footY));
+    this.syncGear();
+  }
+
+  /**
+   * 護甲結算：回傳實際扣血量。爆頭打頭盔、打身體打防彈背心，再套天生減傷（消防衣、硬皮）。
+   * 減傷用 src/combat/Damage.ts 的 armorAfter()：護甲 × 傷害類型係數 − 穿甲
+   * （霰彈對護甲最無力、鈍器與爆炸無視部分護甲）。被吸收的傷害扣在裝備耐久上，歸零就壞掉。
+   */
+  private mitigate(amount: number, info: HitInfo): number {
+    const pen = info.penetration ?? 0;
+    const blast = info.type === 'blast';
+    const bus = GameEvents.of(this.scene);
+    const fx = Fx.of(this.scene);
+    const dir = Math.sign(info.dirX ?? 1) || 1;
+    let dmg = amount;
+    if (info.headshot && !blast && this.helmet) {
+      const piece = this.helmet;
+      const a = armorAfter(piece.armor, info.type, pen);
+      const absorbed = dmg * a;
+      dmg -= absorbed;
+      // 鈍擊特別容易把頭盔敲飛
+      piece.hp -= absorbed * (info.type === 'blunt' ? 2 : 1) + 1;
+      const hp = this.headPoint() ?? { x: this.footX, y: this.footY - 50 * this.s };
+      fx?.sparks(hp.x, hp.y + 3, info.dirX ?? 1, this.footY, 5);
+      const broke = piece.hp <= 0;
+      if (broke) this.knockOffHat(dir, 1.2);
+      bus.emit('enemy:armor', { enemyId: this.def.id, x: hp.x, y: hp.y, part: 'helmet', broke });
+    } else if (!info.headshot || blast) {
+      if (this.vest) {
+        const piece = this.vest;
+        const a = armorAfter(piece.armor, info.type, pen);
+        const absorbed = dmg * a;
+        dmg -= absorbed;
+        piece.hp -= absorbed;
+        const broke = piece.hp <= 0;
+        if (broke) {
+          this.vest = null;
+          fx?.popText(this.footX, this.footY - 44 * this.s, '破甲', '#c8d8ff');
+        }
+        if (a > 0) {
+          fx?.sparks(this.footX, this.footY - 30 * this.s, info.dirX ?? 1, this.footY, 3);
+          bus.emit('enemy:armor', { enemyId: this.def.id, x: this.footX, y: this.footY - 30 * this.s, part: 'vest', broke });
+        }
+      }
+      const body = armorAfter(this.spec.bodyArmor, info.type, pen);
+      dmg *= 1 - body;
+    }
+    return dmg;
+  }
+
+  /** 頭飾飛走（頭盔被打爆，或死亡時掉落） */
+  private knockOffHat(dir: number, power = 1): void {
+    if (!this.hat) return;
+    const fx = Fx.of(this.scene);
+    const hp = this.headPoint() ?? { x: this.footX, y: this.footY - 50 * this.s };
+    if (fx) {
+      fx.fling(GEAR_TEXTURE, this.spec.hat, hp.x, hp.y - 2, dir, this.footY + Phaser.Math.Between(-3, 3), {
+        scale: this.s,
+        tint: this.spec.hatTint,
+        flipX: this.flipX,
+        power,
+      });
+    }
+    this.hat.destroy();
+    this.hat = null;
+    this.helmet = null;
   }
 
   /** 正在硬直（近戰處決、子彈打暈） */
@@ -283,15 +498,19 @@ export class Zombie extends Phaser.GameObjects.Sprite {
   }
 
   /**
-   * 武器的統一入口：處理硬直，再交給 takeDamage 扣血（護甲在 takeDamage 裡算）。
-   * 體型越大越難打退、打暈。
+   * 子彈打到這裡會不會被擋下、不再往後穿：看這一槍打到的部位剩多少護甲（≥ 30% 就停）。
+   * 只是預判，不會扣裝備耐久。
    */
+  stopsBullet(info: Pick<DamageInfo, 'type' | 'penetration' | 'headshot'>): boolean {
+    const raw = info.headshot ? (this.helmet?.armor ?? 0) : Math.max(this.vest?.armor ?? 0, this.spec.bodyArmor);
+    return armorAfter(raw, info.type, info.penetration) >= 0.3;
+  }
+
+  /** 武器的統一入口：先上硬直（已含職業抗性），再交給 takeDamage 扣血與結算護甲 */
   takeHit(info: DamageInfo): boolean {
     if (this.dead) return false;
-    const heavy = this.s >= 1.2;
-    const stagger = info.stagger * (1 - this.staggerResist) * (heavy ? 0.4 : 1);
-    if (stagger > 0) this.stunTimer = Math.max(this.stunTimer, stagger);
-    return this.takeDamage(info.amount, info.knockback / (this.s * this.s), {
+    if (info.stagger > 0) this.stagger(info.stagger);
+    return this.takeDamage(info.amount, info.knockback, {
       headshot: info.headshot,
       dirX: info.dirX,
       type: info.type,
@@ -301,26 +520,38 @@ export class Zombie extends Phaser.GameObjects.Sprite {
 
   takeDamage(amount: number, knockback: number, info: HitInfo = {}): boolean {
     if (this.dead) return false;
-    if (this.armor) {
-      amount = resolveDamage(
-        { amount, type: info.type ?? 'ballistic', penetration: info.penetration ?? 0, headshot: !!info.headshot },
-        this.armor,
-      );
-    }
-    this.hp -= amount;
-    this.footX += knockback * Math.sign(info.dirX ?? 1);
+    const dealt = this.mitigate(amount, info);
+    this.hp -= dealt;
+    this.sinceHit = 0;
+    this.footX += knockback * (1 - this.spec.knockbackResist) * Math.sign(info.dirX ?? 1);
     this.x = this.footX;
     const fx = Fx.of(this.scene);
     if (this.hp <= 0) {
       this.dead = true;
+      const dir = (info.dirX ?? 1) >= 0 ? 1 : -1;
       GameEvents.of(this.scene).emit('enemy:death', { enemyId: this.def.id, x: this.footX, y: this.footY, headshot: !!info.headshot });
+      // 倒下時頭飾一定掉
+      this.knockOffHat(dir, info.headshot ? 1.3 : 0.7);
+      this.mark?.destroy();
+      this.mark = null;
+      if (this.spec.burst) {
+        const b = BURST[this.spec.burst];
+        fx?.burst(this.footX, this.footY - 24 * this.s, this.footY, b.radius);
+        GameEvents.of(this.scene).emit('enemy:burst', {
+          enemyId: this.def.id,
+          x: this.footX,
+          y: this.footY,
+          radius: b.radius,
+          damage: b.damage,
+        });
+      }
       this.restoreTint();
       this.y = this.footY;
       if (fx) {
         // 程式化倒地：複製當下影格成屍體，自己立刻移除
         const frame = this.frame.name;
         fx.fall(this, {
-          dir: (info.dirX ?? 1) >= 0 ? 1 : -1,
+          dir,
           headshot: !!info.headshot,
           headFrame: this.texture.has(`head_${frame}`) ? `head_${frame}` : undefined,
           neckRow: ZOMBIE_NECK_ROW,
@@ -332,11 +563,19 @@ export class Zombie extends Phaser.GameObjects.Sprite {
       }
       return true;
     }
+    // 囚犯：血量過半暴走
+    if (this.spec.profession.ability === 'enrage' && !this.enraged && this.hp < this.maxHp * ENRAGE.below) {
+      this.enraged = true;
+      fx?.popText(this.footX, this.footY - 56 * this.s, '暴走', '#ff6a5a');
+      GameEvents.of(this.scene).emit('enemy:enrage', { enemyId: this.def.id, x: this.footX, y: this.footY });
+      if (this.anims.isPlaying) this.anims.timeScale *= ENRAGE.speedMul;
+    }
     // 受擊：閃白 + 擠壓 + 往後一仰
     this.setTintFill(0xffffff);
+    this.hat?.setTintFill(0xffffff);
     this.scene.time.delayedCall(50, () => this.active && this.restoreTint());
     fx?.squash(this, this.s, info.headshot ? 1.4 : 1);
-    this.hitLean = (info.headshot ? 12 : 7) * Math.sign(info.dirX ?? 1);
+    this.hitLean = (info.headshot ? 12 : 7) * Math.sign(info.dirX ?? 1) * (1 - this.spec.knockbackResist * 0.5);
     return false;
   }
 }

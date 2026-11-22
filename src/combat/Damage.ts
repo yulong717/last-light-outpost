@@ -17,7 +17,9 @@ export type DamageType =
   /** 刀刃：開山刀、斧頭、刀 */
   | 'slash'
   /** 鈍器：球棒、大鎚；無視部分護甲、擊退與硬直強 */
-  | 'blunt';
+  | 'blunt'
+  /** 爆炸（腫脹霧屍爆開）：不分頭身 */
+  | 'blast';
 
 export type DamageSource = 'player' | 'ally' | 'turret' | 'trap';
 
@@ -52,14 +54,23 @@ const ARMOR_FACTOR: Record<DamageType, number> = {
   buckshot: 1.5,
   slash: 1.25,
   blunt: 0.7,
+  blast: 0.5,
 };
+
+/**
+ * 單一護甲部位（頭盔、背心、天生減傷）實際擋下的比例：
+ * 原始護甲 × 傷害類型係數 − 穿甲，夾在 0..0.9。霧屍的 mitigate() 與子彈穿透判定都用它。
+ */
+export function armorAfter(raw: number, type: string | undefined, penetration = 0): number {
+  const k = ARMOR_FACTOR[(type ?? 'ballistic') as DamageType] ?? 1;
+  return Math.max(0, Math.min(0.9, Math.min(1, raw * k) - penetration));
+}
 
 /** 這一擊打到的部位實際有多少護甲（已扣掉穿甲），0..1 */
 export function effectiveArmor(info: Pick<DamageInfo, 'type' | 'penetration' | 'headshot'>, armor?: ArmorProfile): number {
   if (!armor) return 0;
   const raw = info.headshot ? (armor.head ?? armor.body) : armor.body;
-  const a = Math.min(1, raw * ARMOR_FACTOR[info.type]);
-  return Math.max(0, Math.min(0.9, a - info.penetration));
+  return armorAfter(raw, info.type, info.penetration);
 }
 
 /** 實際扣血。護甲最多擋 90%，永遠至少扣 1 點。 */

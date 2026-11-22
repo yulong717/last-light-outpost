@@ -8,6 +8,7 @@
 | 效果 | 做法 | 程式位置 |
 | --- | --- | --- |
 | 三種霧屍各自的配色與體型 | Python 調色盤替換＋加寬（不靠遊戲內 tint） | `tools/art/make_zombie_variants.py` |
+| 霧屍職業制服、隨機膚色衣色、頭飾、背包、血跡 | 執行期換色＋程式畫圖樣，頭飾疊圖（見 docs/ZOMBIES.md） | `src/art/ZombieComposer.ts` |
 | 霧屍攻擊動作（蓄力、前撲） | 從走路影格逐列位移上半身，產生 2 格 | 同上 |
 | 受擊閃白＋擠壓伸展＋後仰 | `setTintFill` + scale 補間 + 逐漸回正的角度 | `src/entities/Zombie.ts`、`src/fx/Fx.ts` `squash()` |
 | 卡肉（hit-stop） | 擊殺時整個戰場停 25–55ms | `Fx.freeze()`，`DefenseScene` 的 dt 乘上 `fx.timeScale` |
