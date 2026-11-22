@@ -1,6 +1,5 @@
 import Phaser from 'phaser';
 import {
-  DEPTH_FX,
   GAME_HEIGHT,
   GAME_WIDTH,
   GROUND_Y,
@@ -18,6 +17,7 @@ import { prewarmLooks, scrapFor, spawnEnemy } from '../systems/ZombieFactory';
 import { pixelText } from '../utils/text';
 import type { FirearmDef } from '../data/weapons';
 import { MeleeSystem } from '../systems/MeleeSystem';
+import { WeaponRig } from '../entities/WeaponRig';
 import { Barricade } from '../entities/Barricade';
 import { Player } from '../entities/Player';
 import { Zombie, type ZombieContext } from '../entities/Zombie';
@@ -54,6 +54,7 @@ export interface HudData {
   barricadeHp: number;
   barricadeMaxHp: number;
   weaponName: string;
+  weaponId: string;
   weaponModel: string;
   ammo: number;
   magazine: number;
@@ -98,7 +99,8 @@ export class DefenseScene extends Phaser.Scene {
   private headshots = 0;
   private ended = false;
   private fx!: Fx;
-  private wasReloading = false;
+  /** 主角手上的武器（手臂、槍、換彈動作） */
+  private rig!: WeaponRig;
   private phase: 'day' | 'night' = 'day';
   private outpost!: Outpost;
   private build!: BuildMode;
@@ -142,9 +144,12 @@ export class DefenseScene extends Phaser.Scene {
     cam.setDeadzone(160, GAME_HEIGHT);
     cam.setFollowOffset(-90, 0);
     this.fx.attachShadow(this.player.sprite, 22);
+    this.rig = new WeaponRig(this);
+    this.rig.setWeapon(GameState.data.armory.loadout[0] ?? 'm1911');
 
     this.screenFx = new ScreenFeedback(this);
     this.wireFeedback();
+    this.wireRig();
     // 音效：訂閱 GameEvents，依鏡頭位置做左右聲道（見 src/audio/、docs/AUDIO.md）
     attachAudio(this);
 
@@ -377,6 +382,9 @@ export class DefenseScene extends Phaser.Scene {
     const dt = Math.min(deltaMs / 1000, 0.05) * this.fx.timeScale;
     if (this.phase === 'day') {
       this.build.update(dt);
+      // 白天：槍口朝前稍微放低；在軍械庫換了配置，手上的槍跟著換
+      this.rig.setWeapon(GameState.data.armory.loadout[0] ?? 'm1911');
+      this.updateRig(dt, this.player.footX + 100, this.player.footY - 20);
       return;
     }
     const inp = this.input2.update();
@@ -393,7 +401,6 @@ export class DefenseScene extends Phaser.Scene {
     } else if (inp.meleePressed) this.melee.trySwing(this.player);
     const meleeRes = this.melee.update(dt, this.player, this.zombies);
     this.kills += meleeRes.kills;
-    this.animateReload();
     // 負重：拿機槍走得慢
     this.player.speedMul = this.weapons.active.def.moveMul;
 
@@ -401,13 +408,18 @@ export class DefenseScene extends Phaser.Scene {
     this.player.update(dt, inp.moveX, inp.moveY, inp.aimX, { minX: BASE_X + 14, maxX: WORLD_WIDTH - 16 });
 
     const p = this.player;
-    const angle = Phaser.Math.Angle.Between(p.gunX, p.gunY, inp.aimX, inp.aimY);
-    const muzzleX = p.gunX + Math.cos(angle) * 14;
-    const muzzleY = p.gunY + Math.sin(angle) * 14;
+    // 手上的武器先擺好姿勢，子彈從真正的槍口射出
+    this.rig.setWeapon(this.weapons.active.def.id);
+    const mp = this.melee.pose;
+    this.rig.setMelee(mp ? { id: this.melee.def.id, ...mp } : null);
+    this.updateRig(dt, inp.aimX, inp.aimY);
+    const muzzleX = this.rig.muzzle.x;
+    const muzzleY = this.rig.muzzle.y;
     const shot = p.alive && !this.melee.busy
       ? this.weapons.tryFire(muzzleX, muzzleY, inp.aimX, inp.aimY, inp.fireHeld, inp.firePressed, this.zombies, p.moveFactor)
       : null;
     if (shot) {
+      this.rig.fire();
       this.playShotFeedback(muzzleX, muzzleY, shot.angle);
       this.kills += shot.kills;
       this.headshots += shot.headshots;
@@ -470,16 +482,43 @@ export class DefenseScene extends Phaser.Scene {
     }
   }
 
-  /** 換彈開始時播放換彈影格，長度對齊武器的換彈時間；換完回到射擊圖 */
-  private animateReload(): void {
-    const reloading = this.weapons.reloading;
-    if (reloading && !this.wasReloading && this.anims.exists('player_reload')) {
-      this.player.sprite.play({ key: 'player_reload', duration: this.weapons.reloadDuration * 1000 });
-    } else if (!reloading && this.wasReloading && this.player.sprite.texture.key === 'player_reload') {
-      this.player.sprite.stop();
-      this.player.sprite.setTexture('player', 0);
+  /** 主角的武器姿勢：從肩膀指向瞄準點，角度限制在面向的前方 ±70° */
+  private updateRig(dt: number, aimX: number, aimY: number): void {
+    const p = this.player;
+    const sx = p.footX + 3 * p.facing;
+    const sy = p.footY - 35;
+    let a = Math.atan2(aimY - sy, aimX - sx);
+    const lim = Phaser.Math.DegToRad(70);
+    if (p.facing > 0) a = Phaser.Math.Clamp(a, -lim, lim);
+    else {
+      const rel = Phaser.Math.Angle.Wrap(a - Math.PI);
+      a = Math.PI + Phaser.Math.Clamp(rel, -lim, lim);
     }
-    this.wasReloading = reloading;
+    this.rig.setVisible(p.alive);
+    this.rig.update(dt, { footX: p.footX, footY: p.footY, facing: p.facing, aim: a, bob: p.bob, depth: p.sprite.depth });
+  }
+
+  /** 換彈、上膛的動作跟著武器系統的事件走 */
+  private wireRig(): void {
+    const bus = GameEvents.of(this);
+    const shellKey = (id: string) => {
+      const a = this.weapons?.active.def;
+      if (!a || a.id !== id) return 'shell_pistol';
+      return a.ammo === '12ga' ? 'shell_12ga' : a.ammo === '556' || a.ammo === '762' ? 'shell_rifle' : 'shell_pistol';
+    };
+    bus.on('player:reload-start', (e) => this.rig.startReload(e.duration, !!e.empty));
+    bus.on('player:reload-round', (e) => this.rig.roundIn(!!e.clip));
+    bus.on('player:reload-cancel', () => this.rig.endReload());
+    bus.on('player:reload-end', () => this.rig.endReload());
+    bus.on('player:rack', () => this.rig.rack());
+    bus.on('player:cycle', (e) => {
+      this.rig.cycle(e.delay);
+      // 泵動／栓動：拉的時候彈殼才跳出來
+      this.time.delayedCall((e.delay + 0.12) * 1000, () => {
+        const ej = this.rig.eject;
+        this.fx.ejectShell(ej.x, ej.y, this.player.footY + 2, this.player.facing, shellKey(e.weaponId));
+      });
+    });
   }
 
   /**
@@ -517,20 +556,12 @@ export class DefenseScene extends Phaser.Scene {
     if (def.rumbleMs > 0) rumble(def.rumbleMs, 0.6);
     // 拋殼 + 槍口煙（程式化粒子，見 src/fx/Fx.ts）
     // 左輪、雙管換彈時才退殼；泵動／栓動拉槓時才拋殼
-    if (def.cls !== 'revolver' && def.id !== 'coach') {
-      const eject = () => this.fx.ejectShell(this.player.footX + 4 * this.player.facing, this.player.gunY - 2, this.player.footY + 2, this.player.facing);
-      if (def.cycleSound) this.time.delayedCall(Math.min(300, 350 / def.fireRate), eject);
-      else eject();
+    if (def.cls !== 'revolver' && def.id !== 'coach' && !def.cycleSound) {
+      const ej = this.rig.eject;
+      const key = def.ammo === '12ga' ? 'shell_12ga' : def.ammo === '556' || def.ammo === '762' ? 'shell_rifle' : 'shell_pistol';
+      this.fx.ejectShell(ej.x, ej.y, this.player.footY + 2, this.player.facing, key);
     }
     this.fx.muzzleSmoke(x, y, angle);
-    if (this.anims.exists('player_shoot')) {
-      // 有開火影格時，火光與後座力都由動畫表現
-      this.player.sprite.play('player_shoot');
-      return;
-    }
-    this.player.kick();
-    const flash = this.add.circle(x, y, 4, 0xfff3a0).setDepth(DEPTH_FX + 2);
-    this.tweens.add({ targets: flash, scale: 0.2, alpha: 0, duration: 70, onComplete: () => flash.destroy() });
   }
 
   private hud(): HudData {
@@ -544,6 +575,7 @@ export class DefenseScene extends Phaser.Scene {
       barricadeHp: this.barricade.hp,
       barricadeMaxHp: this.barricade.maxHp,
       weaponName: w.def.name,
+      weaponId: w.def.id,
       weaponModel: w.def.model,
       ammo: w.ammo,
       magazine: w.def.magazine,

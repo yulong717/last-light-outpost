@@ -15,6 +15,7 @@ export class UIScene extends Phaser.Scene {
   private barricadeBar!: Phaser.GameObjects.Rectangle;
   private reloadBar!: Phaser.GameObjects.Rectangle;
   private ammoText!: Phaser.GameObjects.Text;
+  private weaponIcon!: Phaser.GameObjects.Image;
   private reserveText!: Phaser.GameObjects.Text;
   private slotText!: Phaser.GameObjects.Text;
   private staminaBar!: Phaser.GameObjects.Rectangle;
@@ -72,6 +73,8 @@ export class UIScene extends Phaser.Scene {
     this.reserveText = pixelText(this, wx, GAME_HEIGHT - 15, '', 7, '#b0bec5');
     this.add.rectangle(wx, GAME_HEIGHT - 4, 80, 2, 0x000000).setOrigin(0);
     this.reloadBar = this.add.rectangle(wx, GAME_HEIGHT - 4, 80, 2, 0xfff176).setOrigin(0);
+    // 目前手上的槍（圖示放大兩倍，在武器名稱上面）
+    this.weaponIcon = this.add.image(wx, GAME_HEIGHT - 47, '__DEFAULT').setOrigin(0, 1).setScale(2).setVisible(false);
 
     this.button(GAME_WIDTH - 38, GAME_HEIGHT - 38, '換彈', () => queueAction('reload'));
     this.button(GAME_WIDTH - 76, GAME_HEIGHT - 38, '換槍', () => queueAction('next'));
@@ -219,6 +222,11 @@ export class UIScene extends Phaser.Scene {
     this.ammoText.setColor(h.ammo === 0 && !h.reloading ? '#ff6b6b' : '#e8e8e8');
     this.reserveText.setText(`${h.weaponModel}　備彈 ${reserve}`).setColor(h.reserve === 0 ? '#ff6b6b' : '#b0bec5');
     this.reloadBar.width = 80 * Math.min(1, h.reloading ? h.reloadProgress : h.ammo / h.magazine);
+    const iconKey = `wpn_${h.weaponId}_icon`;
+    if (this.textures.exists(iconKey)) {
+      if (this.weaponIcon.texture.key !== iconKey) this.weaponIcon.setTexture(iconKey);
+      this.weaponIcon.setVisible(true).setAlpha(h.reloading ? 0.5 : 1);
+    } else this.weaponIcon.setVisible(false);
     const keys = this.touchUI ? '' : '1/2/3 ';
     const melee = this.touchUI ? h.meleeName : `右鍵/V ${h.meleeName}`;
     this.slotText.setText(`${keys}${h.slots.map((n, i) => (i === h.slot ? `[${n}]` : n)).join(' ')}　${melee}`);

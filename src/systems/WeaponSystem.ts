@@ -355,7 +355,11 @@ export class WeaponSystem {
     let carry = 1;
     const dirX = Math.cos(angle);
     const fx = Fx.of(this.scene);
-    for (const h of hits.slice(0, def.pierce)) {
+    const chain = hits.slice(0, def.pierce);
+    let rayKills = 0;
+    let stoppedAt = -1;
+    for (let i = 0; i < chain.length; i++) {
+      const h = chain[i];
       const head = h.z.isHeadshot(h.y);
       const info: DamageInfo = {
         amount: def.damage * carry * this.falloff(def, h.dist) * (head ? def.headshotMul : 1),
@@ -376,6 +380,7 @@ export class WeaponSystem {
       const killed = h.z.takeHit(info);
       if (killed) {
         result.kills++;
+        rayKills++;
         // 爆頭擊殺卡肉久一點，一般擊殺輕輕頓一下
         fx?.freeze(head ? 55 : 25);
       }
@@ -385,8 +390,22 @@ export class WeaponSystem {
       endY = h.y;
       carry *= def.pierceFalloff;
       // 子彈被護甲擋住就不再往後穿
-      if (stopped) break;
+      if (stopped) {
+        stoppedAt = i;
+        break;
+      }
+      // 打穿：從背後噴出（射出口），子彈繼續往後飛
+      if (i < chain.length - 1 || chain.length < def.pierce) {
+        const bodyW = 12 * (h.z.def.scale ?? 1);
+        fx?.blood(h.x + dirX * bodyW, h.y, dirX, h.z.footY, head ? 6 : 4, 1.4);
+      }
     }
+    // 沒被擋、穿透數還沒用完：曳光彈飛到射程盡頭（看得出子彈穿過去了）
+    if (stoppedAt < 0 && chain.length < def.pierce) {
+      endX = ray.x2;
+      endY = ray.y2;
+    }
+    if (rayKills >= 2) fx?.popText(endX - dirX * 10, endY - 14, `貫穿 ×${rayKills}`, '#ffd180');
     this.drawTracer(fromX, fromY, endX, endY);
   }
 
