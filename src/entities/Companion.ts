@@ -2,7 +2,10 @@ import Phaser from 'phaser';
 import { DEPTH_FX, clampLaneY, depthForY } from '../config';
 import { crewShootAnim, ensureCrewTexture } from '../art/CrewArt';
 import type { CompanionRoleDef, CrewMember } from '../data/companions';
-import { companionGunFor } from '../data/weapons';
+import { AMMO, getFirearm } from '../data/weapons';
+import { IMPROVISED_MELEE, crewWeapon } from '../data/crewLoadout';
+import type { DamageInfo } from '../combat/Damage';
+import { GameState } from '../state/GameState';
 import { TRAIT_TUNING, resolveCrewStats, type CrewStats } from '../data/crewTraits';
 import { Fx } from '../fx/Fx';
 import { stripArms } from '../art/WeaponArt';
@@ -31,21 +34,21 @@ export interface CompanionShot {
   headshots: number;
 }
 
+type SwingPhase = 'idle' | 'windup' | 'active' | 'recovery';
+
 /**
  * NPC 夥伴：每人一張依外觀換裝的專屬精靈圖（src/art/CrewArt.ts），頭上有職業顏色標記。
  * 數值 = 職業基礎 × 個人屬性 × 特質（src/data/crewTraits.ts 的 resolveCrewStats）。
  * 行為由 CompanionSystem 決定「要去哪、能不能開槍」，這裡只負責移動、自動瞄準射擊、受傷與陣亡。
  * 一樣用 footX / footY（腳底）做所有判定。
  */
-/** 沒有配發武器時，各職業手上拿的槍（外觀與槍聲；數值仍是職業預設） */
-const ROLE_WEAPON: Record<string, string> = { shooter: 'm4a1', medic: 'm1911', engineer: 'm1911' };
 
 export class Companion {
   readonly sprite: Phaser.GameObjects.Sprite;
   readonly member: CrewMember;
   readonly def: CompanionRoleDef;
-  /** 這位隊員實際的數值 */
-  readonly stats: CrewStats;
+  /** 這位隊員實際的數值（子彈打光換回隨身手槍時會重算） */
+  stats: CrewStats;
   footX: number;
   footY: number;
   hp: number;
@@ -76,22 +79,28 @@ export class Companion {
   private secondWindUsed = false;
   /** 「膽小」或膽識低：這一幀被霧屍貼身 */
   private panicking = false;
+  /** 近戰揮擊 */
+  private swing: SwingPhase = 'idle';
+  private swingT = 0;
+  private swingDir = 1;
+  private swingHit = new Set<Zombie>();
 
   constructor(private scene: Phaser.Scene, member: CrewMember, def: CompanionRoleDef, x: number, y: number) {
     this.member = member;
     this.def = def;
     this.footX = x;
     this.footY = clampLaneY(y);
-    // 配發了武器就用那把槍的基礎數值（src/data/weapons.ts 的 companionGunFor），再套個人屬性與特質
-    this.stats = resolveCrewStats(def, member, member.weaponId ? companionGunFor(member.weaponId) : def.gun);
+    // 武器：配發的（會用才拿）> 隨身手槍 > 沒碰過槍的人拿隨身小刀
+    this.stats = resolveCrewStats(def, member, crewWeapon(member));
     this.hp = this.stats.maxHp;
-    this.ammo = this.stats.gun.magazine;
+    this.ammo = 0;
+    this.loadMagazine(true);
     const key = ensureCrewTexture(scene, member);
     this.tint = key ? null : def.tint;
     this.shootAnim = key ? crewShootAnim(member) : scene.anims.exists('player_shoot') ? 'player_shoot' : null;
     // 身體擦掉手臂，手與武器由 WeaponRig 畫（和主角一樣會換彈、拉栓）
     const body = key ? stripArms(scene, key) : null;
-    this.visualWeapon = member.weaponId ?? ROLE_WEAPON[def.role] ?? 'm1911';
+    this.visualWeapon = this.stats.weaponId;
     if (body) {
       const look = member.look;
       const cloth = CLOTH[look?.jacket ?? 0]?.ramp ?? CLOTH[0].ramp;
@@ -140,7 +149,7 @@ export class Companion {
       this.reloadLeft -= dt;
       if (this.reloadLeft <= 0) {
         this.reloadLeft = 0;
-        this.ammo = this.stats.gun.magazine;
+        this.loadMagazine(false);
         this.rig?.endReload();
       }
     }
@@ -161,6 +170,14 @@ export class Companion {
     if (moving) {
       this.walkPhase += dt * 14;
       this.facing = dx >= 0 ? 1 : -1;
+    }
+
+    // 近戰型：貼近就揮
+    if (this.stats.melee) {
+      const shot = this.updateMelee(dt, intent);
+      this.sync(moving);
+      this.updateRig(dt, null);
+      return shot;
     }
 
     // 自動瞄準：射程內最近的霧屍
@@ -193,6 +210,145 @@ export class Companion {
       }
     }
     return best;
+  }
+
+  get isMelee(): boolean {
+    return !!this.stats.melee;
+  }
+
+  /** 近戰攻擊距離（給 CompanionSystem 決定要站多前面） */
+  get meleeReach(): number {
+    return this.stats.melee?.reach ?? 0;
+  }
+
+  /**
+   * 裝填：配發的槍從據點彈藥庫扣子彈（和主角共用）；隨身手槍備彈無限。
+   * 庫存打光就換回隨身手槍。
+   */
+  private loadMagazine(first: boolean): void {
+    if (this.stats.melee) return;
+    const g = this.stats.gun;
+    const fd = !this.stats.sidearm ? getFirearm(this.stats.weaponId) : undefined;
+    if (!fd || fd.infiniteReserve) {
+      this.ammo = g.magazine;
+      return;
+    }
+    const reserve = GameState.data.armory.ammo;
+    const need = g.magazine - Math.max(0, this.ammo);
+    const take = Math.min(need, reserve[fd.ammo] ?? 0);
+    reserve[fd.ammo] = (reserve[fd.ammo] ?? 0) - take;
+    this.ammo = Math.max(0, this.ammo) + take;
+    if (this.ammo > 0) return;
+    // 沒子彈了：換回隨身手槍（不會用手槍的人拿隨身小刀）
+    const fallback = (this.member.prof?.handgun ?? 2) > 0 ? undefined : IMPROVISED_MELEE;
+    const hp = this.hp;
+    this.stats = resolveCrewStats(this.def, this.member, fallback);
+    this.hp = Math.min(hp, this.stats.maxHp);
+    this.ammo = this.stats.melee ? 0 : this.stats.gun.magazine;
+    this.visualWeapon = this.stats.weaponId;
+    this.rig?.setWeapon(this.visualWeapon);
+    if (!first) Fx.of(this.scene)?.popText(this.footX, this.footY - 62, `${AMMO[fd.ammo].name}打光了`, '#ffcc80');
+  }
+
+  /** 近戰：最近的霧屍在攻擊距離內就起手；判定在 active 那一瞬間掃一次扇形 */
+  private updateMelee(dt: number, intent: CompanionIntent): CompanionShot | null {
+    const ms = this.stats.melee!;
+    const res: CompanionShot = { kills: 0, headshots: 0 };
+    const near = this.nearestZombieWithin(intent.zombies, ms.reach + 14);
+    if (near && this.swing === 'idle') this.facing = near.footX >= this.footX ? 1 : -1;
+    this.panicking = this.closestDistance(intent.zombies) < TRAIT_TUNING.skittishRange;
+    const rage = this.lastStand;
+    const speed = rage ? 1 / TRAIT_TUNING.lastStandFireRate : 1;
+    this.swingT += dt;
+    switch (this.swing) {
+      case 'idle':
+        if (near && intent.canShoot && this.cooldown <= 0) {
+          this.swing = 'windup';
+          this.swingT = 0;
+          this.swingDir = -this.swingDir;
+          this.swingHit.clear();
+        }
+        break;
+      case 'windup':
+        if (this.swingT >= ms.windup * speed) {
+          this.swing = 'active';
+          this.swingT = 0;
+          this.sweep(intent.zombies, res, rage);
+          GameEvents.of(this.scene).emit('ally:shoot', { role: this.def.role, x: this.footX, y: this.footY - 30, angle: this.facing > 0 ? 0 : Math.PI, weaponId: ms.id });
+        }
+        break;
+      case 'active':
+        if (this.swingT >= ms.active) {
+          this.swing = 'recovery';
+          this.swingT = 0;
+        }
+        break;
+      case 'recovery':
+        if (this.swingT >= ms.recovery * speed) {
+          this.swing = 'idle';
+          this.swingT = 0;
+          this.cooldown = 0.08;
+        }
+        break;
+    }
+    if (this.rig) {
+      const dur = this.swing === 'windup' ? ms.windup * speed : this.swing === 'active' ? ms.active : ms.recovery * speed;
+      this.rig.setMelee({ id: ms.id, phase: this.swing === 'idle' ? 'recovery' : this.swing, k: this.swing === 'idle' ? 1 : Math.min(1, this.swingT / Math.max(0.01, dur)), dir: this.swingDir });
+    }
+    return res.kills || res.headshots ? res : null;
+  }
+
+  private nearestZombieWithin(zombies: Zombie[], range: number): Zombie | null {
+    let best: Zombie | null = null;
+    let bestD = range;
+    for (const z of zombies) {
+      if (z.dead) continue;
+      const d = Math.hypot(z.footX - this.footX, (z.footY - this.footY) * 2);
+      if (d < bestD) {
+        bestD = d;
+        best = z;
+      }
+    }
+    return best;
+  }
+
+  /** 揮擊判定：和主角的近戰一樣，前方扇形、最多打 maxTargets 隻 */
+  private sweep(zombies: Zombie[], res: CompanionShot, rage: boolean): void {
+    const ms = this.stats.melee!;
+    const half = Phaser.Math.DegToRad(ms.arc / 2);
+    const cands: { z: Zombie; d: number }[] = [];
+    for (const z of zombies) {
+      if (z.dead || this.swingHit.has(z)) continue;
+      const fwd = (z.footX - this.footX) * this.facing;
+      const side = (z.footY - this.footY) * 2;
+      const d = Math.hypot(fwd, side);
+      if (d > ms.reach + 10 * (z.def.scale ?? 1) || fwd < -6) continue;
+      if (Math.atan2(Math.abs(side), Math.max(0.01, fwd)) > half && d > 10) continue;
+      cands.push({ z, d });
+    }
+    cands.sort((a, b) => a.d - b.d);
+    const fx = Fx.of(this.scene);
+    const bus = GameEvents.of(this.scene);
+    for (const { z } of cands.slice(0, ms.maxTargets)) {
+      this.swingHit.add(z);
+      const info: DamageInfo = {
+        amount: ms.damage * (rage ? TRAIT_TUNING.lastStandDamage : 1),
+        type: ms.damageType,
+        penetration: ms.penetration,
+        knockback: ms.knockback,
+        stagger: ms.stagger,
+        headshot: false,
+        dirX: this.facing,
+        source: 'ally',
+        weaponId: ms.id,
+      };
+      const hx = z.footX - 4 * this.facing;
+      const hy = z.footY - 30 * (z.def.scale ?? 1);
+      fx?.blood(hx, hy, this.facing, z.footY, ms.damageType === 'slash' ? 6 : 3, 0.9);
+      const killed = z.takeHit(info);
+      if (killed) res.kills++;
+      bus.emit('enemy:hit', { enemyId: z.def.id, x: hx, y: hy, damage: info.amount, headshot: false, killed });
+    }
   }
 
   /** 最近一隻霧屍的距離（判斷有沒有被貼身） */
@@ -295,8 +451,8 @@ export class Companion {
   takeDamage(amount: number): boolean {
     if (!this.alive || this.hurtCooldown > 0) return false;
     const fx = Fx.of(this.scene);
-    // 身手矯健：有機率閃開
-    if (this.stats.hooks.has('nimble') && Math.random() < TRAIT_TUNING.nimbleChance) {
+    // 閃避：體格（瘦小難打中）＋身手矯健
+    if (Math.random() < this.stats.dodge) {
       this.hurtCooldown = 0.35;
       fx?.popText(this.footX, this.footY - 60, '閃開！', '#b3e5fc');
       return false;

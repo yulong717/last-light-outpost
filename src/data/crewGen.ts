@@ -1,4 +1,5 @@
 import { Rng } from '../utils/rng';
+import { BACKGROUNDS, BACKGROUND_BY_ID, BODIES, WEAPON_GROUPS, type CrewBodyInfo, type Proficiency } from './crewBody';
 import type { CompanionRole } from './companions';
 import {
   BODY_EXCLUSIVE,
@@ -50,7 +51,7 @@ export function randomName(rng: Rng, taken: string[] = []): string {
   return rng.pick(SURNAMES) + rng.pick(GIVEN);
 }
 
-export interface CrewProfileGen {
+export interface CrewProfileGen extends CrewBodyInfo {
   name: string;
   look: CrewLook;
   attrs: CrewAttrs;
@@ -121,15 +122,20 @@ function pickGear<T extends string>(
   );
 }
 
-function rollLook(rng: Rng, role: CompanionRole, traits: string[]): CrewLook {
+function rollLook(rng: Rng, role: CompanionRole, traits: string[], info?: CrewBodyInfo): CrewLook {
   const tdefs = traits.map((id) => TRAIT_BY_ID[id]).filter(Boolean);
-  const head = pickGear<HeadGearId>(rng, HEAD_GEAR, role, NO_HAT_WEIGHT);
+  const bg = info ? BACKGROUND_BY_ID[info.background] : undefined;
+  const bodyDef = info ? BODIES[info.body] : undefined;
+  // 出身會讓某些打扮更常見（退伍軍人戴鋼盔、工地師傅戴工地帽…）
+  let head = pickGear<HeadGearId>(rng, HEAD_GEAR, role, NO_HAT_WEIGHT);
+  if (bg?.head && rng.chance(0.55)) head = rng.pick(bg.head);
   const headDef = HEAD_GEAR.find((h) => h.id === head);
 
   // 臉：0～1 件隨機 + 特質指定的
   const face = new Set<FaceGearId>();
   const f = pickGear<FaceGearId>(rng, FACE_GEAR, role, NO_FACE_WEIGHT);
   if (f) face.add(f);
+  if (bg?.face && rng.chance(0.45)) face.add(rng.pick(bg.face));
   for (const t of tdefs) if (t.face) face.add(t.face);
   // 眼鏡類只留一副；特質指定的優先
   const eyewear: FaceGearId[] = ['glasses', 'sunglasses', 'goggles', 'eyepatch'];
@@ -141,11 +147,18 @@ function rollLook(rng: Rng, role: CompanionRole, traits: string[]): CrewLook {
     face.delete('cigarette');
   }
   if (face.has('beard')) face.delete('stubble');
+  // 眼鏡類只留一副（出身與隨機可能各給一副）
+  const eyes = [...face].filter((e) => eyewear.includes(e));
+  for (const e of eyes.slice(0, -1)) if (e !== forcedEye) face.delete(e);
 
   // 身上：職業招牌 + 0～2 件隨機 + 特質指定的
   const body = new Set<BodyGearId>();
   if (role === 'medic') body.add('armband');
   for (const t of tdefs) if (t.body) body.add(t.body);
+  if (bg?.gear && rng.chance(0.5)) {
+    const g = rng.pick(bg.gear);
+    if (!BODY_EXCLUSIVE.some((grp) => grp.includes(g) && grp.some((o) => body.has(o)))) body.add(g);
+  }
   const extra = rng.int(0, 2);
   for (let i = 0; i < extra; i++) {
     const g = pickGear<BodyGearId>(rng, BODY_GEAR, role, 2);
@@ -157,13 +170,14 @@ function rollLook(rng: Rng, role: CompanionRole, traits: string[]): CrewLook {
   const hairStyle = rng.weighted(HAIR_STYLES, (h) => h.weight)!.id;
   const gearColors = [1, 2, 3, 5, 6, 7, 8, 9, 11];
   const gearDef = BODY_GEAR.find((g) => body.has(g.id) && g.colors);
-  let w = rng.float(0.94, 1.06);
-  let h = rng.float(0.96, 1.04);
+  // 寬度主要由體格的像素加寬決定，這裡只留一點個人差異
+  let w = rng.float(0.97, 1.03);
+  let h = rng.float(0.97, 1.03) * (bodyDef?.height ?? 1);
   for (const t of tdefs) {
     w += t.build?.w ?? 0;
     h += t.build?.h ?? 0;
   }
-  const jacket = rng.pick(JACKET_COLORS);
+  const jacket = bg?.jackets && rng.chance(0.6) ? rng.pick(bg.jackets) : rng.pick(JACKET_COLORS);
   return {
     skin: rng.int(0, SKIN_TONES.length - 1),
     hair: HAIR_COLORS.indexOf(rng.weighted(HAIR_COLORS, (c) => c.weight)!),
@@ -182,7 +196,8 @@ function rollLook(rng: Rng, role: CompanionRole, traits: string[]): CrewLook {
     face: [...face],
     body: [...body],
     gearColor: gearDef?.colors ? pickDifferent(rng, gearDef.colors, jacket) : pickDifferent(rng, gearColors, jacket),
-    build: { w: clamp(w, 0.86, 1.14), h: clamp(h, 0.92, 1.06) },
+    build: { w: clamp(w, 0.9, 1.1), h: clamp(h, 0.9, 1.12) },
+    widen: bodyDef?.widen ?? 0,
   };
 
   function pickDifferent(r: Rng, list: number[], avoid: number): number {
@@ -195,12 +210,62 @@ const CAMO_COLORS = [1, 3, 7, 9];
 
 const clamp = (v: number, lo: number, hi: number): number => Math.min(hi, Math.max(lo, v));
 
+/**
+ * 體格、出身、武器熟練。用獨立的亂數串（種子另外混過），
+ * 所以舊存檔補上這些時，原本的長相、特質、名字都不會變。
+ */
+export function generateBodyInfo(role: CompanionRole, seed: number, traits: string[], attrs: CrewAttrs): CrewBodyInfo {
+  const rng = new Rng((seed ^ 0xb0d1e5) >>> 0);
+  const bg = rng.weighted(BACKGROUNDS, (b) => b.roles[role] ?? 0) ?? BACKGROUNDS[0];
+  const has = (t: string): boolean => traits.includes(t);
+  const body = rng.weighted(Object.values(BODIES), (b) => {
+    let w = b.weight * (bg.bodies?.[b.id] ?? 1);
+    // 特質和體格對得上：鐵打的多半壯、體弱的多半瘦
+    if (has('tough') && (b.id === 'stocky' || b.id === 'hulk')) w *= 3;
+    if (has('tough') && b.id === 'slim') w = 0;
+    if (has('frail') && b.id === 'slim') w *= 4;
+    if (has('frail') && (b.id === 'hulk' || b.id === 'stocky')) w = 0;
+    if (has('fleet') && (b.id === 'slim' || b.id === 'athletic')) w *= 2.5;
+    if (has('fleet') && b.id === 'hulk') w = 0;
+    if (has('sluggish') && (b.id === 'stocky' || b.id === 'hulk')) w *= 2.5;
+    if (has('nimble') && b.id === 'hulk') w = 0;
+    if (has('heavyhitter') && (b.id === 'stocky' || b.id === 'hulk' || b.id === 'athletic')) w *= 2;
+    return w;
+  })!.id;
+
+  const prof: Proficiency = { ...bg.prof };
+  const groups = WEAPON_GROUPS.map((g) => g.id);
+  // 個人差異：兩類各上下一級（不會從 0 變會用，除了少數天分）
+  for (let i = 0; i < 2; i++) {
+    const g = rng.pick(groups);
+    const delta = rng.chance(0.5) ? 1 : -1;
+    if (prof[g] === 0 && !(delta > 0 && rng.chance(0.25))) continue;
+    prof[g] = Math.min(4, Math.max(prof[g] > 0 ? 1 : 0, prof[g] + delta));
+  }
+  // 槍法好的人狙擊有天分；神槍手更是
+  if (attrs.aim >= 4 && prof.sniper < 4) prof.sniper = Math.max(prof.sniper + 1, 1);
+  if (has('sharpshooter')) prof.sniper = Math.min(4, Math.max(2, prof.sniper + 1));
+  if (has('triggerhappy')) {
+    prof.smg = Math.min(4, prof.smg + 1);
+    prof.lmg = Math.min(4, Math.max(1, prof.lmg + 1));
+  }
+  // 不碰槍：所有槍都不會用，近戰更熟
+  if (has('gunshy')) {
+    for (const g of groups) if (g !== 'melee') prof[g] = 0;
+    prof.melee = Math.min(4, Math.max(3, prof.melee + 1));
+  }
+  // 至少要有一樣會用：手槍保底
+  if (groups.every((g) => prof[g] === 0)) prof.handgun = 1;
+  return { body, background: bg.id, prof };
+}
+
 export function generateCrewProfile(role: CompanionRole, seed: number, takenNames: string[] = []): CrewProfileGen {
   const rng = new Rng(seed);
   const traits = pickTraits(rng, role);
   const flawed = traits.some((t) => TRAIT_BY_ID[t]?.kind === 'flaw');
   const attrs = rollAttrs(rng, role, flawed);
-  const look = rollLook(rng, role, traits);
+  const info = generateBodyInfo(role, seed, traits, attrs);
+  const look = rollLook(rng, role, traits, info);
   const name = randomName(rng, takenNames);
-  return { name, look, attrs, traits };
+  return { name, look, attrs, traits, ...info };
 }

@@ -1,3 +1,4 @@
+import { crewStats } from '../data/crewLoadout';
 import { COMPANION_ROLES, type CompanionRole, type CrewMember } from '../data/companions';
 import {
   AMMO_ROLL,
@@ -62,8 +63,10 @@ export class Expedition {
     const st = GameState.data;
     this.intel = st.intel?.zone === zone.id ? INTEL[st.intel.kind] : undefined;
     this.riskNow = zone.risk + (this.intel?.riskAdd ?? 0);
-    this.lootMul = this.intel?.lootMul ?? 1;
-    for (const m of squad) this.crewHp.set(m.id, COMPANION_ROLES[m.role].maxHp);
+    // 負重：壯碩、巨漢背得多，瘦小的少帶一點
+    const carry = squad.reduce((sum, m) => sum + crewStats(m).carry, 0);
+    this.lootMul = (this.intel?.lootMul ?? 1) * Math.max(0.8, 1 + carry);
+    for (const m of squad) this.crewHp.set(m.id, crewStats(m).maxHp);
   }
 
   /** 出發：扣時段、記錄今天去過 */

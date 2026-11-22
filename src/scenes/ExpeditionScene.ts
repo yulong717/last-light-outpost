@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { GAME_HEIGHT, GAME_WIDTH } from '../config';
 import { AudioManager } from '../audio/AudioManager';
 import { COMPANION_ROLES } from '../data/companions';
+import { crewStats } from '../data/crewLoadout';
 import { MEDKIT_HEAL, NOISE, SUPPLIES, type EventOption, type ExploreEvent, type Outcome } from '../data/explore';
 import { Expedition, PLAYER_EXPLORE_HP, describeLoot, type Resolution } from '../explore/Expedition';
 import { uiBar, uiButton, uiPanel } from '../explore/ui';
@@ -119,7 +120,7 @@ export class ExpeditionScene extends Phaser.Scene {
     let cx = GAME_WIDTH - 8;
     for (const m of [...e.squad].reverse()) {
       const hp = e.crewHp.get(m.id) ?? 0;
-      const max = COMPANION_ROLES[m.role].maxHp;
+      const max = crewStats(m).maxHp;
       const t = pixelText(this, cx, 7, `${m.name} ${hp > 0 ? `${hp}/${max}` : '倒下'}`, 8, hp > 0 ? '#c8e6c9' : '#ef9a9a').setOrigin(1, 0);
       this.hud.add(t);
       cx -= t.width + 10;

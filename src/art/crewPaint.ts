@@ -227,7 +227,9 @@ export function paintCrewSheet(src: Pixels, mask: Pixels, look: CrewLook, opt: P
     if (look.head) drawBitmap(ctx, HATS[look.head].art, headRamp, 'over', dy);
     if (look.head === 'helmet') line(ctx, 22, 15 + dy, 23, 24 + dy, FIXED.b);
 
-    // 6) 修外框
+    // 6) 體格：脖子以下整段加寬或變窄（像素欄位複製／移除，不會糊）
+    if (look.widen) widenBody(c, ox, F, look.widen);
+    // 7) 修外框
     reoutline(c, ox, F);
   }
   return { width: c.w, height: c.h, data: c.px };
@@ -389,6 +391,54 @@ function paintZone(
       const rgb = fn(x, y, c.rgb(ox + x, y), c.lum(ox + x, y));
       if (rgb) c.set(ox + x, y, rgb, Part.Gear);
     }
+}
+
+/** 軀幹中線（第 0 格座標）與開始加寬的列 */
+const BODY_CENTER_X = 27;
+const BODY_TOP_Y = 25;
+
+/**
+ * 加寬：從中線往兩側推開，中間複製中線那一欄；變窄：從中線往內收。
+ * 頭不動，所以壯的人看起來肩寬體厚、頭相對小；瘦的人反過來。
+ */
+function widenBody(c: Canvas, ox: number, F: number, d: number): void {
+  const cx = ox + BODY_CENTER_X;
+  const L = Math.ceil(Math.abs(d) / 2);
+  const R = Math.floor(Math.abs(d) / 2);
+  for (let y = BODY_TOP_Y; y < c.h; y++) {
+    const rowPx: number[][] = [];
+    const rowPart: number[] = [];
+    for (let x = ox; x < ox + F; x++) {
+      const i = c.idx(x, y);
+      rowPx.push([c.px[i * 4], c.px[i * 4 + 1], c.px[i * 4 + 2], c.px[i * 4 + 3]]);
+      rowPart.push(c.part[i]);
+    }
+    const src = (x: number): number => {
+      // 回傳舊列裡的 x（-1 = 透明）
+      if (d > 0) {
+        if (x < cx - L) return x + L;
+        if (x < cx + R) return cx;
+        return x - R;
+      }
+      if (x < cx) return x - L;
+      return x + R;
+    };
+    for (let x = ox; x < ox + F; x++) {
+      const sx = src(x);
+      const i = c.idx(x, y);
+      if (sx < ox || sx >= ox + F) {
+        c.px[i * 4 + 3] = 0;
+        c.part[i] = Part.None;
+        continue;
+      }
+      const p = rowPx[sx - ox];
+      c.px[i * 4] = p[0];
+      c.px[i * 4 + 1] = p[1];
+      c.px[i * 4 + 2] = p[2];
+      c.px[i * 4 + 3] = p[3];
+      c.part[i] = rowPart[sx - ox];
+    }
+  }
 }
 
 /**

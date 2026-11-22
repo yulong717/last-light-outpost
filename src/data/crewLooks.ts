@@ -80,6 +80,8 @@ export interface CrewLook {
   gearColor: number;
   /** 體型：寬、高的縮放（1 = 原圖） */
   build: { w: number; h: number };
+  /** 體格：軀幹加寬幾格像素（負數變窄）；舊存檔沒有就是 0 */
+  widen?: number;
 }
 
 type RoleWeights = Partial<Record<CompanionRole, number>>;

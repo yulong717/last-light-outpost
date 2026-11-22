@@ -3,6 +3,7 @@ import { COMPANION_ROLES, makeCrewMember, type CompanionRole } from '../data/com
 import { BODY_GEAR, FACE_GEAR, HAIR_STYLES, HEAD_GEAR } from '../data/crewLooks';
 import { ATTRS, TRAIT_BY_ID, resolveCrewStats } from '../data/crewTraits';
 import { randomSeed } from '../utils/rng';
+import { BACKGROUND_BY_ID, BODIES, PROF_NAMES, WEAPON_GROUPS } from '../data/crewBody';
 
 /** 開發用：一次產生一批隨機倖存者，檢查換裝與數值。網址加 ?seed=123 可固定結果。 */
 async function loadPixels(url: string): Promise<Pixels> {
@@ -69,6 +70,8 @@ async function main(): Promise<void> {
         'beforeend',
         `<div class="name">${m.name}<span class="role">${COMPANION_ROLES[role].title}</span></div>
          <div>${traits}</div>
+         <div style="color:#ffe082">${BODIES[m.body].name}・${BACKGROUND_BY_ID[m.background].name}</div>
+         <div class="gear">${WEAPON_GROUPS.map((g) => `${g.name}${m.prof[g.id] ? PROF_NAMES[m.prof[g.id]].slice(0, 2) : '✗'}`).join(' ')}</div>
          <div class="attrs">${stars}</div>
          <div class="gear">${gear}</div>
          <div class="gear">血 ${st.maxHp}・速 ${st.speed.toFixed(0)}・傷 ${st.gun.damage.toFixed(1)}・射速 ${st.gun.fireRate.toFixed(2)}・彈匣 ${st.gun.magazine}</div>`,
