@@ -728,6 +728,61 @@ export const SFX: Record<string, SfxDef> = {
     },
   },
   /** 波次來襲：低沉的警報號角 */
+  /** 汽車防盜警報：兩音交替的方波（一段 1.2 秒，循環播放） */
+  car_alarm: {
+    variants: 1,
+    volume: 0.4,
+    pitch: 0,
+    maxVoices: 2,
+    minGapMs: 300,
+    recipe: (fs) => {
+      const b = new Buf(fs, 1.2);
+      b.add(0, 1.2, (t) => {
+        const f = Math.floor(t * 5) % 2 === 0 ? 1180 : 860;
+        return ((Math.floor(t * f * 2) & 1) * 2 - 1) * 0.3 * Math.min(1, (1.2 - t) * 40);
+      });
+      return b.normalize(0.7);
+    },
+  },
+  /** 玻璃碎裂：高頻叮噹＋雜訊 */
+  glass_break: {
+    variants: 3,
+    volume: 0.45,
+    pitch: 2,
+    maxVoices: 3,
+    minGapMs: 60,
+    recipe: (fs, r) => {
+      const b = new Buf(fs, 0.6);
+      const hp = new Biquad('hp', fs, 3500);
+      b.add(0, 0.5, (t) => hp.run(noise(r)) * env(t, 0.12, 0.001) * 0.8);
+      for (let k = 0; k < 7; k++) {
+        const at = r() * 0.3;
+        const f = 2500 + r() * 4000;
+        b.add(at, 0.15, (t) => Math.sin(2 * Math.PI * f * t) * env(t, 0.05) * 0.3);
+      }
+      return b.reverb(0.2, 0.8).normalize(0.8);
+    },
+  },
+  /** 油桶爆炸：低頻轟＋長尾 */
+  explosion: {
+    variants: 2,
+    volume: 0.9,
+    pitch: 2,
+    maxVoices: 3,
+    minGapMs: 80,
+    recipe: (fs, r) => {
+      const b = new Buf(fs, 2);
+      const lp = new Biquad('lp', fs, 1400, 0.8);
+      let ph = 0;
+      b.add(0, 2, (t, i) => {
+        if (i % 32 === 0) lp.set(200 + 1800 * Math.exp(-t / 0.15));
+        const f = 55 * (0.5 + Math.exp(-t / 0.08));
+        ph += (2 * Math.PI * f) / fs;
+        return lp.run(noise(r)) * env(t, 0.6, 0.002) + Math.sin(ph) * env(t, 0.35, 0.002) * 1.4;
+      });
+      return b.saturate(3).reverb(0.5, 2).normalize(0.95);
+    },
+  },
   wave_horn: {
     variants: 1,
     volume: 0.55,

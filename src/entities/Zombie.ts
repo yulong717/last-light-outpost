@@ -53,6 +53,8 @@ export interface ZombieTarget {
   alive: boolean;
   /** fromX/fromY 是霧屍腳底 */
   hit: (damage: number, fromX: number, fromY: number) => void;
+  /** 誘餌（響警報的車）：距離乘上這個值，越小越吸引霧屍；預設 1 */
+  lure?: number;
 }
 
 /** 主角離多近會被盯上（以地面距離計，y 方向加權） */
@@ -505,7 +507,7 @@ export class Zombie extends Phaser.GameObjects.Sprite {
     let bestD = Math.max(ctx.aggroRange ?? 0, this.spec.body === 'dog' ? POUNCE.aggro : AGGRO_RANGE);
     for (const t of list) {
       if (!t.alive || t.x < ctx.blockX) continue;
-      const d = Math.hypot(t.x - this.footX, (t.y - this.footY) * 1.6);
+      const d = Math.hypot(t.x - this.footX, (t.y - this.footY) * 1.6) * (t.lure ?? 1);
       if (d < bestD) {
         bestD = d;
         best = t;
