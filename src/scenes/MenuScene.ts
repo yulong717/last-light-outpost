@@ -19,7 +19,7 @@ export class MenuScene extends Phaser.Scene {
       : '滑鼠瞄準、左鍵射擊　R 換彈　1／2 或 Q 換槍';
     pixelText(this, cx, 212, hint, 8, '#c8c8c8').setOrigin(0.5);
 
-    const start = pixelText(this, cx, 264, touch ? '點擊開始第一夜' : '點擊或按空白鍵開始第一夜', 10, '#ffffff').setOrigin(0.5);
+    const start = pixelText(this, cx, 264, touch ? '點擊開始：白天布置據點，晚上守住它' : '點擊或按空白鍵開始：白天布置據點，晚上守住它', 10, '#ffffff').setOrigin(0.5);
     this.tweens.add({ targets: start, alpha: 0.3, duration: 700, yoyo: true, repeat: -1 });
 
     const go = () => {

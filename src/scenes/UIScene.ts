@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { GAME_HEIGHT, GAME_WIDTH } from '../config';
 import { JOYSTICK_RADIUS, JOYSTICK_ZONE, joystick, queueAction, registerUIRect } from '../input/InputManager';
+import { GameState } from '../state/GameState';
 import { pixelText } from '../utils/text';
 import type { HudData } from './DefenseScene';
 
@@ -103,8 +104,8 @@ export class UIScene extends Phaser.Scene {
     this.barricadeBar.width = 78 * (h.barricadeHp / h.barricadeMaxHp);
     this.ammoText.setText(h.reloading ? `${h.weaponName}  換彈中…` : `${h.weaponName}  ${h.ammo} / ${h.magazine}`);
     this.reloadBar.width = 60 * (h.reloading ? h.reloadProgress : h.ammo / h.magazine);
-    this.waveText.setText(`第一夜　第 ${h.wave} / ${h.totalWaves} 波`);
-    this.killText.setText(`擊殺 ${h.kills}`);
+    this.waveText.setText(`第 ${GameState.data.day} 夜　第 ${h.wave} / ${h.totalWaves} 波`);
+    this.killText.setText(`廢料 ${GameState.data.scrap}　擊殺 ${h.kills}`);
   }
 
   private onWaveStart(wave: number, total: number): void {

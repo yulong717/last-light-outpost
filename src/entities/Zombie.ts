@@ -19,6 +19,12 @@ export interface ZombieContext {
   hitBlock: (damage: number, y: number) => void;
   player: { x: number; y: number; alive: boolean };
   hitPlayer: (damage: number) => void;
+  /**
+   * 據點建築的阻擋（沙包牆等）：依霧屍位置回傳比 blockX 更前面的擋路線，沒有就回傳 null。
+   */
+  blockerFor?: (x: number, y: number) => { blockX: number; hit: (damage: number, y: number) => void } | null;
+  /** 地面效果的速度倍率（陷阱、照明燈），1 代表不影響 */
+  speedMul?: (x: number, y: number) => number;
 }
 
 /** 主角離多近會被盯上（以地面距離計，y 方向加權） */
@@ -102,8 +108,11 @@ export class Zombie extends Phaser.GameObjects.Sprite {
   update(dt: number, ctx: ZombieContext): void {
     if (this.dead) return;
     this.hitLean *= Math.max(0, 1 - dt * 12);
-    const minX = ctx.blockX + 18 * this.s;
-    const speed = this.def.speed * this.speedJitter;
+    const blk = ctx.blockerFor?.(this.footX, this.footY);
+    const blockX = blk ? blk.blockX : ctx.blockX;
+    const hitBlock = blk ? blk.hit : ctx.hitBlock;
+    const minX = blockX + 18 * this.s;
+    const speed = this.def.speed * this.speedJitter * (ctx.speedMul?.(this.footX, this.footY) ?? 1);
     const p = ctx.player;
 
     // 主角在擋路線外側、而且夠近 → 改追主角（2D 追擊）
@@ -136,7 +145,7 @@ export class Zombie extends Phaser.GameObjects.Sprite {
       moved = true;
     } else {
       this.setFlipX(true);
-      this.attack(dt, () => ctx.hitBlock(this.def.damage, this.footY), -1);
+      this.attack(dt, () => hitBlock(this.def.damage, this.footY), -1);
     }
 
     // 不能穿過路障

@@ -30,16 +30,28 @@ npm run build    # 型別檢查 + 打包到 dist/
 - 輸入抽象層（`src/input/InputManager.ts`），鍵鼠與觸控共用遊戲邏輯
 - 數值全部在 `src/data/`
 
+### 據點布置（白天）
+
+一天的流程：白天布置 → 按「開始夜晚」（或 Enter）→ 夜晚防守 → 撐過就進入下一天，建築、路障耐久、廢料都保留。
+
+- 戰場上有 10 個固定槽位：路障後方 2 座高台（砲塔／照明燈），前方三排地面點（沙包牆／尖刺陷阱／照明燈）
+- 點槽位跳出面板：空槽位選建築；已蓋的可升級（最高 Lv3）、修理、拆除（退一半）
+- 點主路障可強化（300 → 420 → 560）與修理；點左側外牆可修理據點耐久
+- 沙包牆擋住同一排的霧屍，牠們會停下來拆；陷阱刺傷＋減速；照明燈讓光圈內的霧屍變慢；砲塔自動射擊前方
+- 廢料：開局 80，擊殺掉落（2／3／8），撐過一夜 +20，每天白天固定 +25（白天探索做好前的暫代收入）
+- 槽位、數值都在 `src/data/buildings.ts`；邏輯在 `src/build/`（Outpost、BuildMode）與 `src/scenes/BuildUIScene.ts`
+
 ## 資料夾
 
 ```
 src/
-  scenes/    Boot, Menu, Defense, UI(HUD), GameOver
-  entities/  Zombie, Barricade
+  scenes/    Boot, Menu, Defense, UI(HUD), BuildUI（白天布置面板）, GameOver
+  build/     Outpost（建築與修理）, BuildMode（槽位點選）
+  entities/  Zombie, Barricade, Building
   systems/   WeaponSystem（hitscan 射擊）, WaveSpawner
   input/     InputManager
   state/     GameState（含 localStorage 存檔）
-  data/      weapons, enemies, waves
+  data/      weapons, enemies, waves, buildings
 public/assets/  之後放像素圖、地圖、音效
 ```
 

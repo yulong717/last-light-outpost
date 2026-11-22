@@ -4,9 +4,11 @@ import { BootScene } from './scenes/BootScene';
 import { MenuScene } from './scenes/MenuScene';
 import { DefenseScene } from './scenes/DefenseScene';
 import { UIScene } from './scenes/UIScene';
+import { BuildUIScene } from './scenes/BuildUIScene';
 import { GameOverScene } from './scenes/GameOverScene';
+import { GameState } from './state/GameState';
 
-new Phaser.Game({
+const game = new Phaser.Game({
   type: Phaser.AUTO,
   parent: 'game',
   width: GAME_WIDTH,
@@ -23,5 +25,8 @@ new Phaser.Game({
     default: 'arcade',
     arcade: { debug: false },
   },
-  scene: [BootScene, MenuScene, DefenseScene, UIScene, GameOverScene],
+  scene: [BootScene, MenuScene, DefenseScene, UIScene, BuildUIScene, GameOverScene],
 });
+
+// 開發模式下掛到 window，方便在主控台或自動化測試裡操作場景
+if (import.meta.env.DEV) Object.assign(window, { __game: game, __state: GameState });
