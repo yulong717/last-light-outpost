@@ -1,10 +1,20 @@
 import Phaser from 'phaser';
-import { GAME_HEIGHT, GAME_WIDTH, GROUND_Y, PLACEHOLDER_COLORS } from '../config';
+import {
+  DEPTH_FX,
+  GAME_HEIGHT,
+  GAME_WIDTH,
+  GROUND_Y,
+  LANE_BOTTOM,
+  LANE_TOP,
+  PLACEHOLDER_COLORS,
+  WORLD_WIDTH,
+} from '../config';
 import { ENEMIES } from '../data/enemies';
 import { NIGHT_ONE } from '../data/waves';
 import { WEAPONS } from '../data/weapons';
 import { Barricade } from '../entities/Barricade';
-import { Zombie, type ZombieTarget } from '../entities/Zombie';
+import { Player } from '../entities/Player';
+import { Zombie, type ZombieContext } from '../entities/Zombie';
 import { InputManager } from '../input/InputManager';
 import { GameState } from '../state/GameState';
 import { WaveSpawner } from '../systems/WaveSpawner';
@@ -13,6 +23,8 @@ import type { GameOverData } from './GameOverScene';
 
 /** 給 UIScene 讀的 HUD 資料 */
 export interface HudData {
+  playerHp: number;
+  playerMaxHp: number;
   baseHp: number;
   baseMaxHp: number;
   barricadeHp: number;
@@ -28,18 +40,20 @@ export interface HudData {
 }
 
 const BASE_X = 44;
-const PLAYER_X = 74;
-const BARRICADE_X = 148;
-const SPAWN_X = GAME_WIDTH + 20;
+const PLAYER_X = 92;
+const BARRICADE_X = 160;
+const PLAYER_MAX_HP = 100;
 
-/** 夜晚防守：固定鏡頭，守住路障與據點直到天亮。 */
+/**
+ * 夜晚防守：2.5D 帶狀戰場。主角可在地面帶上前後左右移動，
+ * 也能翻出路障外迎擊（風險自負）；鏡頭跟著主角水平捲動。
+ */
 export class DefenseScene extends Phaser.Scene {
   private input2!: InputManager;
   private weapons!: WeaponSystem;
   private spawner!: WaveSpawner;
   private barricade!: Barricade;
-  private gun!: Phaser.GameObjects.Rectangle;
-  private player!: Phaser.GameObjects.Sprite;
+  private player!: Player;
   private zombies: Zombie[] = [];
   private kills = 0;
   private headshots = 0;
@@ -59,17 +73,14 @@ export class DefenseScene extends Phaser.Scene {
 
     const st = GameState.data;
     this.barricade = new Barricade(this, BARRICADE_X, st.barricadeMaxHp);
-    this.player = this.add.sprite(PLAYER_X, GROUND_Y - 8, 'player', 0).setDepth(10);
-    // 影格腳底在 64 格中的第 63 列
-    this.player.setOrigin(0.5, this.anims.exists('player_shoot') ? 63 / 64 : 1);
-    // 待機呼吸（程式化動態，之後換成影格動畫）
-    this.tweens.add({ targets: this.player, scaleY: 1.03, duration: 900, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
-    this.gun = this.add
-      .rectangle(PLAYER_X + 10, GROUND_Y - 48, 14, 3, 0x222222)
-      .setOrigin(0, 0.5)
-      .setDepth(11)
-      // 槍已經畫在角色圖上；這條線只用來計算瞄準角度與槍口位置
-      .setVisible(false);
+    this.player = new Player(this, PLAYER_X, (LANE_TOP + LANE_BOTTOM) / 2, PLAYER_MAX_HP);
+
+    // 戰場比畫面寬：鏡頭跟著主角水平捲動，中間留一段不跟的死區
+    const cam = this.cameras.main;
+    cam.setBounds(0, 0, WORLD_WIDTH, GAME_HEIGHT);
+    cam.startFollow(this.player.sprite, true, 0.12, 0);
+    cam.setDeadzone(160, GAME_HEIGHT);
+    cam.setFollowOffset(-90, 0);
 
     this.input2 = new InputManager(this);
     this.weapons = new WeaponSystem(this, WEAPONS);
@@ -81,38 +92,68 @@ export class DefenseScene extends Phaser.Scene {
   }
 
   private drawBackdrop(): void {
-    this.add.rectangle(0, 0, GAME_WIDTH, GROUND_Y, PLACEHOLDER_COLORS.sky).setOrigin(0);
-    // 遠方的灰霧帶
+    // 天空固定不捲動
+    this.add.rectangle(0, 0, GAME_WIDTH, GROUND_Y, PLACEHOLDER_COLORS.sky).setOrigin(0).setScrollFactor(0);
+    // 遠方的灰霧帶：視差捲動，越遠越慢
     for (let i = 0; i < 3; i++) {
       this.add
-        .rectangle(0, GROUND_Y - 70 + i * 18, GAME_WIDTH, 30, PLACEHOLDER_COLORS.fog, 0.06 + i * 0.03)
-        .setOrigin(0);
+        .rectangle(0, GROUND_Y - 70 + i * 18, WORLD_WIDTH, 30, PLACEHOLDER_COLORS.fog, 0.06 + i * 0.03)
+        .setOrigin(0)
+        .setScrollFactor(0.3 + i * 0.2);
     }
-    this.add.rectangle(0, GROUND_Y, GAME_WIDTH, GAME_HEIGHT - GROUND_Y, PLACEHOLDER_COLORS.ground).setOrigin(0);
-    // 據點外牆與射擊平台
-    this.add.rectangle(0, GROUND_Y - 84, BASE_X, 84, 0x3d4450).setOrigin(0);
-    this.add.rectangle(BASE_X, GROUND_Y - 8, 52, 8, 0x555d6b).setOrigin(0);
+    // 遠景廢墟剪影
+    const rng = new Phaser.Math.RandomDataGenerator(['outpost']);
+    for (let x = 0; x < WORLD_WIDTH; x += rng.between(40, 90)) {
+      const h = rng.between(20, 60);
+      this.add.rectangle(x, GROUND_Y, rng.between(24, 50), h, 0x232831).setOrigin(0, 1).setScrollFactor(0.6);
+    }
+    // 地面帶：越近越亮一點，做出縱深
+    const bands = 6;
+    const bandH = (GAME_HEIGHT - GROUND_Y) / bands;
+    for (let i = 0; i < bands; i++) {
+      const c = Phaser.Display.Color.IntegerToColor(PLACEHOLDER_COLORS.ground).lighten(i * 2).color;
+      this.add.rectangle(0, GROUND_Y + i * bandH, WORLD_WIDTH, bandH + 1, c).setOrigin(0);
+    }
+    // 地上的碎石與裂痕，捲動時才看得出在移動
+    for (let n = 0; n < 90; n++) {
+      const y = rng.between(GROUND_Y + 4, GAME_HEIGHT - 2);
+      const near = (y - GROUND_Y) / (GAME_HEIGHT - GROUND_Y);
+      this.add
+        .rectangle(rng.between(0, WORLD_WIDTH), y, 2 + near * 6, 1 + Math.round(near), 0x1c1f25, 0.8)
+        .setOrigin(0.5);
+    }
+    // 據點外牆與射擊平台（整條地面帶都被外牆擋住）
+    this.add.rectangle(0, GROUND_Y - 84, BASE_X, GAME_HEIGHT - GROUND_Y + 84, 0x3d4450).setOrigin(0);
+    this.add.rectangle(BASE_X, GROUND_Y, 6, GAME_HEIGHT - GROUND_Y, 0x555d6b).setOrigin(0);
   }
 
   private spawnZombie(id: string): void {
     if (this.ended) return;
     const def = ENEMIES[id];
     if (!def) return;
-    const z = new Zombie(this, SPAWN_X + Phaser.Math.Between(0, 20), def);
-    z.setDepth(5 + Math.random());
-    this.zombies.push(z);
+    // 在鏡頭右緣外生成，主角在據點附近時節奏不會被拉長
+    const right = Math.min(WORLD_WIDTH, this.cameras.main.scrollX + GAME_WIDTH);
+    const x = right + 20 + Phaser.Math.Between(0, 20);
+    const y = Phaser.Math.Between(LANE_TOP, LANE_BOTTOM);
+    this.zombies.push(new Zombie(this, x, y, def));
   }
 
-  /** 依路障是否還在，決定敵人要攻擊路障還是據點 */
-  private currentTarget(): ZombieTarget {
-    if (this.barricade.alive) {
-      return { frontX: this.barricade.frontX, hit: (d) => this.barricade.takeDamage(d) };
-    }
+  /** 霧屍要攻擊的擋路線：路障還在就是路障，否則是據點外牆 */
+  private zombieContext(): ZombieContext {
+    const blocker = this.barricade.alive
+      ? { blockX: this.barricade.frontX, hitBlock: (d: number) => this.barricade.takeDamage(d) }
+      : {
+          blockX: BASE_X,
+          hitBlock: (d: number) => {
+            GameState.data.baseHp = Math.max(0, GameState.data.baseHp - d);
+            this.cameras.main.shake(80, 0.006);
+          },
+        };
     return {
-      frontX: BASE_X,
-      hit: (d) => {
-        GameState.data.baseHp = Math.max(0, GameState.data.baseHp - d);
-        this.cameras.main.shake(80, 0.006);
+      ...blocker,
+      player: { x: this.player.footX, y: this.player.footY, alive: this.player.alive },
+      hitPlayer: (d) => {
+        if (this.player.takeDamage(d)) this.cameras.main.shake(60, 0.004);
       },
     };
   }
@@ -128,11 +169,16 @@ export class DefenseScene extends Phaser.Scene {
     if (inp.reloadPressed) this.weapons.reload();
     this.weapons.update(dt);
 
-    const angle = Phaser.Math.Angle.Between(this.gun.x, this.gun.y, inp.aimX, inp.aimY);
-    this.gun.setRotation(angle);
-    const muzzleX = this.gun.x + Math.cos(angle) * 14;
-    const muzzleY = this.gun.y + Math.sin(angle) * 14;
-    const shot = this.weapons.tryFire(muzzleX, muzzleY, inp.aimX, inp.aimY, inp.fireHeld, inp.firePressed, this.zombies);
+    // 主角移動：據點外牆內側到戰場右緣
+    this.player.update(dt, inp.moveX, inp.moveY, inp.aimX, { minX: BASE_X + 14, maxX: WORLD_WIDTH - 16 });
+
+    const p = this.player;
+    const angle = Phaser.Math.Angle.Between(p.gunX, p.gunY, inp.aimX, inp.aimY);
+    const muzzleX = p.gunX + Math.cos(angle) * 14;
+    const muzzleY = p.gunY + Math.sin(angle) * 14;
+    const shot = p.alive
+      ? this.weapons.tryFire(muzzleX, muzzleY, inp.aimX, inp.aimY, inp.fireHeld, inp.firePressed, this.zombies)
+      : null;
     if (shot) {
       this.playShotFeedback(muzzleX, muzzleY);
       this.kills += shot.kills;
@@ -140,15 +186,19 @@ export class DefenseScene extends Phaser.Scene {
     }
 
     // 敵人
-    const target = this.currentTarget();
-    for (const z of this.zombies) z.update(dt, target);
+    const ctx = this.zombieContext();
+    for (const z of this.zombies) z.update(dt, ctx);
     this.zombies = this.zombies.filter((z) => z.active && !z.dead);
+    for (let i = 0; i < this.zombies.length; i++) {
+      for (let j = i + 1; j < this.zombies.length; j++) Zombie.separate(this.zombies[i], this.zombies[j]);
+    }
     this.spawner.update(this.zombies.length);
 
     this.events.emit('hud', this.hud());
 
     // 勝負
-    if (GameState.data.baseHp <= 0) this.finish(false);
+    if (GameState.data.baseHp <= 0) this.finish(false, 'base');
+    else if (!this.player.alive) this.finish(false, 'player');
     else if (this.spawner.done && this.zombies.length === 0) this.finish(true);
   }
 
@@ -156,13 +206,11 @@ export class DefenseScene extends Phaser.Scene {
   private playShotFeedback(x: number, y: number): void {
     if (this.anims.exists('player_shoot')) {
       // 有開火影格時，火光與後座力都由動畫表現
-      this.player.play('player_shoot');
+      this.player.sprite.play('player_shoot');
       return;
     }
-    // 直接位移而不用 tween，避免和待機呼吸的 tween 互相干擾
-    this.player.x = PLAYER_X - 2;
-    this.time.delayedCall(45, () => (this.player.x = PLAYER_X));
-    const flash = this.add.circle(x, y, 4, 0xfff3a0).setDepth(52);
+    this.player.kick();
+    const flash = this.add.circle(x, y, 4, 0xfff3a0).setDepth(DEPTH_FX + 2);
     this.tweens.add({ targets: flash, scale: 0.2, alpha: 0, duration: 70, onComplete: () => flash.destroy() });
   }
 
@@ -170,6 +218,8 @@ export class DefenseScene extends Phaser.Scene {
     const w = this.weapons.active;
     const st = GameState.data;
     return {
+      playerHp: this.player.hp,
+      playerMaxHp: this.player.maxHp,
       baseHp: st.baseHp,
       baseMaxHp: st.baseMaxHp,
       barricadeHp: this.barricade.hp,
@@ -185,13 +235,13 @@ export class DefenseScene extends Phaser.Scene {
     };
   }
 
-  private finish(survived: boolean): void {
+  private finish(survived: boolean, reason: GameOverData['reason'] = 'base'): void {
     this.ended = true;
     if (survived) {
       GameState.data.day += 1;
       GameState.save();
     }
-    const data: GameOverData = { survived, kills: this.kills, headshots: this.headshots };
+    const data: GameOverData = { survived, reason, kills: this.kills, headshots: this.headshots };
     this.time.delayedCall(800, () => this.scene.start('GameOver', data));
   }
 }

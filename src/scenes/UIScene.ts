@@ -1,12 +1,15 @@
 import Phaser from 'phaser';
 import { GAME_HEIGHT, GAME_WIDTH } from '../config';
-import { queueAction, registerUIRect } from '../input/InputManager';
+import { JOYSTICK_RADIUS, JOYSTICK_ZONE, joystick, queueAction, registerUIRect } from '../input/InputManager';
 import { pixelText } from '../utils/text';
 import type { HudData } from './DefenseScene';
 
 /** HUD 疊在遊戲場景上方。手機與電腦共用，按鈕至少 24×24 邏輯像素。 */
 export class UIScene extends Phaser.Scene {
+  private playerBar!: Phaser.GameObjects.Rectangle;
   private baseBar!: Phaser.GameObjects.Rectangle;
+  private stick!: Phaser.GameObjects.Graphics;
+  private touchUI = false;
   private barricadeBar!: Phaser.GameObjects.Rectangle;
   private reloadBar!: Phaser.GameObjects.Rectangle;
   private ammoText!: Phaser.GameObjects.Text;
@@ -21,13 +24,21 @@ export class UIScene extends Phaser.Scene {
 
   create(): void {
     this.unregister = [];
-    pixelText(this, 6, 4, '據點', 8);
+    pixelText(this, 6, 4, '生命', 8);
     this.add.rectangle(40, 7, 80, 6, 0x000000).setOrigin(0);
-    this.baseBar = this.add.rectangle(41, 8, 78, 4, 0x4caf50).setOrigin(0);
+    this.playerBar = this.add.rectangle(41, 8, 78, 4, 0xef5350).setOrigin(0);
 
-    pixelText(this, 6, 20, '路障', 8);
+    pixelText(this, 6, 20, '據點', 8);
     this.add.rectangle(40, 23, 80, 6, 0x000000).setOrigin(0);
-    this.barricadeBar = this.add.rectangle(41, 24, 78, 4, 0xbcaaa4).setOrigin(0);
+    this.baseBar = this.add.rectangle(41, 24, 78, 4, 0x4caf50).setOrigin(0);
+
+    pixelText(this, 6, 36, '路障', 8);
+    this.add.rectangle(40, 39, 80, 6, 0x000000).setOrigin(0);
+    this.barricadeBar = this.add.rectangle(41, 40, 78, 4, 0xbcaaa4).setOrigin(0);
+
+    // 觸控裝置才顯示虛擬搖桿（左下角）；電腦用 WASD／方向鍵
+    this.touchUI = this.sys.game.device.input.touch;
+    this.stick = this.add.graphics().setDepth(90);
 
     this.waveText = pixelText(this, GAME_WIDTH / 2, 4, '', 10).setOrigin(0.5, 0);
     this.killText = pixelText(this, GAME_WIDTH - 6, 4, '', 8).setOrigin(1, 0);
@@ -72,7 +83,22 @@ export class UIScene extends Phaser.Scene {
     this.unregister.push(registerUIRect({ x, y, w: size, h: size }));
   }
 
+  update(): void {
+    const g = this.stick;
+    g.clear();
+    if (!this.touchUI) return;
+    // 沒按時在固定位置顯示淡淡的搖桿，提示「這裡可以移動」
+    const bx = joystick.active ? joystick.baseX : JOYSTICK_ZONE.x + 52;
+    const by = joystick.active ? joystick.baseY : JOYSTICK_ZONE.y + JOYSTICK_ZONE.h - 52;
+    const kx = joystick.active ? joystick.knobX : bx;
+    const ky = joystick.active ? joystick.knobY : by;
+    const a = joystick.active ? 0.5 : 0.22;
+    g.lineStyle(1, 0xffffff, a).strokeCircle(bx, by, JOYSTICK_RADIUS);
+    g.fillStyle(0xffffff, a * 0.8).fillCircle(kx, ky, 10);
+  }
+
   private onHud(h: HudData): void {
+    this.playerBar.width = 78 * (h.playerHp / h.playerMaxHp);
     this.baseBar.width = 78 * (h.baseHp / h.baseMaxHp);
     this.barricadeBar.width = 78 * (h.barricadeHp / h.barricadeMaxHp);
     this.ammoText.setText(h.reloading ? `${h.weaponName}  換彈中…` : `${h.weaponName}  ${h.ammo} / ${h.magazine}`);
