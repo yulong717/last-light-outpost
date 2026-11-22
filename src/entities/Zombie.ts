@@ -126,6 +126,7 @@ export class Zombie extends Phaser.GameObjects.Sprite {
           headshot: !!info.headshot,
           headFrame: this.texture.has(`head_${frame}`) ? `head_${frame}` : undefined,
           neckRow: ZOMBIE_NECK_ROW,
+          deathAnim: `${this.def.texture}_death`,
         });
         this.destroy();
       } else {

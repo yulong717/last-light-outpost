@@ -19,6 +19,9 @@
 | 腳下影子 | 跟著角色的橢圓，為之後上下多路線（2.5D）做準備 | `Fx.attachShadow()` |
 | 夜晚氣氛 | 灰燼粒子、兩層視差貼地霧、閃爍據點燈、抖色暗角 | `src/fx/Atmosphere.ts` |
 
+| 霧屍中槍倒地（9 格） | PixelLab PixMiniMax（免費帳號可用），以走路第 0 格為起始影格；非爆頭擊殺播放 | `art/source/zombie_death.png` → 腳本合併進三種霧屍 |
+| 主角換彈（9 格） | PixelLab PixMiniMax，以射擊第 0 格為起始影格；播放長度對齊武器換彈時間 | `public/assets/sprites/player_reload.png`、`DefenseScene.animateReload()` |
+
 所有特效貼圖都在 `src/fx/FxTextures.ts` 用程式畫，沒有額外美術檔。
 碎片和血跡都以「被打中那隻的腳底 y」當地面，所以改成上下移動的多路線後不用改。
 
@@ -64,8 +67,13 @@ python3 tools/art/make_zombie_variants.py
 - Spine 要付費；DragonBones 已改名 LoongBones，是否仍免費未確認。
 - 建議維持 Phaser 原生：Tween + 粒子 + tint + 少量手繪影格，也就是本專案目前的做法。
 
+## PixelLab 免費帳號的做法（實測 2026-11）
+
+- 「Animate with text → V3」只限付費；**PixMiniMax（Beta）** 免費帳號可用，每次扣 1 次生成，4–40 格。
+- 上傳 64×64 的角色單格當 First frame，描述動作，產出是 3×3（或更多）格的 PNG。
+- 取回時要保持像素精確：在頁面上用 `image-rendering: pixelated` 放大成整數倍、洋紅色背景，截圖後每格取中心像素還原（本次 0 個不一致像素）。
+
 ## 下一步建議
 
-1. 用 PixelLab 免費額度補「死亡」「受擊」「跑步」影格，或用 Aseprite/Pixelorama 自己修。
-2. 主角加上換彈動作（目前只有射擊 3 格）。
-3. 背景改成像素分層視差圖（遠景城市剪影、中景圍牆、近景地面），可用程式產生或 CC0 素材。
+1. 再用 PixMiniMax 補「受擊」「疾跑」影格，或用 Aseprite/Pixelorama 自己修。
+2. 背景改成像素分層視差圖（遠景城市剪影、中景圍牆、近景地面），可用程式產生或 CC0 素材。

@@ -47,6 +47,7 @@ export class DefenseScene extends Phaser.Scene {
   private headshots = 0;
   private ended = false;
   private fx!: Fx;
+  private wasReloading = false;
 
   constructor() {
     super('Defense');
@@ -134,6 +135,7 @@ export class DefenseScene extends Phaser.Scene {
     if (inp.nextWeapon) this.weapons.next();
     if (inp.reloadPressed) this.weapons.reload();
     this.weapons.update(dt);
+    this.animateReload();
 
     const angle = Phaser.Math.Angle.Between(this.gun.x, this.gun.y, inp.aimX, inp.aimY);
     this.gun.setRotation(angle);
@@ -157,6 +159,18 @@ export class DefenseScene extends Phaser.Scene {
     // 勝負
     if (GameState.data.baseHp <= 0) this.finish(false);
     else if (this.spawner.done && this.zombies.length === 0) this.finish(true);
+  }
+
+  /** 換彈開始時播放換彈影格，長度對齊武器的換彈時間；換完回到射擊圖 */
+  private animateReload(): void {
+    const reloading = this.weapons.reloading;
+    if (reloading && !this.wasReloading && this.anims.exists('player_reload')) {
+      this.player.play({ key: 'player_reload', duration: this.weapons.active.def.reloadTime * 1000 });
+    } else if (!reloading && this.wasReloading && this.player.texture.key === 'player_reload') {
+      this.player.stop();
+      this.player.setTexture('player', 0);
+    }
+    this.wasReloading = reloading;
   }
 
   /** 開槍回饋：後座力往後頓一下＋槍口火光 */

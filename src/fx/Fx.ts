@@ -31,6 +31,8 @@ export interface FallOptions {
   headFrame?: string;
   /** 斷頭時，屍體從影格第幾列以下保留 */
   neckRow?: number;
+  /** 有倒地影格動畫時的 key；非爆頭擊殺會優先播放它 */
+  deathAnim?: string;
 }
 
 const GRAVITY = 520;
@@ -45,7 +47,7 @@ export class Fx {
   private pool: Phaser.GameObjects.Image[] = [];
   private decals: Phaser.GameObjects.RenderTexture;
   private shadows = new Map<Phaser.GameObjects.Sprite, Phaser.GameObjects.Image>();
-  private corpses: Phaser.GameObjects.Image[] = [];
+  private corpses: Phaser.GameObjects.Sprite[] = [];
   private freezeUntil = 0;
   private squashTweens = new WeakMap<Phaser.GameObjects.Sprite, Phaser.Tweens.Tween>();
 
@@ -122,7 +124,7 @@ export class Fx {
   fall(sprite: Phaser.GameObjects.Sprite, opt: FallOptions): void {
     const sc = this.scene;
     const corpse = sc.add
-      .image(sprite.x, sprite.y, sprite.texture.key, sprite.frame.name)
+      .sprite(sprite.x, sprite.y, sprite.texture.key, sprite.frame.name)
       .setOrigin(sprite.originX, sprite.originY)
       .setFlipX(sprite.flipX)
       .setScale(sprite.scaleX, sprite.scaleY)
@@ -151,6 +153,25 @@ export class Fx {
       this.blood(sprite.x, headY + 4 * s, opt.dir, sprite.y, 22, 1.3);
     }
 
+    const settle = (x: number): void => {
+      this.dust(x, sprite.y, 6);
+      this.stain(x - opt.dir * 4 * s, sprite.y, 2.2);
+      corpse.setTint(0x777777);
+      sc.tweens.add({ targets: corpse, alpha: 0, delay: CORPSE_STAY, duration: 1200, onComplete: () => this.dropCorpse(corpse) });
+    };
+
+    // 影格動畫的倒地方向是「往背後倒」；朝左走（flipX）的霧屍就是往右倒
+    const animDir = sprite.flipX ? 1 : -1;
+    if (!opt.headshot && opt.deathAnim && sc.anims.exists(opt.deathAnim) && opt.dir === animDir) {
+      corpse.play(opt.deathAnim);
+      // 被子彈推著往後滑一點
+      sc.tweens.add({ targets: corpse, x: corpse.x + opt.dir * Phaser.Math.Between(3, 7), duration: 300, ease: 'Quad.easeOut' });
+      corpse.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => settle(corpse.x + opt.dir * 16 * s));
+      this.corpses.push(corpse);
+      if (this.corpses.length > MAX_CORPSES) this.dropCorpse(this.corpses[0]);
+      return;
+    }
+
     // 以腳底為軸轉 90 度時，身體寬度有一半會轉到地面下，所以同時往上抬
     const lift = 11 * s;
     const angle = opt.dir * Phaser.Math.Between(82, 96);
@@ -161,18 +182,13 @@ export class Fx {
       y: corpse.y - lift,
       duration: Phaser.Math.Between(380, 480),
       ease: 'Bounce.easeOut',
-      onComplete: () => {
-        this.dust(corpse.x + opt.dir * 20 * s, sprite.y, 6);
-        this.stain(corpse.x + opt.dir * 14 * s, sprite.y, 2.2);
-        corpse.setTint(0x777777);
-        sc.tweens.add({ targets: corpse, alpha: 0, delay: CORPSE_STAY, duration: 1200, onComplete: () => this.dropCorpse(corpse) });
-      },
+      onComplete: () => settle(corpse.x + opt.dir * 18 * s),
     });
     this.corpses.push(corpse);
     if (this.corpses.length > MAX_CORPSES) this.dropCorpse(this.corpses[0]);
   }
 
-  private dropCorpse(c: Phaser.GameObjects.Image): void {
+  private dropCorpse(c: Phaser.GameObjects.Sprite): void {
     this.corpses = this.corpses.filter((x) => x !== c);
     c.destroy();
   }

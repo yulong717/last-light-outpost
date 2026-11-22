@@ -6,7 +6,7 @@
 只需要 Python 3 + Pillow（pip install pillow），完全免費、可重跑。
 用法（在 repo 根目錄）：
   python3 tools/art/make_zombie_variants.py
-輸出到 public/assets/sprites/zombie_<type>.png，每張 6 格：0–3 走路、4 蓄力、5 前撲。
+輸出到 public/assets/sprites/zombie_<type>.png，每張 15 格：0–3 走路、4 蓄力、5 前撲、6–14 倒地死亡。
 """
 from __future__ import annotations
 
@@ -17,6 +17,8 @@ from PIL import Image
 
 ROOT = Path(__file__).resolve().parents[2]
 SRC = ROOT / "art/source/zombie_walk.png"
+# PixelLab PixMiniMax 以走路第 0 格為起始影格生成的 9 格中槍倒地動畫
+DEATH_SRC = ROOT / "art/source/zombie_death.png"
 OUT = ROOT / "public/assets/sprites"
 F = 64  # 影格大小
 WAIST = 36  # 腰部所在列；這列以上算上半身
@@ -102,7 +104,7 @@ def lean(frame: Image.Image, top_shift: int, drop: int = 0) -> Image.Image:
     return out
 
 
-def build(kind: str, cfg: dict, walk: list[Image.Image]) -> Image.Image:
+def build(kind: str, cfg: dict, walk: list[Image.Image], death: list[Image.Image]) -> Image.Image:
     frames = []
     for fr in walk:
         fr = fr.copy()
@@ -114,6 +116,13 @@ def build(kind: str, cfg: dict, walk: list[Image.Image]) -> Image.Image:
     # 攻擊：取手往前伸最明顯的第 0 格
     frames.append(lean(frames[0], -5, -1))  # 4 蓄力後仰
     frames.append(lean(frames[0], 8, 3))  # 5 前撲
+    for fr in death:  # 6–14 倒地
+        fr = fr.copy()
+        pix = fr.load()
+        for y in range(F):
+            for x in range(F):
+                pix[x, y] = recolor(pix[x, y], cfg["colors"])
+        frames.append(widen(fr, cfg["widen"]))
     sheet = Image.new("RGBA", (F * len(frames), F))
     for i, fr in enumerate(frames):
         sheet.paste(fr, (i * F, 0))
@@ -123,10 +132,12 @@ def build(kind: str, cfg: dict, walk: list[Image.Image]) -> Image.Image:
 def main() -> None:
     src = Image.open(SRC).convert("RGBA")
     walk = [src.crop((i * F, 0, i * F + F, F)) for i in range(src.width // F)]
+    dsrc = Image.open(DEATH_SRC).convert("RGBA")
+    death = [dsrc.crop((i * F, 0, i * F + F, F)) for i in range(dsrc.width // F)]
     OUT.mkdir(parents=True, exist_ok=True)
     for kind, cfg in SCHEMES.items():
         path = OUT / f"zombie_{kind}.png"
-        build(kind, cfg, walk).save(path)
+        build(kind, cfg, walk, death).save(path)
         print("wrote", path.relative_to(ROOT))
 
 

@@ -19,6 +19,8 @@ export class BootScene extends Phaser.Scene {
     // PixelLab 產生的像素圖；之後有動畫時改用 this.load.aseprite(...)
     // 主角：3 格 64×64（0 待機瞄準、1 開火火光、2 後座力上揚）
     this.load.spritesheet('player', 'assets/sprites/player_shoot.png', { frameWidth: 64, frameHeight: 64 });
+    // 主角換彈：9 格（PixelLab PixMiniMax 以射擊第 0 格為起始影格生成）
+    this.load.spritesheet('player_reload', 'assets/sprites/player_reload.png', { frameWidth: 64, frameHeight: 64 });
     // 霧屍：PixelLab 走路圖經程式換色、加寬、做出攻擊影格的三種變體
     for (const key of ZOMBIE_SHEETS) {
       this.load.spritesheet(key, `assets/sprites/${key}.png`, { frameWidth: 64, frameHeight: 64 });
@@ -40,6 +42,13 @@ export class BootScene extends Phaser.Scene {
         frameRate: 20,
       });
     }
+    if (this.textures.get('player_reload').frameTotal > 2) {
+      this.anims.create({
+        key: 'player_reload',
+        frames: this.anims.generateFrameNumbers('player_reload', { start: 0, end: 8 }),
+        frameRate: 9,
+      });
+    }
     for (const key of ZOMBIE_SHEETS) {
       if (this.textures.get(key).frameTotal < 7) continue; // 沒載到圖時用色塊
       this.anims.create({
@@ -54,6 +63,14 @@ export class BootScene extends Phaser.Scene {
         frames: this.anims.generateFrameNumbers(key, { frames: [4, 4, 5, 5, 0] }),
         frameRate: 14,
       });
+      // 倒地：PixelLab 生成的 9 格（中槍後退、膝蓋一軟、倒地）
+      if (this.textures.get(key).frameTotal > 15) {
+        this.anims.create({
+          key: `${key}_death`,
+          frames: this.anims.generateFrameNumbers(key, { start: 6, end: 14 }),
+          frameRate: 16,
+        });
+      }
       registerHeadFrames(this, key, ZOMBIE_NECK_ROW);
     }
     this.scene.start('Menu');
