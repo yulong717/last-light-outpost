@@ -5,6 +5,9 @@ import type { CompanionRoleDef, CrewMember } from '../data/companions';
 import { companionGunFor } from '../data/weapons';
 import { TRAIT_TUNING, resolveCrewStats, type CrewStats } from '../data/crewTraits';
 import { Fx } from '../fx/Fx';
+import { stripArms } from '../art/WeaponArt';
+import { CLOTH, SKIN_TONES } from '../data/crewLooks';
+import { WeaponRig } from './WeaponRig';
 import { GameEvents } from '../systems/GameEvents';
 import type { Zombie } from './Zombie';
 
@@ -34,6 +37,9 @@ export interface CompanionShot {
  * 行為由 CompanionSystem 決定「要去哪、能不能開槍」，這裡只負責移動、自動瞄準射擊、受傷與陣亡。
  * 一樣用 footX / footY（腳底）做所有判定。
  */
+/** 沒有配發武器時，各職業手上拿的槍（外觀與槍聲；數值仍是職業預設） */
+const ROLE_WEAPON: Record<string, string> = { shooter: 'm4a1', medic: 'm1911', engineer: 'm1911' };
+
 export class Companion {
   readonly sprite: Phaser.GameObjects.Sprite;
   readonly member: CrewMember;
@@ -60,6 +66,11 @@ export class Companion {
   /** 有專屬貼圖時不染色 */
   private tint: number | null;
   private shootAnim: string | null;
+  /** 手上的武器（有擦掉手臂的身體圖時才有） */
+  private rig: WeaponRig | null = null;
+  private aim = 0;
+  private bob = 0;
+  private visualWeapon: string;
   private baseScaleX: number;
   /** 「命硬」這晚用掉了沒 */
   private secondWindUsed = false;
@@ -78,7 +89,18 @@ export class Companion {
     const key = ensureCrewTexture(scene, member);
     this.tint = key ? null : def.tint;
     this.shootAnim = key ? crewShootAnim(member) : scene.anims.exists('player_shoot') ? 'player_shoot' : null;
-    this.sprite = scene.add.sprite(x, this.footY, key ?? 'player', 0);
+    // 身體擦掉手臂，手與武器由 WeaponRig 畫（和主角一樣會換彈、拉栓）
+    const body = key ? stripArms(scene, key) : null;
+    this.visualWeapon = member.weaponId ?? ROLE_WEAPON[def.role] ?? 'm1911';
+    if (body) {
+      const look = member.look;
+      const cloth = CLOTH[look?.jacket ?? 0]?.ramp ?? CLOTH[0].ramp;
+      const skin = SKIN_TONES[look?.skin ?? 0] ?? SKIN_TONES[0];
+      this.rig = new WeaponRig(scene, { sleeve: cloth[1], sleeveHi: cloth[2], skin: skin[2] });
+      this.rig.setWeapon(this.visualWeapon);
+      this.shootAnim = null;
+    }
+    this.sprite = scene.add.sprite(x, this.footY, body ?? key ?? 'player', 0);
     if (this.tint !== null) this.sprite.setTint(this.tint);
     this.sprite.setOrigin(0.5, scene.anims.exists('player_shoot') || key ? 63 / 64 : 1);
     // 體型：寬高略有不同
@@ -91,6 +113,7 @@ export class Companion {
     this.hpBar = scene.add.rectangle(x, 0, 14, 1, 0x81c784).setOrigin(0, 0.5);
     Fx.of(scene)?.attachShadow(this.sprite, 20);
     this.sync();
+    this.updateRig(0, null);
   }
 
   get alive(): boolean {
@@ -118,6 +141,7 @@ export class Companion {
       if (this.reloadLeft <= 0) {
         this.reloadLeft = 0;
         this.ammo = this.stats.gun.magazine;
+        this.rig?.endReload();
       }
     }
 
@@ -153,6 +177,7 @@ export class Companion {
       shot = this.fire(target, intent.zombies, intent.fireRateMult ?? 1);
     }
     this.sync(moving);
+    this.updateRig(dt, target);
     return shot;
   }
 
@@ -204,13 +229,18 @@ export class Companion {
     const rage = this.lastStand;
     this.ammo -= 1;
     this.cooldown = 1 / (g.fireRate * rateMult * (rage ? TRAIT_TUNING.lastStandFireRate : 1));
-    if (this.ammo <= 0) this.reloadLeft = g.reloadTime;
+    if (this.ammo <= 0) {
+      this.reloadLeft = g.reloadTime;
+      this.scene.time.delayedCall(250, () => this.alive && this.rig?.startReload(Math.max(0.3, g.reloadTime - 0.25), true, true));
+    }
 
     const r = target.getHitRect();
     const aimHead = Math.random() < g.headChance;
     const aimY = aimHead ? r.y + r.height * 0.12 : r.y + r.height * Phaser.Math.FloatBetween(0.35, 0.7);
-    const fromX = this.gunX + 5 * this.facing;
-    const fromY = this.gunY;
+    // 有手持武器就從真正的槍口射出
+    this.aim = Math.atan2(aimY - (this.footY - 35), target.footX - this.footX);
+    const fromX = this.rig ? this.rig.muzzle.x : this.gunX + 5 * this.facing;
+    const fromY = this.rig ? this.rig.muzzle.y : this.gunY;
     const angle =
       Math.atan2(aimY - fromY, target.footX - fromX) +
       Phaser.Math.DegToRad(Phaser.Math.FloatBetween(-1, 1) * g.spread * this.panicSpread);
@@ -243,8 +273,9 @@ export class Companion {
       fx.bulletTracer(fromX, fromY, endX, endY);
       fx.muzzleSmoke(fromX, fromY, angle);
     }
-    GameEvents.of(this.scene).emit('ally:shoot', { role: this.def.role, x: fromX, y: fromY, angle, weaponId: g.weaponId });
-    if (this.shootAnim) this.sprite.play(this.shootAnim);
+    GameEvents.of(this.scene).emit('ally:shoot', { role: this.def.role, x: fromX, y: fromY, angle, weaponId: g.weaponId ?? this.visualWeapon });
+    if (this.rig) this.rig.fire();
+    else if (this.shootAnim) this.sprite.play(this.shootAnim);
     else {
       const flash = this.scene.add.circle(fromX, fromY, 3, 0xfff3a0).setDepth(DEPTH_FX + 2);
       this.scene.tweens.add({ targets: flash, scale: 0.2, alpha: 0, duration: 70, onComplete: () => flash.destroy() });
@@ -303,6 +334,8 @@ export class Companion {
     GameEvents.of(this.scene).emit('ally:death', { name: this.member.name, role: this.def.role, x: this.footX, y: this.footY });
     this.sprite.stop();
     this.sprite.setTint(0x555555);
+    this.rig?.destroy();
+    this.rig = null;
     this.mark.destroy();
     this.hpBack.destroy();
     this.hpBar.destroy();
@@ -310,9 +343,29 @@ export class Companion {
     return true;
   }
 
+  /** 手上的武器：有目標時指著目標（限制在前方 ±70°），沒目標就平舉 */
+  private updateRig(dt: number, target: Zombie | null): void {
+    if (!this.rig) return;
+    if (!target) this.aim = this.facing > 0 ? 0.12 : Math.PI - 0.12;
+    const lim = Phaser.Math.DegToRad(70);
+    let a = this.aim;
+    if (this.facing > 0) a = Phaser.Math.Clamp(Phaser.Math.Angle.Wrap(a), -lim, lim);
+    else a = Math.PI + Phaser.Math.Clamp(Phaser.Math.Angle.Wrap(a - Math.PI), -lim, lim);
+    this.rig.update(dt, {
+      footX: this.footX,
+      footY: this.footY,
+      facing: this.facing,
+      aim: a,
+      bob: this.bob,
+      depth: this.sprite.depth,
+      scale: this.sprite.scaleY,
+    });
+  }
+
   private sync(moving = false): void {
     if (!this.alive) return;
     const bob = moving ? Math.abs(Math.sin(this.walkPhase)) * 1.5 : 0;
+    this.bob = bob;
     this.sprite.x = this.footX;
     this.sprite.y = this.footY - bob;
     this.sprite.setFlipX(this.facing < 0);

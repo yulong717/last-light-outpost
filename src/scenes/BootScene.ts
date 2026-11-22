@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { createWeaponTextures, stripArms } from '../art/WeaponArt';
 import { PLACEHOLDER_COLORS } from '../config';
 import { ENEMIES } from '../data/enemies';
 import { createBarricadeTexture, registerHeadFrames } from '../art/ProceduralArt';
@@ -37,6 +38,8 @@ export class BootScene extends Phaser.Scene {
     createBuildingTextures(this);
     // 霧屍頭飾與變異標記（身體外觀在出怪時才依職業合成，見 ZombieComposer）
     createGearTexture(this);
+    // 武器像素圖（手持部件、圖示、彈殼、槍口火光），見 src/art/weaponMaps.ts
+    createWeaponTextures(this);
     this.placeholder('player', 20, 44, PLACEHOLDER_COLORS.player, true);
     this.placeholder('barricade', 16, 56, PLACEHOLDER_COLORS.barricade);
     for (const e of Object.values(ENEMIES)) {
@@ -56,6 +59,8 @@ export class BootScene extends Phaser.Scene {
         frameRate: 9,
       });
     }
+    // 主角身體：擦掉手臂和槍，手與武器改由 WeaponRig 即時畫
+    if (this.textures.get('player').frameTotal > 2) stripArms(this, 'player');
     for (const key of ZOMBIE_SHEETS) {
       if (this.textures.get(key).frameTotal < 7) continue; // 沒載到圖時用色塊
       this.anims.create({
