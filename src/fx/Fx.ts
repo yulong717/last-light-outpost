@@ -38,6 +38,7 @@ export interface FallOptions {
 const GRAVITY = 520;
 const MAX_DEBRIS = 260;
 const CORPSE_STAY = 7000;
+const DEPTH_BURST = 57;
 const MAX_CORPSES = 24;
 
 const registry = new WeakMap<Phaser.Scene, Fx>();
@@ -362,6 +363,70 @@ export class Fx {
       alpha: Phaser.Math.FloatBetween(0.6, 0.85),
       scaleX: scale * Phaser.Math.FloatBetween(0.6, 1),
       scaleY: Math.max(0.6, scale * 0.6),
+    });
+  }
+
+  /** 頭飾／頭盔被打飛：一個小圖旋轉著飛出去、落地彈一下躺著 */
+  fling(key: string, frame: string, x: number, y: number, dir: number, floorY: number, o: { scale?: number; tint?: number; flipX?: boolean; power?: number } = {}): void {
+    const power = o.power ?? 1;
+    const d = this.spawn(key, x, y, {
+      frame,
+      vx: dir * Phaser.Math.Between(40, 90) * power,
+      vy: -Phaser.Math.Between(110, 170) * power,
+      spin: dir * Phaser.Math.Between(300, 700),
+      floorY,
+      bounce: 0.4,
+      life: 6,
+      onLand: 'rest',
+      scale: o.scale,
+      tint: o.tint,
+      flipX: o.flipX,
+    });
+    d?.img.setDepth(56);
+  }
+
+  /** 子彈打在護甲上：火花而不是血 */
+  sparks(x: number, y: number, dirX: number, floorY: number, count = 6): void {
+    for (let i = 0; i < count; i++) {
+      this.spawn(FX.px, x, y, {
+        vx: -dirX * Phaser.Math.Between(30, 110) + Phaser.Math.Between(-30, 30),
+        vy: -Phaser.Math.Between(30, 120),
+        floorY,
+        life: 0.25,
+        onLand: 'vanish',
+        tint: Phaser.Utils.Array.GetRandom([0xfff3a0, 0xffd060, 0xffffff]),
+      });
+    }
+  }
+
+  /** 腐液爆開：綠色噴濺＋擴散的圈，地上留一灘綠漬 */
+  burst(x: number, y: number, floorY: number, radius: number): void {
+    const ring = this.scene.add.circle(x, y, 4, 0x9aff4a, 0.5).setDepth(DEPTH_BURST).setStrokeStyle(2, 0xd8ff8a, 0.9);
+    this.scene.tweens.add({
+      targets: ring,
+      radius,
+      alpha: 0,
+      duration: 260,
+      ease: 'Quad.easeOut',
+      onComplete: () => ring.destroy(),
+    });
+    for (let i = 0; i < 26; i++) {
+      const a = Math.random() * Math.PI * 2;
+      const sp = Phaser.Math.Between(40, 170);
+      this.spawn(Math.random() < 0.3 ? FX.px2 : FX.px, x, y, {
+        vx: Math.cos(a) * sp,
+        vy: -Math.abs(Math.sin(a)) * sp - 30,
+        floorY: floorY + Phaser.Math.Between(-6, 6),
+        life: 1.2,
+        onLand: 'vanish',
+        tint: Phaser.Utils.Array.GetRandom([0x9aff4a, 0x6ad02a, 0xc8ff7a, 0x4a8a1a]),
+      });
+    }
+    this.decals.stamp(FX.splat, Phaser.Math.Between(0, SPLAT_FRAMES - 1), x, floorY, {
+      tint: 0x4a7a1a,
+      alpha: 0.7,
+      scaleX: 2.4,
+      scaleY: 1.2,
     });
   }
 

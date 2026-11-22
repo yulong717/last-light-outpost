@@ -20,6 +20,8 @@ export interface GameStateData {
   barricadeLevel: number;
   /** 各槽位上蓋的建築（槽位定義見 src/data/buildings.ts） */
   buildings: SavedBuilding[];
+  /** 已經見過的霧屍職業（第一次遇到時畫面會介紹） */
+  seenZombies?: string[];
 }
 
 export interface SavedBuilding {

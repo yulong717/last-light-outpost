@@ -125,8 +125,7 @@ export const ECONOMY = {
   nightBonus: 20,
   /** 每天白天固定入帳（白天探索做好之前的暫代收入） */
   dailySalvage: 25,
-  /** 擊殺各型霧屍掉落的廢料 */
-  killScrap: { basic: 2, runner: 3, brute: 8 } as Record<string, number>,
+  // 擊殺掉落的廢料改在 src/data/zombies.ts（各職業的 scrap ＋ 變異加成）
   /** 拆除退還比例（以投入的總花費計） */
   refundRatio: 0.5,
   /** 修理：補滿耐久要花「建造費 × 這個比例」，依缺損比例計 */

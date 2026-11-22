@@ -12,8 +12,10 @@ import {
 import { BuildMode } from '../build/BuildMode';
 import { Outpost } from '../build/Outpost';
 import { ECONOMY } from '../data/buildings';
-import { ENEMIES } from '../data/enemies';
-import { NIGHT_ONE } from '../data/waves';
+import { buildNight } from '../data/waves';
+import { BURST } from '../data/zombies';
+import { prewarmLooks, rollZombie, scrapFor } from '../systems/ZombieFactory';
+import { pixelText } from '../utils/text';
 import { WEAPONS } from '../data/weapons';
 import { Barricade } from '../entities/Barricade';
 import { Player } from '../entities/Player';
@@ -139,7 +141,9 @@ export class DefenseScene extends Phaser.Scene {
       barricadeX: BARRICADE_X,
     });
     this.weapons = new WeaponSystem(this, WEAPONS);
-    this.spawner = new WaveSpawner(this, NIGHT_ONE, (id) => this.spawnZombie(id));
+    const night = buildNight(GameState.data.day);
+    prewarmLooks(this, night.flatMap((w) => w.groups.map((g) => g.enemy)));
+    this.spawner = new WaveSpawner(this, night, (id) => this.spawnZombie(id));
 
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.scene.stop('UI');
@@ -222,13 +226,49 @@ export class DefenseScene extends Phaser.Scene {
 
   private spawnZombie(id: string): void {
     if (this.ended) return;
-    const def = ENEMIES[id];
-    if (!def) return;
+    // 職業＋隨機外觀＋變異（見 src/systems/ZombieFactory.ts）
+    const spec = rollZombie(this, id, GameState.data.day);
     // 在鏡頭右緣外生成，主角在據點附近時節奏不會被拉長
     const right = Math.min(WORLD_WIDTH, this.cameras.main.scrollX + GAME_WIDTH);
     const x = right + 20 + Phaser.Math.Between(0, 20);
     const y = Phaser.Math.Between(LANE_TOP, LANE_BOTTOM);
-    this.zombies.push(new Zombie(this, x, y, def));
+    this.zombies.push(new Zombie(this, x, y, spec));
+    this.introduce(spec.profession.id);
+  }
+
+  /** 第一次遇到某個職業時，畫面上方介紹一下牠的特性 */
+  private introduce(id: string): void {
+    const st = GameState.data;
+    st.seenZombies ??= [];
+    if (st.seenZombies.includes(id)) return;
+    st.seenZombies.push(id);
+    if (id === 'basic') return;
+    const p = this.zombies[this.zombies.length - 1].spec.profession;
+    const t1 = pixelText(this, GAME_WIDTH / 2, 62, `新威脅：${p.name}`, 10, '#ff8a6a').setOrigin(0.5);
+    const t2 = pixelText(this, GAME_WIDTH / 2, 78, p.blurb, 8, '#e0e0e0').setOrigin(0.5);
+    for (const t of [t1, t2]) {
+      t.setScrollFactor(0).setDepth(200).setStroke('#000000', 3).setAlpha(0);
+      this.tweens.add({ targets: t, alpha: 1, duration: 200, hold: 3200, yoyo: true, onComplete: () => t.destroy() });
+    }
+  }
+
+  /** 腫脹霧屍與「爆裂」變異爆開：波及主角、夥伴、擋路線與其他霧屍（可以連鎖引爆） */
+  private onBurst(e: { x: number; y: number; radius: number; damage: number }): void {
+    const inRange = (x: number, y: number) => Math.hypot(x - e.x, (y - e.y) * 1.6) <= e.radius;
+    if (this.player.alive && inRange(this.player.footX, this.player.footY)) this.player.takeDamage(e.damage, e.x, e.y);
+    for (const t of this.companions.targets()) if (t.alive && inRange(t.x, t.y)) t.hit(e.damage, e.x, e.y);
+    const ctx = this.zombieContext();
+    if (Math.abs(e.x - ctx.blockX) <= e.radius) ctx.hitBlock(e.damage, e.y);
+    this.camFeel.addTrauma(0.3);
+    // 連鎖引爆稍微錯開，看得出一顆接一顆
+    const victims = this.zombies.filter((z) => !z.dead && inRange(z.footX, z.footY));
+    this.time.delayedCall(90, () => {
+      for (const z of victims) {
+        if (z.dead || !z.active) continue;
+        const killed = z.takeDamage(e.damage * BURST.zombieMul, 6, { dirX: Math.sign(z.footX - e.x) || 1, type: 'blast' });
+        if (killed) this.kills++;
+      }
+    });
   }
 
   /** 霧屍要攻擊的擋路線：路障還在就是路障，否則是據點外牆；前面有沙包牆時先拆沙包 */
@@ -260,6 +300,7 @@ export class DefenseScene extends Phaser.Scene {
       // 受擊回饋（震動、紅邊、卡肉）在 wireFeedback() 裡訂閱 player:hurt
       hitPlayer: (d, fromX, fromY) => this.player.takeDamage(d, fromX, fromY),
       others: this.companions.targets(),
+      zombies: this.zombies,
     };
   }
 
@@ -343,7 +384,7 @@ export class DefenseScene extends Phaser.Scene {
   private collectScrap(): void {
     for (const z of this.zombies) {
       if (!z.dead) continue;
-      const n = ECONOMY.killScrap[z.def.id] ?? 0;
+      const n = scrapFor(z.spec);
       if (n <= 0) continue;
       GameState.data.scrap += n;
       this.scrapEarned += n;
@@ -368,6 +409,7 @@ export class DefenseScene extends Phaser.Scene {
    */
   private wireFeedback(): void {
     const bus = GameEvents.of(this);
+    bus.on('enemy:burst', (e) => this.onBurst(e));
     bus.on('enemy:hit', (e) => this.crosshair.hit(e.headshot ? 'headshot' : e.killed ? 'kill' : 'hit'));
     bus.on('player:hurt', (e) => {
       const h = FEEL.hurt;

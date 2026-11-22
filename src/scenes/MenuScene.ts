@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { GAME_WIDTH } from '../config';
+import { GAME_HEIGHT, GAME_WIDTH } from '../config';
 import { AudioManager, type AudioSettings } from '../audio/AudioManager';
 import { GameState } from '../state/GameState';
 import { pixelText } from '../utils/text';
@@ -39,6 +39,13 @@ export class MenuScene extends Phaser.Scene {
       if (over.length === 0) go();
     });
     this.input.keyboard?.once('keydown-SPACE', go);
+    // 霧屍圖鑑：看各職業的外觀、能力，點擊測試護甲
+    pixelText(this, 16, GAME_HEIGHT - 16, 'B　霧屍圖鑑', 8, '#9aa3ad').setOrigin(0, 1);
+    this.input.keyboard?.once('keydown-B', () => {
+      if (started) return;
+      started = true;
+      this.scene.start('Bestiary');
+    });
   }
 
   /** 右下角：音樂／音效音量（0–10），設定會記住 */
