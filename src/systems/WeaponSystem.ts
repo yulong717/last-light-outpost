@@ -3,6 +3,8 @@ import { HEADSHOT_MULTIPLIER, type WeaponDef } from '../data/weapons';
 import type { Zombie } from '../entities/Zombie';
 import { DEPTH_FX, PLACEHOLDER_COLORS } from '../config';
 import { Fx } from '../fx/Fx';
+import { FEEL } from '../feel/FeelConfig';
+import { GameEvents } from './GameEvents';
 
 export interface WeaponRuntime {
   def: WeaponDef;
@@ -10,8 +12,12 @@ export interface WeaponRuntime {
 }
 
 export interface ShotResult {
+  /** 命中幾次（霰彈每顆彈丸各算一次） */
+  hits: number;
   kills: number;
   headshots: number;
+  /** 這一槍實際用的散射角（度） */
+  spread: number;
 }
 
 /**
@@ -23,6 +29,8 @@ export class WeaponSystem {
   current = 0;
   private cooldown = 0;
   private reloadLeft = 0;
+  /** 連射累積的額外散射（度），每把槍各自計算 */
+  private bloom = 0;
 
   constructor(private scene: Phaser.Scene, defs: WeaponDef[]) {
     this.weapons = defs.map((def) => ({ def, ammo: def.magazine }));
@@ -45,6 +53,8 @@ export class WeaponSystem {
     this.current = index;
     this.reloadLeft = 0;
     this.cooldown = 0.15;
+    this.bloom = 0;
+    GameEvents.of(this.scene).emit('player:weapon-switch', { weaponId: this.active.def.id });
   }
 
   next(): void {
@@ -55,15 +65,27 @@ export class WeaponSystem {
     const w = this.active;
     if (this.reloading || w.ammo === w.def.magazine) return;
     this.reloadLeft = w.def.reloadTime;
+    GameEvents.of(this.scene).emit('player:reload-start', { weaponId: w.def.id, duration: w.def.reloadTime });
+  }
+
+  /**
+   * 目前的散射角（度）：基礎散射 + 連射累積 + 移動懲罰。
+   * @param moveFactor 0 = 站定、1 = 全速移動
+   */
+  spreadNow(moveFactor: number): number {
+    const d = this.active.def;
+    return d.spread + this.bloom + d.moveSpread * FEEL.aim.movePenalty * Phaser.Math.Clamp(moveFactor, 0, 1);
   }
 
   update(dt: number): void {
     this.cooldown = Math.max(0, this.cooldown - dt);
+    this.bloom = Math.max(0, this.bloom - this.active.def.bloomRecover * dt);
     if (this.reloadLeft > 0) {
       this.reloadLeft -= dt;
       if (this.reloadLeft <= 0) {
         this.reloadLeft = 0;
         this.active.ammo = this.active.def.magazine;
+        GameEvents.of(this.scene).emit('player:reload-end', { weaponId: this.active.def.id });
       }
     }
   }
@@ -77,11 +99,15 @@ export class WeaponSystem {
     held: boolean,
     pressed: boolean,
     zombies: Zombie[],
+    moveFactor = 0,
   ): ShotResult | null {
     const w = this.active;
+    const bus = GameEvents.of(this.scene);
+    if (this.reloading && pressed) bus.emit('player:dryfire', { weaponId: w.def.id });
     if (this.reloading || this.cooldown > 0) return null;
     if (!(w.def.automatic ? held || pressed : pressed)) return null;
     if (w.ammo <= 0) {
+      bus.emit('player:dryfire', { weaponId: w.def.id });
       this.reload();
       return null;
     }
@@ -89,14 +115,27 @@ export class WeaponSystem {
     w.ammo -= 1;
     this.cooldown = 1 / w.def.fireRate;
     const base = Math.atan2(aimY - fromY, aimX - fromX);
-    const result: ShotResult = { kills: 0, headshots: 0 };
+    const spread = this.spreadNow(moveFactor);
+    const result: ShotResult = { hits: 0, kills: 0, headshots: 0, spread };
 
     for (let i = 0; i < w.def.pellets; i++) {
-      const angle = base + Phaser.Math.DegToRad(Phaser.Math.FloatBetween(-w.def.spread, w.def.spread));
+      // 霰彈：彈丸平均分布在扇形裡再加一點亂數，不會全部擠在中間
+      const t = w.def.pellets > 1 ? (i / (w.def.pellets - 1)) * 2 - 1 : 0;
+      const jitter = w.def.pellets > 1 ? Phaser.Math.FloatBetween(-0.35, 0.35) : Phaser.Math.FloatBetween(-1, 1);
+      const angle = base + Phaser.Math.DegToRad(Phaser.Math.Clamp(t + jitter, -1, 1) * spread);
       this.castRay(fromX, fromY, angle, w.def, zombies, result);
     }
 
-    if (w.def.pellets > 1) this.scene.cameras.main.shake(60, 0.004);
+    this.bloom = Math.min(w.def.bloomMax, this.bloom + w.def.bloomPerShot);
+    bus.emit('player:shoot', {
+      weaponId: w.def.id,
+      x: fromX,
+      y: fromY,
+      angle: base,
+      pellets: w.def.pellets,
+      ammoLeft: w.ammo,
+      magazine: w.def.magazine,
+    });
     if (w.ammo === 0) this.reload();
     return result;
   }
@@ -135,16 +174,19 @@ export class WeaponSystem {
       const head = h.z.isHeadshot(h.y);
       const dmg = def.damage * (head ? HEADSHOT_MULTIPLIER : 1);
       if (head) result.headshots++;
+      result.hits++;
       const dirX = Math.cos(angle);
       // 血落在這隻霧屍腳下（2.5D：每隻的地面 y 不同）
       const floorY = h.z.footY;
       const fx = Fx.of(this.scene);
       fx?.bulletHit(h.x, h.y, dirX, floorY, head);
-      if (h.z.takeDamage(dmg, def.knockback, { headshot: head, dirX })) {
+      const killed = h.z.takeDamage(dmg, def.knockback, { headshot: head, dirX });
+      if (killed) {
         result.kills++;
         // 爆頭擊殺卡肉久一點，一般擊殺輕輕頓一下
         fx?.freeze(head ? 55 : 25);
       }
+      GameEvents.of(this.scene).emit('enemy:hit', { enemyId: h.z.def.id, x: h.x, y: h.y, damage: dmg, headshot: head, killed });
       if (!fx) this.spawnHitSpark(h.x, h.y, head);
       endX = h.x;
       endY = h.y;

@@ -56,6 +56,7 @@ export class BuildMode {
     this.select(null);
     this.active = false;
     this.hover = null;
+    this.scene.input.setDefaultCursor('default');
     this.gfx.clear().setVisible(false);
   }
 

@@ -20,6 +20,12 @@ import { Player } from '../entities/Player';
 import { Zombie, type ZombieContext } from '../entities/Zombie';
 import { createAtmosphere } from '../fx/Atmosphere';
 import { Fx } from '../fx/Fx';
+import { CameraFeel } from '../feel/CameraFeel';
+import { Crosshair } from '../feel/Crosshair';
+import { FEEL } from '../feel/FeelConfig';
+import { rumble } from '../feel/Haptics';
+import { ScreenFeedback } from '../feel/ScreenFeedback';
+import { GameEvents } from '../systems/GameEvents';
 import { InputManager } from '../input/InputManager';
 import { GameState } from '../state/GameState';
 import { WaveSpawner } from '../systems/WaveSpawner';
@@ -78,6 +84,9 @@ export class DefenseScene extends Phaser.Scene {
   private dusk?: Phaser.GameObjects.Rectangle;
   /** 今晚賺到的廢料（擊殺＋撐過的獎勵），結算畫面顯示 */
   private scrapEarned = 0;
+  private camFeel!: CameraFeel;
+  private crosshair!: Crosshair;
+  private screenFx!: ScreenFeedback;
 
   constructor() {
     super('Defense');
@@ -95,6 +104,7 @@ export class DefenseScene extends Phaser.Scene {
     this.cameras.main.setBounds(0, 0, WORLD_WIDTH, GAME_HEIGHT);
     this.drawBackdrop();
     this.fx = Fx.attach(this);
+    this.camFeel = CameraFeel.attach(this);
     // 貼地霧放在地面帶中段，燈掛在據點外牆上
     createAtmosphere(this, { groundY: LANE_TOP + 14, lamp: { x: BASE_X - 6, y: GROUND_Y - 70 } });
 
@@ -112,6 +122,8 @@ export class DefenseScene extends Phaser.Scene {
     cam.setFollowOffset(-90, 0);
     this.fx.attachShadow(this.player.sprite, 22);
 
+    this.screenFx = new ScreenFeedback(this);
+    this.wireFeedback();
     this.weapons = new WeaponSystem(this, WEAPONS);
     this.spawner = new WaveSpawner(this, NIGHT_ONE, (id) => this.spawnZombie(id));
 
@@ -151,6 +163,8 @@ export class DefenseScene extends Phaser.Scene {
     if (this.dusk) this.tweens.add({ targets: this.dusk, alpha: 0, duration: 800, onComplete: () => this.dusk?.destroy() });
     // 輸入在入夜時才接上，白天點槽位不會變成第一發子彈
     this.input2 = new InputManager(this);
+    // 準星會隱藏滑鼠游標，白天要點槽位，所以入夜才建立
+    this.crosshair = new Crosshair(this);
     this.spawner.start();
     this.scene.launch('UI');
   }
@@ -205,12 +219,19 @@ export class DefenseScene extends Phaser.Scene {
   /** 霧屍要攻擊的擋路線：路障還在就是路障，否則是據點外牆；前面有沙包牆時先拆沙包 */
   private zombieContext(): ZombieContext {
     const blocker = this.barricade.alive
-      ? { blockX: this.barricade.frontX, hitBlock: (d: number, y: number) => this.barricade.takeDamage(d, y) }
+      ? {
+          blockX: this.barricade.frontX,
+          hitBlock: (d: number, y: number) => {
+            this.barricade.takeDamage(d, y);
+            GameEvents.of(this).emit('barricade:hit', { damage: d, y, hp: this.barricade.hp, maxHp: this.barricade.maxHp });
+          },
+        }
       : {
           blockX: BASE_X,
           hitBlock: (d: number) => {
-            GameState.data.baseHp = Math.max(0, GameState.data.baseHp - d);
-            this.cameras.main.shake(80, 0.006);
+            const st = GameState.data;
+            st.baseHp = Math.max(0, st.baseHp - d);
+            GameEvents.of(this).emit('base:hit', { damage: d, hp: st.baseHp, maxHp: st.baseMaxHp });
           },
         };
     const minFront = blocker.blockX;
@@ -219,9 +240,8 @@ export class DefenseScene extends Phaser.Scene {
       blockerFor: (x, y) => this.outpost.blockerFor(x, y, minFront),
       speedMul: (x, y) => this.outpost.speedMul(x, y),
       player: { x: this.player.footX, y: this.player.footY, alive: this.player.alive },
-      hitPlayer: (d) => {
-        if (this.player.takeDamage(d)) this.cameras.main.shake(60, 0.004);
-      },
+      // 受擊回饋（震動、紅邊、卡肉）在 wireFeedback() 裡訂閱 player:hurt
+      hitPlayer: (d, fromX, fromY) => this.player.takeDamage(d, fromX, fromY),
     };
   }
 
@@ -250,13 +270,18 @@ export class DefenseScene extends Phaser.Scene {
     const muzzleX = p.gunX + Math.cos(angle) * 14;
     const muzzleY = p.gunY + Math.sin(angle) * 14;
     const shot = p.alive
-      ? this.weapons.tryFire(muzzleX, muzzleY, inp.aimX, inp.aimY, inp.fireHeld, inp.firePressed, this.zombies)
+      ? this.weapons.tryFire(muzzleX, muzzleY, inp.aimX, inp.aimY, inp.fireHeld, inp.firePressed, this.zombies, p.moveFactor)
       : null;
     if (shot) {
       this.playShotFeedback(muzzleX, muzzleY, angle);
       this.kills += shot.kills;
       this.headshots += shot.headshots;
     }
+    // 準星與畫面回饋用真實時間，卡肉時照樣更新
+    const realDt = Math.min(deltaMs / 1000, 0.05);
+    const aimDist = Phaser.Math.Distance.Between(muzzleX, muzzleY, inp.aimX, inp.aimY);
+    this.crosshair.update(realDt, inp.aimX, inp.aimY, this.weapons.spreadNow(p.moveFactor), aimDist, p.alive);
+    this.screenFx.update(realDt, p.hp, p.maxHp);
 
     // 敵人
     const ctx = this.zombieContext();
@@ -302,8 +327,38 @@ export class DefenseScene extends Phaser.Scene {
     this.wasReloading = reloading;
   }
 
-  /** 開槍回饋：後座力往後頓一下＋槍口火光 */
+  /**
+   * 把遊戲事件接到畫面回饋上。音效、NPC 等其他系統也用同樣方式訂閱 GameEvents。
+   */
+  private wireFeedback(): void {
+    const bus = GameEvents.of(this);
+    bus.on('enemy:hit', (e) => this.crosshair.hit(e.headshot ? 'headshot' : e.killed ? 'kill' : 'hit'));
+    bus.on('player:hurt', (e) => {
+      const h = FEEL.hurt;
+      const strength = Math.min(1, e.amount / 15);
+      this.camFeel.addTrauma(h.trauma * (0.6 + 0.4 * strength));
+      this.screenFx.hurt(strength);
+      this.fx.freeze(h.hitStop);
+      rumble(90, 0.5 + 0.5 * strength);
+    });
+    bus.on('player:death', () => {
+      this.camFeel.addTrauma(0.8);
+      rumble(300, 1);
+    });
+    bus.on('base:hit', () => this.camFeel.addTrauma(0.22));
+    bus.on('barricade:hit', () => this.camFeel.addTrauma(0.05));
+    bus.on('player:heartbeat', () => rumble(30, 0.25));
+  }
+
+  /** 開槍回饋：鏡頭後頓、震動、槍口閃光照亮、拋殼、槍口煙、後座力 */
   private playShotFeedback(x: number, y: number, angle: number): void {
+    const def = this.weapons.active.def;
+    this.camFeel.kick(angle, def.cameraKick);
+    this.camFeel.addTrauma(def.trauma);
+    this.crosshair.fired();
+    this.fx.muzzleLight(x, y, def.pellets > 1 ? 1.3 : 1);
+    if (def.selfKnockback > 0) this.player.push(-Math.cos(angle) * def.selfKnockback);
+    if (def.rumbleMs > 0) rumble(def.rumbleMs, 0.6);
     // 拋殼 + 槍口煙（程式化粒子，見 src/fx/Fx.ts）
     this.fx.ejectShell(this.player.footX + 4 * this.player.facing, y - 2, this.player.footY + 2, this.player.facing);
     this.fx.muzzleSmoke(x, y, angle);
