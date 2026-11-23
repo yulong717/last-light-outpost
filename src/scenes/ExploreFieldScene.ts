@@ -572,7 +572,7 @@ export class ExploreFieldScene extends Phaser.Scene {
     const w = this.weapons.active;
     const res = this.weapons.reserve();
     this.ammoText.setText(
-      this.spec.meleeOnly || this.weapons.unarmed ? `近戰：${this.melee.def.name}${this.weapons.unarmed ? '（沒有槍）' : ''}` : `${w.def.name}  ${w.ammo}/${w.def.magazine}  ${res === Infinity ? '∞' : res}${this.weapons.reloading ? '  換彈中…' : ''}`,
+      this.spec.meleeOnly ? `近戰：${this.melee.def.name}` : `${w.def.name}  ${w.ammo}/${w.def.magazine}  ${res === Infinity ? '∞' : res}${this.weapons.reloading ? '  換彈中…' : ''}`,
     );
     const s = GameState.data.supplies;
     const parts = [`手雷 ${s.grenade}`, `醫療 ${s.medkit}`];

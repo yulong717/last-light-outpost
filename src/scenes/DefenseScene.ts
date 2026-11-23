@@ -90,8 +90,6 @@ export interface HudData {
   companionOrder: CompanionOrder;
   /** 主角技能與糾纏狀態 */
   hero?: HeroHud;
-  /** 身上沒有槍（阿凱開局）：武器欄改顯示近戰 */
-  unarmed?: boolean;
 }
 
 const BASE_X = 44;
@@ -664,7 +662,6 @@ export class DefenseScene extends Phaser.Scene {
       baseMaxHp: st.baseMaxHp,
       barricadeHp: this.barricade.hp,
       barricadeMaxHp: this.barricade.maxHp,
-      unarmed: this.weapons.unarmed,
       weaponName: w.def.name,
       weaponId: w.def.id,
       weaponModel: w.def.model,

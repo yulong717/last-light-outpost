@@ -231,28 +231,19 @@ export class UIScene extends Phaser.Scene {
     this.playerBar.width = 78 * (h.playerHp / h.playerMaxHp);
     this.baseBar.width = 78 * (h.baseHp / h.baseMaxHp);
     this.barricadeBar.width = 78 * (h.barricadeHp / h.barricadeMaxHp);
+    const reserve = h.reserve === Infinity ? '∞' : `${h.reserve}`;
+    this.ammoText.setText(h.reloading ? `${h.weaponName}  換彈中…  ${h.ammo}` : `${h.weaponName}  ${h.ammo}`);
+    this.ammoText.setColor(h.ammo === 0 && !h.reloading ? '#ff6b6b' : '#e8e8e8');
+    this.reserveText.setText(`${h.weaponModel}　備彈 ${reserve}`).setColor(h.reserve === 0 ? '#ff6b6b' : '#b0bec5');
+    this.reloadBar.width = 80 * Math.min(1, h.reloading ? h.reloadProgress : h.ammo / h.magazine);
+    const iconKey = `wpn_${h.weaponId}_icon`;
+    if (this.textures.exists(iconKey)) {
+      if (this.weaponIcon.texture.key !== iconKey) this.weaponIcon.setTexture(iconKey);
+      this.weaponIcon.setVisible(true).setAlpha(h.reloading ? 0.5 : 1);
+    } else this.weaponIcon.setVisible(false);
+    const keys = this.touchUI ? '' : '1/2/3 ';
     const melee = this.touchUI ? h.meleeName : `右鍵/V ${h.meleeName}`;
-    if (h.unarmed) {
-      // 沒有槍（阿凱開局）：武器欄改顯示近戰
-      this.ammoText.setText(h.meleeName).setColor('#e8e8e8');
-      this.reserveText.setText('沒有槍，只能近戰').setColor('#b0bec5');
-      this.reloadBar.width = 0;
-      this.weaponIcon.setVisible(false);
-      this.slotText.setText(this.touchUI ? '' : '右鍵／V／E 揮擊');
-    } else {
-      const reserve = h.reserve === Infinity ? '∞' : `${h.reserve}`;
-      this.ammoText.setText(h.reloading ? `${h.weaponName}  換彈中…  ${h.ammo}` : `${h.weaponName}  ${h.ammo}`);
-      this.ammoText.setColor(h.ammo === 0 && !h.reloading ? '#ff6b6b' : '#e8e8e8');
-      this.reserveText.setText(`${h.weaponModel}　備彈 ${reserve}`).setColor(h.reserve === 0 ? '#ff6b6b' : '#b0bec5');
-      this.reloadBar.width = 80 * Math.min(1, h.reloading ? h.reloadProgress : h.ammo / h.magazine);
-      const iconKey = `wpn_${h.weaponId}_icon`;
-      if (this.textures.exists(iconKey)) {
-        if (this.weaponIcon.texture.key !== iconKey) this.weaponIcon.setTexture(iconKey);
-        this.weaponIcon.setVisible(true).setAlpha(h.reloading ? 0.5 : 1);
-      } else this.weaponIcon.setVisible(false);
-      const keys = this.touchUI ? '' : '1/2/3 ';
-      this.slotText.setText(`${keys}${h.slots.map((n, i) => (i === h.slot ? `[${n}]` : n)).join(' ')}　${melee}`);
-    }
+    this.slotText.setText(`${keys}${h.slots.map((n, i) => (i === h.slot ? `[${n}]` : n)).join(' ')}　${melee}`);
     this.staminaBar.width = 78 * h.stamina;
     // 體力見底時閃紅
     this.staminaFlash += 1;
