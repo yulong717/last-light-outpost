@@ -1024,7 +1024,7 @@ export class ExploreFieldScene extends Phaser.Scene {
     const lim = Phaser.Math.DegToRad(70);
     if (p.facing > 0) a = Phaser.Math.Clamp(a, -lim, lim);
     else a = Math.PI + Phaser.Math.Clamp(Phaser.Math.Angle.Wrap(a - Math.PI), -lim, lim);
-    this.rig.setVisible(p.alive);
+    this.rig.setVisible(p.alive && !this.weapons?.unarmed);
     this.rig.update(dt, { footX: p.footX, footY: p.footY, facing: p.facing, aim: a, bob: p.bob, depth: p.sprite.depth });
   }
 

@@ -74,10 +74,15 @@ export class WeaponSystem {
     private critChance = 0,
   ) {
     const defs = ids.map((id) => getFirearm(id)).filter((d): d is FirearmDef => !!d);
-    if (defs.length === 0) defs.push(getFirearm('m1911')!);
+    // 沒有槍（阿凱開局）：放一把不能用的佔位，開火／換彈都無效，只能近戰
+    this.unarmed = defs.length === 0;
+    if (this.unarmed) defs.push(getFirearm('m1911')!);
     // 入夜時從備彈裝滿彈匣（備彈不夠就裝多少算多少）
-    this.weapons = defs.map((def) => ({ def, ammo: this.take(def, def.magazine) }));
+    this.weapons = defs.map((def) => ({ def, ammo: this.unarmed ? 0 : this.take(def, def.magazine) }));
   }
+
+  /** 身上沒有任何槍 */
+  readonly unarmed: boolean;
 
   get active(): WeaponRuntime {
     return this.weapons[this.current];
@@ -113,6 +118,7 @@ export class WeaponSystem {
   }
 
   reserve(def = this.active.def): number {
+    if (this.unarmed) return 0;
     return this.infinite(def) ? Infinity : this.pool[def.ammo] ?? 0;
   }
 
@@ -125,6 +131,7 @@ export class WeaponSystem {
 
   /** 結算時把彈匣裡的子彈退回備彈 */
   unloadAll(): void {
+    if (this.unarmed) return;
     for (const w of this.weapons) {
       if (!this.infinite(w.def)) this.pool[w.def.ammo] += w.ammo;
       w.ammo = 0;
@@ -136,6 +143,7 @@ export class WeaponSystem {
   }
 
   select(index: number): void {
+    if (this.unarmed) return;
     if (index < 0 || index >= this.weapons.length || index === this.current) return;
     this.cancelReload();
     this.current = index;
@@ -152,6 +160,7 @@ export class WeaponSystem {
   }
 
   reload(): void {
+    if (this.unarmed) return;
     const w = this.active;
     const d = w.def;
     if (this.rl || w.ammo >= this.capacity(w) || this.reserve() <= 0) return;
@@ -253,6 +262,7 @@ export class WeaponSystem {
     zombies: Zombie[],
     moveFactor = 0,
   ): ShotResult | null {
+    if (this.unarmed) return null;
     const w = this.active;
     const d = w.def;
     const bus = GameEvents.of(this.scene);

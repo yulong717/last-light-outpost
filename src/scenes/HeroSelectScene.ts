@@ -99,11 +99,11 @@ export class HeroSelectScene extends Phaser.Scene {
     let ty = y + 116;
     const guns = h.guns.map((g) => getWeapon(g)?.name ?? g).join('、');
     const melee = getWeapon(h.melee)?.name ?? h.melee;
-    pixelText(this, x + 10, ty, `武器：${guns}＋${melee}`, 8, '#f5d76e').setWordWrapWidth(CARD_W - 20, true);
+    pixelText(this, x + 10, ty, guns ? `武器：${guns}＋${melee}` : `武器：${melee}（沒有槍）`, 8, '#f5d76e').setWordWrapWidth(CARD_W - 20, true);
     ty += 14;
     const ammo = (Object.entries(h.ammo) as [AmmoType, number][]).map(([t, n]) => `${AMMO[t].name.split(' ')[0]} ${n}`).join('、');
     const pistol = h.guns.includes('m1911') ? (h.infinitePistol ? 'M1911 無限' : 'M1911 有限') : '';
-    pixelText(this, x + 10, ty, `彈藥：${[pistol, ammo].filter(Boolean).join('・')}`, 7, '#b0bec5').setWordWrapWidth(CARD_W - 20, true);
+    pixelText(this, x + 10, ty, `彈藥：${[pistol, ammo].filter(Boolean).join('・') || '無，只能近戰'}`, 7, '#b0bec5').setWordWrapWidth(CARD_W - 20, true);
     ty += 14;
     pixelText(this, x + 10, ty, `開局：${getZone(h.startZone)?.name ?? h.startZone}`, 7, '#b0bec5');
     ty += 18;
