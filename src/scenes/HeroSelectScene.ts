@@ -1,3 +1,4 @@
+import { ensureHeroTexture, heroBuild } from '../art/HeroArt';
 import Phaser from 'phaser';
 import { GAME_HEIGHT, GAME_WIDTH } from '../config';
 import { AudioManager } from '../audio/AudioManager';
@@ -82,9 +83,14 @@ export class HeroSelectScene extends Phaser.Scene {
     this.cards.set(id, bg);
     this.add.rectangle(x, y, CARD_W, 3, h.color).setOrigin(0).setDepth(99);
 
-    // 角色：同一套像素圖，用顏色區分
-    const key = this.textures.exists('player') ? 'player' : undefined;
-    if (key) this.add.image(x + 30, y + 64, key, 0).setOrigin(0.5, 1).setScale(1).setTint(h.tint).setDepth(100);
+    // 角色：每位主角自己的像素形象（src/art/HeroArt.ts），站在主色的小聚光燈裡
+    const glow = this.add.graphics().setDepth(99);
+    glow.fillStyle(h.color, 0.16).fillEllipse(x + 30, y + 64, 50, 10);
+    glow.fillStyle(h.color, 0.08).fillRect(x + 6, y + 6, 48, 60);
+    const key = ensureHeroTexture(this, id);
+    const build = heroBuild(id);
+    if (key) this.add.image(x + 30, y + 65, key, 0).setOrigin(0.5, 1).setScale(build.w, build.h).setDepth(100);
+    else if (this.textures.exists('player')) this.add.image(x + 30, y + 64, 'player', 0).setOrigin(0.5, 1).setTint(h.tint).setDepth(100);
     pixelText(this, x + 62, y + 10, h.name, 12, '#ffffff');
     pixelText(this, x + 62, y + 28, h.title, 8, '#' + h.color.toString(16).padStart(6, '0'));
     pixelText(this, x + 62, y + 42, `生命 ${h.maxHp}`, 8, '#ef9a9a');

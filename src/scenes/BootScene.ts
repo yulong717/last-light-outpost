@@ -8,6 +8,7 @@ import { createGearTexture } from '../art/ZombieComposer';
 import { ZOMBIE_NECK_ROW, ZOMBIE_SHEETS } from '../art/sprites';
 import { createFxTextures } from '../fx/FxTextures';
 import { createPropTextures } from '../art/PropArt';
+import { createHeroTextures } from '../art/HeroArt';
 
 /**
  * 載入資源。目前沒有美術素材，所以用程式產生「色塊佔位圖」。
@@ -67,6 +68,8 @@ export class BootScene extends Phaser.Scene {
     }
     // 主角身體：擦掉手臂和槍，手與武器改由 WeaponRig 即時畫
     if (this.textures.get('player').frameTotal > 2) stripArms(this, 'player');
+    // 三位主角各自的形象（src/art/HeroArt.ts）
+    createHeroTextures(this);
     for (const key of ZOMBIE_SHEETS) {
       if (this.textures.get(key).frameTotal < 7) continue; // 沒載到圖時用色塊
       this.anims.create({

@@ -4,6 +4,9 @@ import { AudioManager } from '../audio/AudioManager';
 import { registerUIRect } from '../input/InputManager';
 import { uiButton, uiPanel } from '../explore/ui';
 import { pixelText } from '../utils/text';
+import { ensureIllustration, ILLUS_H, ILLUS_W, type IllustrationId } from '../art/IllustrationArt';
+import { ensureHeroTexture, heroBuild } from '../art/HeroArt';
+import type { HeroId } from '../data/heroes';
 
 export interface StoryData {
   title: string;
@@ -11,6 +14,10 @@ export interface StoryData {
   /** 小字：這章的目標 */
   objective?: string;
   onClose?: () => void;
+  /** 上方的關卡插圖（src/art/IllustrationArt.ts） */
+  art?: IllustrationId;
+  /** 插圖裡站著的主角（序章用） */
+  hero?: HeroId;
 }
 
 /**
@@ -31,14 +38,36 @@ export class StoryScene extends Phaser.Scene {
     const w = 440;
     const x = (GAME_WIDTH - w) / 2;
     const lineH = 15;
-    const h = 92 + data.lines.length * lineH + (data.objective ? 22 : 0);
-    const y = Math.max(20, (GAME_HEIGHT - h) / 2);
+    const textH = 92 + data.lines.length * lineH + (data.objective ? 22 : 0);
+    // 插圖高度：放得下就整張，放不下就只露出下半（地面、地標、霧屍那一段）
+    const artH = data.art ? Math.max(0, Math.min(ILLUS_H, GAME_HEIGHT - 16 - textH - 10)) : 0;
+    const h = textH + (artH ? artH + 10 : 0);
+    const y = Math.max(8, (GAME_HEIGHT - h) / 2);
     const objs: Phaser.GameObjects.GameObject[] = [uiPanel(this, x, y, w, h)];
-    objs.push(pixelText(this, GAME_WIDTH / 2, y + 12, data.title, 12, '#f5d76e').setOrigin(0.5, 0));
+    let ty = y;
+    if (data.art && artH > 0) {
+      const key = ensureIllustration(this, data.art);
+      const ax = x + (w - ILLUS_W) / 2;
+      const ay = y + 10;
+      const img = this.add.image(ax, ay, key).setOrigin(0).setDepth(100).setCrop(0, ILLUS_H - artH, ILLUS_W, artH);
+      img.y = ay - (ILLUS_H - artH);
+      objs.push(img);
+      objs.push(this.add.rectangle(ax, ay, ILLUS_W, artH).setOrigin(0).setStrokeStyle(1, 0xf5d76e, 0.35).setDepth(101));
+      if (data.hero) {
+        const hk = ensureHeroTexture(this, data.hero);
+        if (hk) {
+          const b = heroBuild(data.hero);
+          objs.push(this.add.ellipse(ax + 60, ay + artH - 6, 34, 6, 0x000000, 0.5).setDepth(101));
+          objs.push(this.add.image(ax + 60, ay + artH - 5, hk, 0).setOrigin(0.5, 1).setScale(b.w, b.h).setDepth(102));
+        }
+      }
+      ty = y + artH + 10;
+    }
+    objs.push(pixelText(this, GAME_WIDTH / 2, ty + 12, data.title, 12, '#f5d76e').setOrigin(0.5, 0));
     data.lines.forEach((l, i) => {
-      objs.push(pixelText(this, x + 22, y + 40 + i * lineH, l, 8, '#e0e0e0').setWordWrapWidth(w - 44, true));
+      objs.push(pixelText(this, x + 22, ty + 40 + i * lineH, l, 8, '#e0e0e0').setWordWrapWidth(w - 44, true));
     });
-    let by = y + 46 + data.lines.length * lineH;
+    let by = ty + 46 + data.lines.length * lineH;
     if (data.objective) {
       objs.push(pixelText(this, x + 22, by, `目標：${data.objective}`, 8, '#9ad17a'));
       by += 22;

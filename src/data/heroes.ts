@@ -34,7 +34,7 @@ export interface HeroDef {
   /** 開局地點（探索區域 id）：第一章在這裡 */
   startZone: string;
   skills: HeroSkill[];
-  /** 主角身體的染色（同一套像素圖，用顏色區分） */
+  /** 舊版共用像素圖的染色：只在主角專屬圖（src/art/HeroArt.ts）畫不出來時當備用 */
   tint: number;
   /** 選角卡的主色 */
   color: number;

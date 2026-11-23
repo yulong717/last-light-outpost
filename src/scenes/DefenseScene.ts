@@ -1,3 +1,5 @@
+import { illustrationFor } from '../art/IllustrationArt';
+import { heroRigColors } from '../art/HeroArt';
 import Phaser from 'phaser';
 import {
   GAME_HEIGHT,
@@ -21,7 +23,7 @@ import { Barricade } from '../entities/Barricade';
 import { Player } from '../entities/Player';
 import { Zombie, type ZombieContext } from '../entities/Zombie';
 import { attachAudio } from '../audio/AudioBridge';
-import { createAtmosphere } from '../fx/Atmosphere';
+import { createAtmosphere, nightGrade } from '../fx/Atmosphere';
 import { Fx } from '../fx/Fx';
 import { CameraFeel } from '../feel/CameraFeel';
 import { Crosshair } from '../feel/Crosshair';
@@ -40,7 +42,7 @@ import { EXPLORE_TIME, getZone } from '../data/explore';
 import { crewReady } from '../data/companions';
 import { HeroSystem, type HeroHud } from '../systems/HeroSystem';
 import { LUCK } from '../data/heroes';
-import { PROLOGUES } from '../data/story';
+import { OPENINGS, PROLOGUES } from '../data/story';
 import type { StoryData } from './StoryScene';
 import { throwGrenade, useMedkit } from '../explore/Supplies';
 import { describeLoot } from '../explore/Expedition';
@@ -170,7 +172,7 @@ export class DefenseScene extends Phaser.Scene {
     cam.setDeadzone(160, GAME_HEIGHT);
     cam.setFollowOffset(-90, 0);
     this.fx.attachShadow(this.player.sprite, 22);
-    this.rig = new WeaponRig(this);
+    this.rig = new WeaponRig(this, heroRigColors(GameState.data.hero ?? 'soldier'));
     this.rig.setWeapon(GameState.data.armory.loadout[0] ?? 'm1911');
 
     this.screenFx = new ScreenFeedback(this);
@@ -225,6 +227,8 @@ export class DefenseScene extends Phaser.Scene {
       intro === 'prologue'
         ? {
             ...PROLOGUES[GameState.data.hero],
+            art: illustrationFor(OPENINGS[GameState.data.hero]?.zone),
+            hero: GameState.data.hero,
             onClose: () => {
               GameState.markIntroSeen();
               GameState.save();
@@ -235,6 +239,7 @@ export class DefenseScene extends Phaser.Scene {
         : {
             title: intro.title,
             lines: intro.intro,
+            art: illustrationFor(intro.zone),
             objective: `${intro.objective}（${getZone(intro.zone)?.name ?? ''}・城市地圖上的★）`,
             onClose: () => {
               GameState.markIntroSeen();
@@ -280,6 +285,8 @@ export class DefenseScene extends Phaser.Scene {
     this.scene.stop('BuildUI');
     this.scene.stop('Armory');
     if (this.dusk) this.tweens.add({ targets: this.dusk, alpha: 0, duration: 800, onComplete: () => this.dusk?.destroy() });
+    // 入夜調色：壓暗偏藍，據點燈與主角身邊留光（src/fx/Atmosphere.ts）
+    nightGrade(this, [{ x: BASE_X - 6, y: GROUND_Y - 40, scale: 1.3 }], this.player.sprite);
     // 武器在入夜才上膛：白天在軍械庫換的配置、買的子彈都算進去
     const armory = GameState.data.armory;
     this.weapons = new WeaponSystem(this, armory.loadout, armory.ammo, !!armory.finitePistol, GameState.data.hero === 'lucky' ? LUCK.critChance : 0);

@@ -78,3 +78,49 @@ export function createAtmosphere(scene: Phaser.Scene, opt: AtmosphereOptions): v
   // 暗角固定在鏡頭上
   scene.add.image(0, 0, FX.vignette).setOrigin(0).setScrollFactor(0).setDepth(90).setDisplaySize(width, height);
 }
+
+export interface NightLight {
+  x: number;
+  y: number;
+  /** 光圈大小倍率（1 = 一盞路燈） */
+  scale?: number;
+  color?: number;
+}
+
+/**
+ * 入夜調色：整個戰場慢慢壓暗、偏冷藍（乘法混合），再把燈、主角身邊的光加回來。
+ * 疊在角色之上、特效（槍口火光、曳光、血）之下，所以開槍的火光仍然很亮。
+ * follow：會跟著移動的光源（主角的手電筒餘光）。
+ */
+export function nightGrade(scene: Phaser.Scene, lights: NightLight[], follow?: Phaser.GameObjects.Components.Transform): void {
+  const shade = scene.add
+    .rectangle(0, 0, GAME_WIDTH, GAME_HEIGHT, 0x6670a0)
+    .setOrigin(0)
+    .setScrollFactor(0)
+    .setDepth(55)
+    .setBlendMode(Phaser.BlendModes.MULTIPLY)
+    .setAlpha(0);
+  scene.tweens.add({ targets: shade, alpha: 1, duration: 1800, ease: 'Sine.easeIn' });
+  const pools: Phaser.GameObjects.Image[] = [];
+  for (const l of lights) {
+    const g = scene.add
+      .image(l.x, l.y, FX.glow)
+      .setBlendMode(Phaser.BlendModes.ADD)
+      .setTint(l.color ?? 0xffc070)
+      .setScale(2.4 * (l.scale ?? 1), 1.6 * (l.scale ?? 1))
+      .setDepth(56)
+      .setAlpha(0);
+    pools.push(g);
+  }
+  scene.tweens.add({ targets: pools, alpha: 0.32, duration: 1800 });
+  if (follow) {
+    const halo = scene.add.image(follow.x, follow.y, FX.glow).setBlendMode(Phaser.BlendModes.ADD).setTint(0x9ab0ff).setScale(1.8, 1.3).setDepth(56).setAlpha(0);
+    scene.tweens.add({ targets: halo, alpha: 0.26, duration: 1800 });
+    const sync = (): void => {
+      if (!halo.active) return;
+      halo.setPosition(follow.x, follow.y - 18);
+    };
+    scene.events.on(Phaser.Scenes.Events.POST_UPDATE, sync);
+    scene.events.once(Phaser.Scenes.Events.SHUTDOWN, () => scene.events.off(Phaser.Scenes.Events.POST_UPDATE, sync));
+  }
+}

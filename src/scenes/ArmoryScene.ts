@@ -157,9 +157,9 @@ export class ArmoryScene extends Phaser.Scene {
     let y = PY + 32;
     const nm = this.text(x, y, d.name, 11, '#ffffff');
     this.text(x + nm.width + 6, y + 4, d.model, 7, '#90a4ae');
-    this.icon(x + w, y - 2, d.id, 2).setOrigin(1, 0);
+    const showW = this.showcase(x + w, y - 4, d.id);
     y += 18;
-    this.text(x, y, d.desc, 8, '#c8c8c8').setWordWrapWidth(w, true);
+    this.text(x, y, d.desc, 8, '#c8c8c8').setWordWrapWidth(w - showW - 6, true);
     y += 30;
     const per = d.pellets > 1 ? `${d.damage}×${d.pellets}` : `${d.damage}`;
     this.bar(x, y, w, '單發傷害', (d.damage * d.pellets) / MAX.dmg, per);
@@ -225,9 +225,9 @@ export class ArmoryScene extends Phaser.Scene {
     let y = PY + 32;
     const nm = this.text(x, y, m.name, 11, '#ffffff');
     this.text(x + nm.width + 6, y + 4, m.damageType === 'blunt' ? '鈍器' : '刀刃', 7, '#90a4ae');
-    this.icon(x + w, y - 2, m.id, 2).setOrigin(1, 0);
+    const showW = this.showcase(x + w, y - 4, m.id);
     y += 18;
-    this.text(x, y, m.desc, 8, '#c8c8c8').setWordWrapWidth(w, true);
+    this.text(x, y, m.desc, 8, '#c8c8c8').setWordWrapWidth(w - showW - 6, true);
     y += 30;
     const swing = m.windup + m.active + m.recovery;
     this.bar(x, y, w, '傷害', m.damage / MAX.melee, `${m.damage}`);
@@ -301,6 +301,35 @@ export class ArmoryScene extends Phaser.Scene {
   }
 
   // ── 小元件 ────────────────────────────────────────────
+
+  /**
+   * 詳細頁右上的展示架：深色泡棉襯底＋洞洞板，武器放大 3 倍、底下有影子（右上角對齊 x, y）。
+   * 回傳展示架寬度，讓說明文字讓開。
+   */
+  private showcase(x: number, y: number, id: string): number {
+    const key = `wpn_${id}_icon`;
+    if (!this.textures.exists(key)) return 0;
+    const tex = this.textures.get(key).getSourceImage() as HTMLCanvasElement;
+    const s = tex.width > 34 ? 2 : 3;
+    const w = tex.width * s + 16;
+    const h = Math.max(40, tex.height * s + 14);
+    const left = x - w;
+    const g = this.add.graphics();
+    this.root.add(g);
+    g.fillStyle(0x3a3e46, 1).fillRect(left, y, w, h);
+    g.fillStyle(0x2a2e36, 1).fillRect(left + 3, y + 3, w - 6, h - 6);
+    g.fillStyle(0x1c1e24, 1);
+    for (let yy = y + 6; yy < y + h - 4; yy += 6) for (let xx = left + 6; xx < x - 4; xx += 6) g.fillRect(xx, yy, 1, 1);
+    g.lineStyle(1, 0xf5d76e, 0.35).strokeRect(left + 0.5, y + 0.5, w - 1, h - 1);
+    // 頂燈打下來的光
+    g.fillStyle(0xf5d76e, 0.05).fillRect(left + 3, y + 3, w - 6, Math.round(h / 3));
+    const cx = left + w / 2;
+    const cy = y + h / 2;
+    const shadow = this.add.image(cx + 2, cy + 3, key).setScale(s).setTintFill(0x000000).setAlpha(0.45);
+    this.root.add(shadow);
+    this.root.add(this.add.image(cx, cy, key).setScale(s));
+    return w;
+  }
 
   /** 武器圖示（WeaponArt 產生的 wpn_<id>_icon），沒有圖就給個空的佔位 */
   private icon(x: number, y: number, id: string, scale = 1): Phaser.GameObjects.Image {
