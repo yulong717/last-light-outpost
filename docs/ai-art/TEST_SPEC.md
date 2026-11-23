@@ -72,16 +72,16 @@
 
 播放速度：循環 10 fps、攻擊 12 fps、死亡 10 fps。
 
-**比對方式（2026-11-23 更新為最新模型，見 SETUP 第 3 節）**：
+**模型（2026-11-23 定案）**：全部用 **MiniMax H3**（設定稿與關鍵格用 H3 Image，動作用 H3 影片）。不再做跨模型比對；改為在 H3 內比較設定：
 
-| 步驟 | 比對的模型 |
+| 比較項目 | 做法 |
 | --- | --- |
-| 設定稿（人台換裝） | H3 Image ／ Qwen-Image 2.1（RGBA）／ MOSS-Image（JSON bbox 定位） |
-| 循環動作 | H3 影片＋pixelart8x LoRA ／ HyperFlow H3 Flash ／ LTX-2.x＋ume-pixelart；Wan 2.2 只當備案 |
-| 短動作關鍵格 | 設定稿階段勝出的圖片模型（角色＋姿勢模板）；MOSS 可加 pose 控制 LoRA |
+| pixelart8x LoRA 有／無 | 同一 seed 並排，看縮到 64px 後的乾淨度與閃色 |
+| 放大倍率 4× / 8× | 依 bunnyUFO 的經驗 8× 腿較乾淨，確認耗時 |
+| 循環：首尾同幀 vs 尾幀用「另一腳在前」關鍵格 | 看步幅是否足夠 |
+| 現成工具 vs 自寫腳本 | PixelForge-H3 節點的去背、量化、防閃、對齊是否夠用 |
 
-先用 `bunnyUFO sprite-from-prompt-h3` 工作流與 `PixelForge-H3` 節點跑通，不足的部分再補自寫腳本。
-後處理所有模型完全一樣，才能公平比較。
+後處理固定一套，才能比較設定差異。
 
 ## 5. 提示詞基準（英文，依模型微調）
 
@@ -114,7 +114,7 @@ Redraw the character from Picture 1 in the exact pose of Picture 2. Keep Picture
 Keep Picture 2's pose, size and foot position exactly.
 ```
 
-## 6. 後處理（寫成 `tools/art/ai/` 的腳本，兩條路線共用）
+## 6. 後處理（先用 PixelForge-H3 節點，不足再補 `tools/art/ai/` 腳本）
 
 1. **挑格** `pick_frames.py`：循環動作依步態（腳最高、雙腿最開）挑出規定格數，且首尾能接；短動作依模板相似度。
 2. **去背** `pixelize.py`：洋紅色相鍵（hue 接近 300°、高飽和）→ 透明；邊緣殘留洋紅改成相鄰色。效果差才用 BiRefNet `toonout`。
@@ -140,5 +140,5 @@ Keep Picture 2's pose, size and foot position exactly.
 - [ ] 阿凱認得出：條紋球衣、紅色 7 號、深藍帽
 - [ ] 無手臂版的肩膀位置在各格一致（WeaponRig 才接得上）
 - [ ] 每個動作的姿勢讀得懂（縮回 64 px、1 倍大小時仍看得出在做什麼）
-- [ ] A、B 兩條路線各有一份完整結果與比較表（品質 1–5 分、每個動作耗時、重抽次數、VRAM 峰值）
+- [ ] H3 設定比較表（LoRA 有無、倍率、循環方式；品質 1–5 分、耗時、重抽次數、VRAM 峰值）
 - [ ] 估算：照此流程做完 18 個隊員＋3 主角＋7 種霧屍要多少時間

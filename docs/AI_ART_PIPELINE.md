@@ -33,7 +33,7 @@
 
 ## 3. 推薦的模型組合
 
-> **2026-11-23 更新**：本節為初版，已被 [`ai-art/SETUP.md`](ai-art/SETUP.md) 第 3 節取代（改用 H3 Image／Qwen-Image 2.1／MOSS-Image 與 H3 影片＋像素 LoRA／HyperFlow H3 Flash／LTX-2.x）。以下保留作為紀錄。
+> **2026-11-23 更新**：本節為初版，已被 [`ai-art/SETUP.md`](ai-art/SETUP.md) 第 3 節取代：**定案以 MiniMax H3 為單一主線**（H3 Image＋H3 影片＋pixelart8x LoRA＋PixelForge-H3 節點），不再跨模型比對。以下保留作為紀錄。
 
 
 | 用途 | 主力 | 備案 / 低 VRAM | 授權 |
