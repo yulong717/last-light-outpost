@@ -338,7 +338,8 @@ export class UIScene extends Phaser.Scene {
       const c = h.meleeChain;
       const pips = c.len > 1 ? '　' + Array.from({ length: c.len }, (_, i) => (i < c.idx ? '■' : '□')).join('') : '';
       this.ammoText.setText(`${h.meleeName}${pips}`).setColor('#ffe082');
-      this.reserveText.setText(c.len > 1 ? `刀・快速連砍 ${c.len} 下收尾` : '重擊・打飛一排，每下要重新掄').setColor('#b0bec5');
+      const style = c.len > 1 ? `刀・快速連砍 ${c.len} 下收尾` : '重擊・打飛一排，每下要重新掄';
+      this.reserveText.setText(h.unarmed ? `沒有槍　${style}` : style).setColor('#b0bec5');
       this.reloadBar.width = 80 * h.stamina;
     } else {
       this.ammoText.setText(h.reloading ? `${h.weaponName}  換彈中…  ${h.ammo}` : `${h.weaponName}  ${h.ammo}`);
@@ -346,7 +347,8 @@ export class UIScene extends Phaser.Scene {
       this.reserveText.setText(`${h.weaponModel}　備彈 ${reserve}`).setColor(h.reserve === 0 ? '#ff6b6b' : '#b0bec5');
       this.reloadBar.width = 80 * Math.min(1, h.reloading ? h.reloadProgress : h.ammo / h.magazine);
     }
-    this.stanceLabel.setText(h.meleeStance ? '持槍' : '持刀');
+    // 沒有槍時切換鍵沒有作用，變暗
+    this.stanceLabel.setText(h.unarmed ? '近戰' : h.meleeStance ? '持槍' : '持刀').setAlpha(h.unarmed ? 0.4 : 1);
     this.stanceBg.setStrokeStyle(1, h.meleeStance ? 0xffe082 : 0xffffff, h.meleeStance ? 0.9 : 0.5);
     const iconKey = h.meleeStance ? `wpn_${h.meleeId}_icon` : `wpn_${h.weaponId}_icon`;
     if (this.textures.exists(iconKey)) {
@@ -356,7 +358,8 @@ export class UIScene extends Phaser.Scene {
     const keys = this.touchUI ? '' : '1/2/3 ';
     const meleeName = h.meleeStance ? `[${h.meleeName}]` : h.meleeName;
     const melee = this.touchUI ? meleeName : `4 ${meleeName}`;
-    this.slotText.setText(`${keys}${h.slots.map((n, i) => (i === h.slot && !h.meleeStance ? `[${n}]` : n)).join(' ')}　${melee}`);
+    if (h.unarmed) this.slotText.setText(this.touchUI ? '' : '左鍵／右鍵／V 揮擊，按住連續揮');
+    else this.slotText.setText(`${keys}${h.slots.map((n, i) => (i === h.slot && !h.meleeStance ? `[${n}]` : n)).join(' ')}　${melee}`);
     this.staminaBar.width = 78 * h.stamina;
     // 體力見底時閃紅
     this.staminaFlash += 1;

@@ -97,6 +97,8 @@ export interface HudData {
   meleeStance: boolean;
   /** 連段進度：第幾下／一串幾下（0 = 沒有連段）；streak 是連擊數 */
   meleeChain: { idx: number; len: number; streak: number };
+  /** 身上沒有槍（阿凱開局）：鎖在近戰模式，武器欄不列槍 */
+  unarmed: boolean;
   /** 體力 0..1 */
   stamina: number;
   meleeBusy: boolean;
@@ -803,6 +805,7 @@ export class DefenseScene extends Phaser.Scene {
       meleeName: this.melee.def.name,
       meleeId: this.melee.def.id,
       meleeStance: this.melee.stance,
+      unarmed: this.weapons.unarmed,
       meleeChain: this.melee.chain,
       stamina: this.melee.staminaRatio,
       meleeBusy: this.melee.busy,
