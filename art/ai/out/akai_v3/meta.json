@@ -1,0 +1,113 @@
+{
+ "idle": {
+  "look": "old in-game akai (hero_student), REVIEW-03",
+  "source_video": "art/ai/raw/v3/idle_s3",
+  "seed": 3,
+  "workflow": "art/ai/workflows/h3_video_i2v.json",
+  "length": 56,
+  "res": 512,
+  "key_image": "art/ai/raw/v3/akai_noarm.png",
+  "picks": [
+   6,
+   11,
+   16,
+   22
+  ],
+  "seeds_tried": [
+   1,
+   2,
+   3,
+   4
+  ],
+  "palette": "akai_oldlook_64.png exact colours (62) + 3 extra (bat)",
+  "post": "headlock 42 rows, keep original outline, feet y=61",
+  "frames": 4,
+  "fps": 10,
+  "loop": true,
+  "colours": 56,
+  "foot_rows": [
+   61,
+   61,
+   61,
+   61
+  ]
+ },
+ "walk": {
+  "look": "old in-game akai (hero_student), REVIEW-03",
+  "source_video": "art/ai/raw/v3/walk_s1",
+  "seed": 1,
+  "workflow": "art/ai/workflows/h3_video_i2v.json",
+  "length": 56,
+  "res": 512,
+  "key_image": "art/ai/raw/v3/akai_walkkey.png",
+  "picks": [
+   29,
+   32,
+   35,
+   39,
+   42,
+   45,
+   49,
+   52
+  ],
+  "seeds_tried": [
+   1,
+   2,
+   3,
+   4
+  ],
+  "palette": "akai_oldlook_64.png exact colours (62) + 3 extra (bat)",
+  "post": "headlock 42 rows, keep original outline, feet y=61",
+  "frames": 8,
+  "fps": 10,
+  "loop": true,
+  "colours": 64,
+  "foot_rows": [
+   61,
+   61,
+   61,
+   61,
+   61,
+   61,
+   61,
+   61
+  ]
+ },
+ "melee": {
+  "look": "old in-game akai (hero_student), REVIEW-03",
+  "source_video": "art/ai/raw/v3/melee_s4",
+  "seed": 4,
+  "workflow": "art/ai/workflows/h3_video_i2v.json",
+  "length": 39,
+  "res": 512,
+  "key_image": "art/ai/raw/v3/akai_meleeready.png (first frame only)",
+  "picks": [
+   9,
+   13,
+   17,
+   20,
+   24,
+   28
+  ],
+  "seeds_tried": [
+   1,
+   2,
+   3,
+   4
+  ],
+  "palette": "akai_oldlook_64.png exact colours (62) + 3 extra (bat)",
+  "post": "no lock, keep original outline, feet y=61",
+  "frames": 6,
+  "fps": 12,
+  "loop": false,
+  "colours": 61,
+  "foot_rows": [
+   61,
+   61,
+   61,
+   61,
+   61,
+   61
+  ]
+ }
+}

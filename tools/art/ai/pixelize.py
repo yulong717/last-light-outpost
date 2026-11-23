@@ -147,6 +147,31 @@ def build_palette(dirs: list[Path], k: int, out: Path, dark_l: float = 0.25,
     return centers
 
 
+def palette_from_image(base: Path, dirs: list[Path], extra: int, out: Path, min_dist: float = 0.08) -> np.ndarray:
+    """Use an existing sprite's exact colours; add up to `extra` colours (k-means) only for frame
+    pixels that are far (OKLab distance > min_dist) from every base colour (e.g. a new prop)."""
+    a = np.array(Image.open(base).convert("RGBA")).reshape(-1, 4)
+    pal = np.unique(a[a[:, 3] > 0][:, :3], axis=0)
+    if extra > 0:
+        from sklearn.cluster import KMeans
+        px = []
+        for f in load_frames(dirs):
+            b = np.array(Image.open(f).convert("RGBA")).reshape(-1, 4)
+            px.append(b[b[:, 3] > 0][:, :3])
+        px = np.concatenate(px)
+        lab = srgb_to_oklab(px)
+        plab = srgb_to_oklab(pal)
+        d = np.sqrt(((lab[:, None, :] - plab[None, :, :]) ** 2).sum(-1)).min(1)
+        far = px[d > min_dist]
+        if len(far) >= extra * 20:
+            km = KMeans(n_clusters=extra, n_init=8, random_state=0).fit(srgb_to_oklab(far))
+            pal = np.concatenate([pal, oklab_to_srgb(km.cluster_centers_)])
+    pal = pal[np.argsort(srgb_to_oklab(pal)[:, 0])]
+    out.parent.mkdir(parents=True, exist_ok=True)
+    Image.fromarray(pal.reshape(1, -1, 3).astype(np.uint8), "RGB").save(out)
+    return pal
+
+
 def quantize(img: Image.Image, pal: np.ndarray) -> Image.Image:
     a = np.array(img.convert("RGBA"))
     op = a[..., 3] > 0
@@ -175,7 +200,7 @@ def shifted(m: np.ndarray, dy: int, dx: int, fill=False):
     return out
 
 
-def cleanup(img: Image.Image, pal: np.ndarray) -> Image.Image:
+def cleanup(img: Image.Image, pal: np.ndarray, outline: bool = True) -> Image.Image:
     a = np.array(img.convert("RGBA"))
     op = a[..., 3] > 0
     # 1. remove opaque pixels with no 4-neighbour (orphans) and fill transparent holes surrounded on 4 sides
@@ -206,6 +231,8 @@ def cleanup(img: Image.Image, pal: np.ndarray) -> Image.Image:
                 v = vals[cnt.argmax()]
                 newa[y, x, :3] = [(v >> 16) & 255, (v >> 8) & 255, v & 255]
     a = newa
+    if not outline:
+        return Image.fromarray(a, "RGBA")
     # 3. outline: every opaque pixel touching transparency (4-neighbour) gets the darkest palette
     #    colour of its hue family (selout-ish: darker variant of itself, never pure black)
     op = a[..., 3] > 0
@@ -312,6 +339,9 @@ def main():
     p.add_argument("--out", type=Path, required=True)
     p.add_argument("--dark-l", type=float, default=0.25, help="OKLab L below which pixels merge into one outline colour")
     p.add_argument("--reserve", nargs="*", default=[], help="hex colours always in the palette")
+    p.add_argument("--base", type=Path, default=None,
+                   help="use this sprite's exact colours instead of k-means (plus --extra new colours)")
+    p.add_argument("--extra", type=int, default=0)
     q = sub.add_parser("apply")
     q.add_argument("dir", type=Path)
     q.add_argument("--palette", type=Path, required=True)
@@ -320,6 +350,7 @@ def main():
     q.add_argument("--stripes", default="", help="Y0:Y1 rows (from the figure's top) to pinstripe, e.g. 17:34")
     q.add_argument("--stripe-color", default="#7C8AA8")
     q.add_argument("--stripe-every", type=int, default=3)
+    q.add_argument("--keep-outline", action="store_true", help="do not recolour edge pixels (art already has its outline)")
     a = ap.parse_args()
 
     if a.cmd == "downscale":
@@ -330,12 +361,15 @@ def main():
         info = downscale(a.frames, a.out, scale, a.align)
         print(json.dumps({"frames": len(info), "scale512": info[0]["scale512"]}))
     elif a.cmd == "palette":
-        pal = build_palette(a.dirs, a.k, a.out, a.dark_l, a.reserve)
+        if a.base:
+            pal = palette_from_image(a.base, a.dirs, a.extra, a.out)
+        else:
+            pal = build_palette(a.dirs, a.k, a.out, a.dark_l, a.reserve)
         print(f"{len(pal)} colours -> {a.out}")
     else:
         pal = np.array(Image.open(a.palette).convert("RGB")).reshape(-1, 3)
         files = load_frames([a.dir])
-        imgs = [cleanup(quantize(Image.open(f), pal), pal) for f in files]
+        imgs = [cleanup(quantize(Image.open(f), pal), pal, outline=not a.keep_outline) for f in files]
         if a.stripes:
             y0, y1 = (int(v) for v in a.stripes.split(":"))
             sc = hex_rgb(a.stripe_color)
