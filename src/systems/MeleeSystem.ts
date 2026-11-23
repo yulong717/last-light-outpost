@@ -161,7 +161,7 @@ export class MeleeSystem {
    * - 近戰模式中按換槍／1～3 → 回到槍（換槍鍵這一幀被吃掉，不會順便換下一把）
    * 回傳這一幀要不要揮、能不能開槍
    */
-  handleInput(inp: InputState): { swing: boolean; gunAllowed: boolean } {
+  handleInput(inp: InputState): { swing: boolean; pressed: boolean; gunAllowed: boolean } {
     if (inp.toggleMelee) this.setStance(!this.stance);
     if (this.stance && !this.stanceLocked && (inp.nextWeapon || inp.selectWeapon >= 0)) {
       this.setStance(false);
@@ -169,7 +169,8 @@ export class MeleeSystem {
     }
     const attack = this.stance && (inp.firePressed || inp.fireHeld);
     const swing = inp.meleePressed || inp.meleeHeld || attack;
-    return { swing, gunAllowed: !this.stance && !this.busy };
+    const pressed = inp.meleePressed || (this.stance && inp.firePressed);
+    return { swing, pressed, gunAllowed: !this.stance && !this.busy };
   }
 
   /** 移動倍率：揮擊中變慢（鈍器幾乎站定），近戰模式比拿槍輕快 */
@@ -184,10 +185,11 @@ export class MeleeSystem {
   }
 
   /** 按下（或按住）近戰。aimX：往哪邊揮（沒給就照目前面向） */
-  trySwing(player: Player, aimX?: number): boolean {
+  trySwing(player: Player, aimX?: number, pressed = true): boolean {
     if (!player.alive) return false;
     if (this.busy || this.heftT > 0) {
-      this.queued = true;
+      // 只有「按下」才排下一下；按著不放不會在揮的途中多排一下（點一下＝揮一下）
+      if (pressed) this.queued = true;
       return true;
     }
     this.start(player, aimX);
@@ -455,73 +457,53 @@ export class MeleeSystem {
     this.scene.tweens.add({ targets: t, scale: 1, duration: 140, ease: 'Back.easeOut' });
   }
 
-  /** 揮擊軌跡：身體高度的一道弧，很快淡掉；收尾突刺是一道直線 */
+  /**
+   * 揮擊軌跡：只畫幾條細的速度線（不畫整片白弧，免得擋住畫面）。
+   * 左揮、右揮是壓扁的橫向弧（方向相反），下揮是直立的弧，刀類收尾突刺是幾條直線。
+   */
   private drawTrail(player: Player): void {
     const d = this.def;
+    const st = this.step;
     const g = this.scene.add.graphics().setDepth(DEPTH_FX + 1);
     const cx = player.footX;
     const cy = player.footY - 28;
-    const heavy = d.swing === 'heavy';
-    const st = this.step;
-    if (st?.launch && !this.dashSwing) {
-      // 下劈：從頭頂後方劈到前方地面的一道直立大弧
-      const r = st.reach + 8;
-      const steps = 12;
-      for (let layer = 0; layer < 4; layer++) {
-        g.lineStyle(6 - layer, layer === 0 ? 0xffffff : d.trailColor, 0.95 - layer * 0.2);
+    const f = this.facing;
+    const color = d.trailColor;
+    const arc = (a0: number, a1: number, r: number, sx: number, sy: number, oy = 0): void => {
+      // 弧頭（揮到的那一端）實、弧尾虛：只畫後 60%，三條細線錯開半徑
+      for (let line = 0; line < 3; line++) {
+        const rr = r - line * 3;
+        g.lineStyle(1, line === 0 ? 0xffffff : color, line === 0 ? 0.7 : 0.45);
         g.beginPath();
+        const steps = 10;
         for (let i = 0; i <= steps; i++) {
-          const a = Phaser.Math.Linear(-110, 35, i / steps) * (Math.PI / 180);
-          const rr = r - layer * 3 - (1 - i / steps) * 6;
-          const px = cx + this.facing * Math.cos(a) * rr * 0.8;
-          const py = cy + 6 + Math.sin(a) * rr * 0.7;
+          const a = Phaser.Math.Linear(a0, a1, 0.4 + 0.6 * (i / steps));
+          const px = cx + f * Math.cos(a) * rr * sx;
+          const py = cy + oy + Math.sin(a) * rr * sy;
           if (i === 0) g.moveTo(px, py);
           else g.lineTo(px, py);
         }
         g.strokePath();
       }
-      this.scene.tweens.add({ targets: g, alpha: 0, duration: 200, onComplete: () => g.destroy() });
-      return;
-    }
-    if (this.finisher && !st) {
-      const len = d.reach * 1.25 + 10;
-      for (let layer = 0; layer < 3; layer++) {
-        g.lineStyle(4 - layer, layer === 0 ? 0xffffff : d.trailColor, 0.95 - layer * 0.25);
-        g.lineBetween(cx + this.facing * 4, cy - 1 + layer, cx + this.facing * (len - layer * 4), cy + layer);
+    };
+    const deg = Math.PI / 180;
+    if (st?.launch && !this.dashSwing) {
+      // 下揮：從頭頂劈到前方地面
+      arc(-110 * deg, 35 * deg, (st.reach ?? d.reach) + 6, 0.8, 0.7, 6);
+    } else if (this.finisher && !st) {
+      // 刀類收尾突刺：三條直線
+      const len = d.reach * 1.25 + 8;
+      for (let i = -1; i <= 1; i++) {
+        g.lineStyle(1, i === 0 ? 0xffffff : color, i === 0 ? 0.8 : 0.45);
+        g.lineBetween(cx + f * 8, cy + i * 3, cx + f * (len - Math.abs(i) * 6), cy + i * 3);
       }
-      g.fillStyle(0xffffff, 0.9).fillTriangle(
-        cx + this.facing * (len + 6),
-        cy,
-        cx + this.facing * (len - 4),
-        cy - 4,
-        cx + this.facing * (len - 4),
-        cy + 4,
-      );
-      this.scene.tweens.add({ targets: g, alpha: 0, scaleX: 1.05, duration: 160, onComplete: () => g.destroy() });
-      return;
+    } else {
+      // 左揮／右揮：dir 決定由上往下或由下往上
+      const r = (st ? st.reach : d.reach) + 4;
+      const half = Math.min(150, st ? st.arc : d.arc) / 2;
+      arc(-half * this.dir * deg, half * this.dir * deg, r, 1, 0.55);
     }
-    const r = (st ? st.reach : d.reach) + 6;
-    const half = Phaser.Math.DegToRad(Math.min(150, st ? st.arc : d.arc) / 2);
-    const mid = this.facing > 0 ? 0 : Math.PI;
-    // 刀刃左右來回，鈍器由上往下
-    const a0 = mid - half * this.dir;
-    const a1 = mid + half * this.dir;
-    const steps = 12;
-    const layers = heavy ? 4 : 3;
-    for (let layer = 0; layer < layers; layer++) {
-      g.lineStyle((heavy ? 5 : 3) - layer, layer === 0 ? 0xffffff : d.trailColor, 0.9 - layer * 0.2);
-      g.beginPath();
-      for (let i = 0; i <= steps; i++) {
-        const a = Phaser.Math.Linear(a0, a1, i / steps);
-        // 2.5D：弧壓扁成橢圓，貼合地面帶；弧尾細、弧頭粗
-        const rr = r - layer * 3 - (1 - i / steps) * 4;
-        const px = cx + Math.cos(a) * rr;
-        const py = cy + Math.sin(a) * rr * 0.55;
-        if (i === 0) g.moveTo(px, py);
-        else g.lineTo(px, py);
-      }
-      g.strokePath();
-    }
-    this.scene.tweens.add({ targets: g, alpha: 0, duration: 90 + d.active * 700, onComplete: () => g.destroy() });
+    this.scene.tweens.add({ targets: g, alpha: 0, duration: 110, onComplete: () => g.destroy() });
   }
+
 }

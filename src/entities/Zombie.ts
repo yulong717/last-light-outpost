@@ -866,13 +866,9 @@ export class Zombie extends Phaser.GameObjects.Sprite {
       if (this.anims.isPlaying) this.anims.timeScale *= ENRAGE.speedMul;
     }
     // 受擊：閃白 → 轉紅 → 回正 + 擠壓 + 往後一仰
-    this.setTintFill(0xffffff);
-    this.hat?.setTintFill(0xffffff);
-    this.scene.time.delayedCall(60, () => {
-      if (!this.active || this.dead) return;
-      this.setTint(0xff7a6a);
-      this.hat?.setTint(0xff7a6a);
-    });
+    // 受擊只染紅一下（整隻閃白太搶眼、會擋畫面）
+    this.setTint(0xff7a6a);
+    this.hat?.setTint(0xff7a6a);
     this.scene.time.delayedCall(140, () => this.active && !this.dead && this.restoreTint());
     fx?.squash(this, this.s, info.headshot ? 1.4 : 1, this.s * (this.spec.widthMul ?? 1));
     if (this.hasReact && !this.airborne && !this.downed) this.hitT = REACT.hit;

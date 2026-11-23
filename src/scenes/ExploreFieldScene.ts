@@ -725,7 +725,7 @@ export class ExploreFieldScene extends Phaser.Scene {
     this.weapons.update(dt);
     if (melee.swing && p.alive) {
       this.weapons.cancelReload();
-      this.melee.trySwing(p, inp.aimX);
+      this.melee.trySwing(p, inp.aimX, melee.pressed);
     }
     const meleeRes = this.melee.update(dt, p, this.zombies);
     this.kills += meleeRes.kills;

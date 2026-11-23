@@ -596,7 +596,7 @@ export class DefenseScene extends Phaser.Scene {
     // 近戰：拿槍時隨時快揮一下，近戰模式下攻擊鍵就是揮；會打斷換彈
     if (melee.swing && this.player.alive) {
       this.weapons.cancelReload();
-      this.melee.trySwing(this.player, inp.aimX);
+      this.melee.trySwing(this.player, inp.aimX, melee.pressed);
     }
     const meleeRes = this.melee.update(dt, this.player, this.zombies);
     this.kills += meleeRes.kills;
