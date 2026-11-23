@@ -1,17 +1,145 @@
 {
-  "_meta_doc": "MiniMax H3 Image edit, API format. Based on ComfyUI template image_minimax_h3_image_edit without the LLM prompt expander. Inputs: load1 (Picture 1), prompt in cond.prompt, size in cond.width/height (and scale1 to match), seed in sampler.seed. Template default sampler: 6 steps, cfg 1, euler/simple.",
-  "unet": {"class_type": "UNETLoader", "inputs": {"unet_name": "minimax_h3_image_pruned_int8_convrot.safetensors", "weight_dtype": "default"}},
-  "clip": {"class_type": "CLIPLoader", "inputs": {"clip_name": "qwen3vl_32b_minimax_h3_int8_convrot.safetensors", "type": "minimax", "device": "default"}},
-  "vae": {"class_type": "VAELoader", "inputs": {"vae_name": "minimax_h3_image_vae_fp16.safetensors"}},
-  "load1": {"class_type": "LoadImage", "inputs": {"image": "PLACEHOLDER.png"}},
-  "scale1": {"class_type": "ImageScale", "inputs": {"image": ["load1", 0], "upscale_method": "nearest-exact", "width": 1024, "height": 1024, "crop": "disabled"}},
-  "cond": {"class_type": "MiniMaxH3ImageConditioning", "inputs": {
-    "clip": ["clip", 0], "vae": ["vae", 0], "images.image_1": ["scale1", 0],
-    "prompt": "", "width": 1024, "height": 1024}},
-  "neg": {"class_type": "ConditioningZeroOut", "inputs": {"conditioning": ["cond", 0]}},
-  "sampler": {"class_type": "KSampler", "inputs": {
-    "model": ["unet", 0], "positive": ["cond", 0], "negative": ["neg", 0], "latent_image": ["cond", 1],
-    "seed": 1, "steps": 6, "cfg": 1.0, "sampler_name": "euler", "scheduler": "simple", "denoise": 1.0}},
-  "decode": {"class_type": "VAEDecode", "inputs": {"samples": ["sampler", 0], "vae": ["vae", 0]}},
-  "save": {"class_type": "SaveImage", "inputs": {"images": ["decode", 0], "filename_prefix": "ai_art/h3_image_edit"}}
+ "_meta_doc": "MiniMax H3 Image edit, API format. Based on ComfyUI template image_minimax_h3_image_edit without the LLM prompt expander. Inputs: load1 (Picture 1), load2 (Picture 2, optional: --set cond.images.image_2=null), prompt in cond.prompt, size in cond.width/height (and scale1 to match), seed in sampler.seed. Template default sampler: 6 steps, cfg 1, euler/simple.",
+ "unet": {
+  "class_type": "UNETLoader",
+  "inputs": {
+   "unet_name": "minimax_h3_image_pruned_int8_convrot.safetensors",
+   "weight_dtype": "default"
+  }
+ },
+ "clip": {
+  "class_type": "CLIPLoader",
+  "inputs": {
+   "clip_name": "qwen3vl_32b_minimax_h3_int8_convrot.safetensors",
+   "type": "minimax",
+   "device": "default"
+  }
+ },
+ "vae": {
+  "class_type": "VAELoader",
+  "inputs": {
+   "vae_name": "minimax_h3_image_vae_fp16.safetensors"
+  }
+ },
+ "load1": {
+  "class_type": "LoadImage",
+  "inputs": {
+   "image": "PLACEHOLDER.png"
+  }
+ },
+ "scale1": {
+  "class_type": "ImageScale",
+  "inputs": {
+   "image": [
+    "load1",
+    0
+   ],
+   "upscale_method": "nearest-exact",
+   "width": 1024,
+   "height": 1024,
+   "crop": "disabled"
+  }
+ },
+ "load2": {
+  "class_type": "LoadImage",
+  "inputs": {
+   "image": "PLACEHOLDER.png"
+  }
+ },
+ "scale2": {
+  "class_type": "ImageScale",
+  "inputs": {
+   "image": [
+    "load2",
+    0
+   ],
+   "upscale_method": "nearest-exact",
+   "width": 1024,
+   "height": 1024,
+   "crop": "disabled"
+  }
+ },
+ "cond": {
+  "class_type": "MiniMaxH3ImageConditioning",
+  "inputs": {
+   "clip": [
+    "clip",
+    0
+   ],
+   "vae": [
+    "vae",
+    0
+   ],
+   "images.image_1": [
+    "scale1",
+    0
+   ],
+   "prompt": "",
+   "width": 1024,
+   "height": 1024,
+   "images.image_2": [
+    "scale2",
+    0
+   ]
+  }
+ },
+ "neg": {
+  "class_type": "ConditioningZeroOut",
+  "inputs": {
+   "conditioning": [
+    "cond",
+    0
+   ]
+  }
+ },
+ "sampler": {
+  "class_type": "KSampler",
+  "inputs": {
+   "model": [
+    "unet",
+    0
+   ],
+   "positive": [
+    "cond",
+    0
+   ],
+   "negative": [
+    "neg",
+    0
+   ],
+   "latent_image": [
+    "cond",
+    1
+   ],
+   "seed": 1,
+   "steps": 6,
+   "cfg": 1.0,
+   "sampler_name": "euler",
+   "scheduler": "simple",
+   "denoise": 1.0
+  }
+ },
+ "decode": {
+  "class_type": "VAEDecode",
+  "inputs": {
+   "samples": [
+    "sampler",
+    0
+   ],
+   "vae": [
+    "vae",
+    0
+   ]
+  }
+ },
+ "save": {
+  "class_type": "SaveImage",
+  "inputs": {
+   "images": [
+    "decode",
+    0
+   ],
+   "filename_prefix": "ai_art/h3_image_edit"
+  }
+ }
 }

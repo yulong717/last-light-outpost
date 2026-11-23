@@ -5,3 +5,4 @@ dist
 __pycache__/
 art/ai/raw/
 .venv-art/
+art/ai/out/CLEANUP_LIST.md

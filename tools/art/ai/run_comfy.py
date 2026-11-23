@@ -137,8 +137,27 @@ def main():
         node, field = key.split(".", 1)
         if node not in wf:
             raise SystemExit(f"unknown node '{node}' (have: {', '.join(wf)})")
-        wf[node]["inputs"][field] = parse_value(raw)
-        overrides[key] = parse_value(raw)
+        value = parse_value(raw)
+        if value is None:  # --set node.input=null removes an (optional) input link
+            wf[node]["inputs"].pop(field, None)
+        else:
+            wf[node]["inputs"][field] = value
+        overrides[key] = value
+    # drop nodes nothing references anymore (e.g. an unused LoadImage after removing its link)
+    def referenced():
+        refs = set()
+        for n in wf.values():
+            for v in n["inputs"].values():
+                if isinstance(v, list) and len(v) == 2 and isinstance(v[0], str):
+                    refs.add(v[0])
+        return refs
+    while True:
+        refs = referenced()
+        dead = [k for k, n in wf.items() if k not in refs and not n["class_type"].startswith("Save")]
+        if not dead:
+            break
+        for k in dead:
+            wf.pop(k)
 
     result = run(wf, args.url, args.out, args.timeout)
 

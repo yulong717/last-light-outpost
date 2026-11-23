@@ -1,0 +1,36 @@
+# M-body pose templates, generated with H3 Image edit from the stand mannequin (1024 canvas,
+# figure placed per canvas spec). base: stand (with arms) | noarm (armless, for WeaponRig actions)
+# Output: art/ai/mannequins/M/<name>_512.png / _64.png
+common: >-
+  Keep the same plain featureless grey mannequin from <Picture 1>: same head size (smaller head,
+  3.5 heads tall proportions), same body size and proportions, same scale. Strict side view facing right,
+  the body stays in the same place in the frame, the lowest foot stays on the same ground line
+  as in <Picture 1>. Pixel art game sprite, flat grey shading lit from the top-left, clean 1px
+  dark outline, solid magenta background (#FF00FF), no shadow on the ground, no text.
+poses:
+  # --- locomotion keys (armless: walk/run arms are drawn by WeaponRig) ---
+  walk_contact_a: {base: noarm, pose: "Walking with a long stride: the near leg (right leg) is extended far forward with the heel touching the ground, the far leg is extended far back with the toes pushing off. Legs clearly spread apart."}
+  walk_pass_a:    {base: noarm, pose: "Walking, passing position: the near leg (right leg) is straight and carries the weight, the far leg is lifted with the knee bent high, the foot passing under the body."}
+  walk_contact_b: {base: noarm, pose: "Walking with a long stride: the far leg (left leg) is extended far forward with the heel touching the ground, the near leg (right leg) is extended far back with the toes pushing off. Legs clearly spread apart."}
+  run_a:          {base: noarm, pose: "Running fast, leaning forward: the near leg is lifted high in front with the knee raised to hip height, the far leg is extended far back pushing off the ground."}
+  # --- gun actions (armless) ---
+  aim_1:   {base: noarm, pose: "Standing in a firm shooting stance: feet staggered, front foot forward, knees slightly bent, upper body leaning slightly forward, ready to aim."}
+  aim_2:   {base: noarm, pose: "Same firm shooting stance with feet staggered and knees slightly bent; the upper body breathes slightly lower by one pixel."}
+  shoot_1: {base: noarm, pose: "Firm shooting stance with feet staggered; the upper body is jolted backward by recoil, shoulders pushed back, head tilted back slightly."}
+  shoot_2: {base: noarm, pose: "Firm shooting stance with feet staggered; the upper body is still leaning back slightly from recoil, recovering."}
+  shoot_3: {base: noarm, pose: "Firm shooting stance with feet staggered, upper body leaning slightly forward again, ready to aim."}
+  # --- melee (with arms, baseball bat) ---
+  melee_1: {base: stand, pose: "Holding a baseball bat with both hands, ready batting stance: knees bent, bat held up behind the head over the rear shoulder."}
+  melee_2: {base: stand, pose: "Wind-up: holding a baseball bat with both hands, torso twisted back, bat pulled far back behind the body, weight on the back foot."}
+  melee_3: {base: stand, pose: "Swinging a baseball bat with both hands: the bat is level at waist height pointing backward-down, starting the forward swing, front foot stepping forward."}
+  melee_4: {base: stand, pose: "Impact: swinging a baseball bat with both hands, the bat is fully extended straight forward to the right at chest height, arms straight, weight on the front foot."}
+  melee_5: {base: stand, pose: "Follow-through: the baseball bat has swung past the front and is now raised high in front and above, arms crossed over, torso rotated forward."}
+  melee_6: {base: stand, pose: "Recovering: holding a baseball bat with both hands lowered in front of the body, standing upright, relaxed."}
+  # --- hit (with arms) ---
+  hit_1: {base: stand, pose: "Getting hit in the chest from the right: the upper body jerks backward, head snapped back, arms flung slightly forward."}
+  hit_2: {base: stand, pose: "Staggering backward after a hit: leaning back, one foot stepping back, arms loose."}
+  hit_3: {base: stand, pose: "Recovering from a hit: upright again, slightly hunched, arms down."}
+  # --- death (with arms) keys 1, 4, 8 ---
+  death_1: {base: stand, pose: "Fatally hit: the upper body bends forward violently, knees starting to buckle, arms dropping."}
+  death_4: {base: stand, pose: "Collapsing: kneeling on both knees, upper body slumping forward, head down, arms hanging."}
+  death_8: {base: stand, pose: "Dead: lying face down flat on the ground, stretched out horizontally with the head to the right, the body rests on the ground line."}
