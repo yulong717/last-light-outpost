@@ -61,8 +61,8 @@ export const TUTORIAL_STEPS: TutorialStepDef[] = [
     goal: 2,
     unarmed: {
       title: '你只有球棒：翻出路障，近身揮擊',
-      desktop: '右鍵或 V 揮棒，連按接連段；每揮一下耗體力，見底會變慢',
-      touch: '按「近戰」揮棒，連按接連段；每揮一下耗體力，見底會變慢',
+      desktop: '右鍵或 V 揮棒，連按接連段；體力見底會變慢',
+      touch: '按「近戰」揮棒，連按接連段；體力見底會變慢',
       goal: 4,
     },
   },

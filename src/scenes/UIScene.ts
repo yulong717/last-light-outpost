@@ -187,7 +187,7 @@ export class UIScene extends Phaser.Scene {
     u.head.setText(`${t.cleared ? '✓ ' : ''}${t.title}`).setColor(t.cleared ? '#9ad17a' : '#f5d76e');
     u.hint.setText(t.hint);
     u.progress.setText(`${t.progress ? t.progress + '　' : ''}${t.step}/${t.total}`);
-    u.panel.height = 30 + u.hint.height;
+    u.panel.setSize(u.panel.width, 30 + u.hint.height);
     u.panel.setStrokeStyle(1, t.cleared ? 0x9ad17a : 0xf5d76e, 0.7);
     // 手機才閃框提示按鈕／搖桿／射擊區（電腦版看文字的按鍵就好）
     u.current = this.touchUI && !t.cleared ? t.focus : null;
