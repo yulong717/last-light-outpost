@@ -38,6 +38,23 @@ export class Player {
   /** 被打後的無敵時間（秒），避免一群霧屍同一幀把人秒掉 */
   private hurtCooldown = 0;
   private walkPhase = 0;
+  private aiAnim = false;
+  /** AI 影格的球棒揮擊正在播放（WeaponRig 這時不畫手與球棒） */
+  aiMeleeFrame = -1;
+
+  /** 依近戰階段挑揮擊影格；回傳 true 表示由角色影格自己畫手與球棒 */
+  setMeleePose(mp: { phase: string; k: number } | null): boolean {
+    if (!this.aiAnim || !this.scene.textures.exists('akai_ai_melee') || !mp) {
+      this.aiMeleeFrame = -1;
+      return false;
+    }
+    const k = Math.min(0.999, Math.max(0, mp.k));
+    if (mp.phase === 'ready') this.aiMeleeFrame = 99; // 持棒待機／走路
+    else if (mp.phase === 'windup') this.aiMeleeFrame = k < 0.5 ? 0 : 1;
+    else if (mp.phase === 'active') this.aiMeleeFrame = k < 0.5 ? 2 : 3;
+    else this.aiMeleeFrame = k < 0.5 ? 4 : 5;
+    return this.aiMeleeFrame >= 0;
+  }
   private stepIndex = 0;
   private recoil = 0;
   /** 外力（受擊、霰彈後座力）造成的速度，會很快衰減 */
@@ -61,12 +78,15 @@ export class Player {
     // 有擦掉手臂的身體圖就用它，手與武器由 WeaponRig 畫
     // 每位主角有自己的像素形象（src/art/HeroArt.ts）；畫不出來時退回舊的共用圖
     const hero = GameState.data.hero ?? 'soldier';
-    const heroBody = heroBodyTexture(scene, hero);
-    this.build = heroBody ? heroBuild(hero) : { w: 1, h: 1 };
+    // 阿凱（student）改用 H3 生成的影格（64×64 腳底在第 61 列，64×72 在第 69 列）
+    this.aiAnim = hero === 'student' && scene.anims.exists('akai_ai_walk');
+    const heroBody = this.aiAnim ? 'akai_ai_idle' : heroBodyTexture(scene, hero);
+    this.build = heroBody && !this.aiAnim ? heroBuild(hero) : { w: 1, h: 1 };
     const body = heroBody !== null || scene.textures.exists('player_body');
     this.sprite = scene.add.sprite(x, this.footY, heroBody ?? (body ? 'player_body' : 'player'), 0);
-    // 影格腳底在 64 格中的第 63 列
-    this.sprite.setOrigin(0.5, body || scene.anims.exists('player_shoot') ? 63 / 64 : 1);
+    // 影格腳底在 64 格中的第 63 列（AI 影格在第 61 列）
+    this.sprite.setOrigin(0.5, this.aiAnim ? 62 / 64 : body || scene.anims.exists('player_shoot') ? 63 / 64 : 1);
+    if (this.aiAnim) this.sprite.play('akai_ai_idle');
     this.sync();
   }
 
@@ -94,6 +114,8 @@ export class Player {
 
   /** 走路上下顛簸（像素），WeaponRig 跟著身體動 */
   get bob(): number {
+    // AI 影格：依當格頭頂高度（idle 頭頂在第 6 列）讓手臂跟著身體起伏
+    if (this.aiAnim) return 0;
     return this.walkPhase > 0 ? Math.abs(Math.sin(this.walkPhase)) * 1.5 : 0;
   }
 
@@ -226,7 +248,18 @@ export class Player {
   private sync(): void {
     const s = this.sprite;
     if (!this.alive) return;
-    const bob = this.walkPhase > 0 ? Math.abs(Math.sin(this.walkPhase)) * 1.5 : 0;
+    if (this.aiAnim && this.aiMeleeFrame >= 0 && this.aiMeleeFrame < 99) {
+      s.anims.stop();
+      s.setTexture('akai_ai_melee', this.aiMeleeFrame);
+    } else if (this.aiAnim) {
+      const bat = this.aiMeleeFrame === 99;
+      const want = (this.walkPhase > 0 ? 'akai_ai_walk' : 'akai_ai_idle') + (bat ? '_bat' : '');
+      if (s.anims.currentAnim?.key !== want || !s.anims.isPlaying) s.play(want);
+    }
+    // 64×64 影格腳底在第 61 列，持棒／揮擊的 64×72 影格腳底在第 69 列
+    if (this.aiAnim) s.setOrigin(0.5, s.height > 64 ? 70 / 72 : 62 / 64);
+    // AI 影格本身有上下起伏，不再疊加程式顛簸
+    const bob = this.walkPhase > 0 && !this.aiAnim ? Math.abs(Math.sin(this.walkPhase)) * 1.5 : 0;
     s.x = this.footX - this.recoil * this.facing;
     s.y = this.footY - bob;
     s.setFlipX(this.facing < 0);

@@ -30,6 +30,13 @@ export class BootScene extends Phaser.Scene {
     // 隊員底圖：PixelLab 依主角姿勢重畫的 18 個不同的人＋部位遮罩（tools/art/make_crew_bases.py）
     this.load.image('crew_bases', 'assets/sprites/crew_bases.png');
     this.load.image('crew_bases_regions', 'assets/sprites/crew_bases_regions.png');
+    // 阿凱（H3 生成，舊版形象）：無手臂 idle 4 格、walk 8 格（持槍時手與槍由 WeaponRig 畫）；
+    // 持棒 idle_bat 4 格、walk_bat 8 格、揮擊 melee 6 格為 64×72，手與球棒畫在影格裡。來源 art/ai/out/akai_v4/
+    this.load.spritesheet('akai_ai_idle', 'assets/sprites/akai_ai_idle.png', { frameWidth: 64, frameHeight: 64 });
+    this.load.spritesheet('akai_ai_walk', 'assets/sprites/akai_ai_walk.png', { frameWidth: 64, frameHeight: 64 });
+    this.load.spritesheet('akai_ai_melee', 'assets/sprites/akai_ai_melee.png', { frameWidth: 64, frameHeight: 72 });
+    this.load.spritesheet('akai_ai_idle_bat', 'assets/sprites/akai_ai_idle_bat.png', { frameWidth: 64, frameHeight: 72 });
+    this.load.spritesheet('akai_ai_walk_bat', 'assets/sprites/akai_ai_walk_bat.png', { frameWidth: 64, frameHeight: 72 });
     this.load.spritesheet('player_reload', 'assets/sprites/player_reload.png', { frameWidth: 64, frameHeight: 64 });
     // 霧屍：PixelLab 走路圖經程式換色、加寬、做出攻擊影格的三種變體
     for (const key of ZOMBIE_SHEETS) {
@@ -70,6 +77,12 @@ export class BootScene extends Phaser.Scene {
     if (this.textures.get('player').frameTotal > 2) stripArms(this, 'player');
     // 三位主角各自的形象（src/art/HeroArt.ts）
     createHeroTextures(this);
+    if (this.textures.exists('akai_ai_idle') && this.textures.get('akai_ai_idle').frameTotal > 2) {
+      this.anims.create({ key: 'akai_ai_idle', frames: this.anims.generateFrameNumbers('akai_ai_idle', { start: 0, end: 3 }), frameRate: 6, repeat: -1 });
+      this.anims.create({ key: 'akai_ai_walk', frames: this.anims.generateFrameNumbers('akai_ai_walk', { start: 0, end: 7 }), frameRate: 10, repeat: -1 });
+      this.anims.create({ key: 'akai_ai_idle_bat', frames: this.anims.generateFrameNumbers('akai_ai_idle_bat', { start: 0, end: 3 }), frameRate: 6, repeat: -1 });
+      this.anims.create({ key: 'akai_ai_walk_bat', frames: this.anims.generateFrameNumbers('akai_ai_walk_bat', { start: 0, end: 7 }), frameRate: 10, repeat: -1 });
+    }
     for (const key of ZOMBIE_SHEETS) {
       if (this.textures.get(key).frameTotal < 7) continue; // 沒載到圖時用色塊
       this.anims.create({

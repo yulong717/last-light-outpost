@@ -612,6 +612,7 @@ export class DefenseScene extends Phaser.Scene {
     this.rig.setWeapon(this.weapons.active.def.id);
     const mp = this.melee.pose;
     this.rig.setMelee(mp ? { id: this.melee.def.id, ...mp } : null);
+    this.rig.bodyDrawsArms = this.player.setMeleePose(mp ?? null);
     this.updateRig(dt, inp.aimX, inp.aimY);
     const muzzleX = this.rig.muzzle.x;
     const muzzleY = this.rig.muzzle.y;
