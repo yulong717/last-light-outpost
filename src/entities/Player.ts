@@ -27,6 +27,8 @@ export class Player {
   footX: number;
   footY: number;
   hp: number;
+  /** 血量下限：開局教學設 1，怎麼打都不會倒下 */
+  minHp = 0;
   readonly maxHp: number;
   /** 1 面向右、-1 面向左 */
   facing = 1;
@@ -196,7 +198,7 @@ export class Player {
   takeDamage(amount: number, fromX = this.footX - this.facing, fromY = this.footY): boolean {
     if (!this.alive || this.hurtCooldown > 0) return false;
     const h = FEEL.hurt;
-    this.hp = Math.max(0, this.hp - amount);
+    this.hp = Math.max(this.minHp, this.hp - amount);
     this.hurtCooldown = h.iframes;
 
     // 往攻擊者反方向擊退（y 方向小一點）

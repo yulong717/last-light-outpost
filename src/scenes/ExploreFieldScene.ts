@@ -20,7 +20,7 @@ import { rumble } from '../feel/Haptics';
 import { ScreenFeedback } from '../feel/ScreenFeedback';
 import { createAtmosphere } from '../fx/Atmosphere';
 import { Fx } from '../fx/Fx';
-import { InputManager, queueAction, registerUIRect } from '../input/InputManager';
+import { InputManager, holdAction, queueAction, registerUIRect } from '../input/InputManager';
 import { GameState } from '../state/GameState';
 import { GameEvents } from '../systems/GameEvents';
 import { HeroSystem, heroTouch } from '../systems/HeroSystem';
@@ -109,6 +109,8 @@ export class ExploreFieldScene extends Phaser.Scene {
   private player!: Player;
   private weapons!: WeaponSystem;
   private melee!: MeleeSystem;
+  /** 觸控「持刀／持槍」切換鍵的字 */
+  private stanceLabel?: Phaser.GameObjects.Text;
   private heroSys!: HeroSystem;
   /** 主角手上的武器（和夜晚一樣會換彈、拉栓、揮砍） */
   private rig!: WeaponRig;
@@ -190,6 +192,10 @@ export class ExploreFieldScene extends Phaser.Scene {
     const armory = GameState.data.armory;
     this.weapons = new WeaponSystem(this, armory.loadout, armory.ammo, !!armory.finitePistol, GameState.data.hero === 'lucky' ? LUCK.critChance : 0);
     this.melee = new MeleeSystem(this, armory.melee);
+    // 禁止開槍的關卡：一進場就拿著近戰武器，點畫面就是揮
+    if (this.spec.meleeOnly) this.melee.lockStance();
+    // 沒帶任何槍（純近戰主角）：整場都是近戰模式
+    if (GameState.data.armory.loadout.length === 0) this.melee.lockStance();
     this.heroSys = new HeroSystem(this, this.player, this.melee, () => this.zombies);
     this.heroSys.onKill = () => this.kills++;
     this.input2 = new InputManager(this);
@@ -445,9 +451,14 @@ export class ExploreFieldScene extends Phaser.Scene {
     this.takedownHint.setVisible(!!best);
     if (best) {
       this.takedownHint.setPosition(best.z.footX, best.z.footY - 78);
-      if (this.input2.state.meleePressed) {
+      const st = this.input2.state;
+      // 近戰模式下點畫面（攻擊鍵）也能暗殺
+      if (st.meleePressed || (this.melee.stance && st.firePressed)) {
         this.takedown(best);
-        this.input2.state.meleePressed = false;
+        st.meleePressed = false;
+        st.meleeHeld = false;
+        st.firePressed = false;
+        st.fireHeld = false;
       }
     }
   }
@@ -614,7 +625,11 @@ export class ExploreFieldScene extends Phaser.Scene {
     if (touch) {
       this.touchButton(GAME_WIDTH - 38, GAME_HEIGHT - 38, '換彈', () => queueAction('reload'));
       this.touchButton(GAME_WIDTH - 76, GAME_HEIGHT - 38, '換槍', () => queueAction('next'));
-      this.touchButton(GAME_WIDTH - 38, GAME_HEIGHT - 76, '近戰', () => queueAction('melee'));
+      this.touchButton(GAME_WIDTH - 38, GAME_HEIGHT - 76, '近戰', () => {
+        queueAction('melee');
+        holdAction('melee', true);
+      }, () => holdAction('melee', false));
+      if (!this.spec.meleeOnly) this.stanceLabel = this.touchButton(GAME_WIDTH - 76, GAME_HEIGHT - 114, '持刀', () => queueAction('stance'));
       this.touchButton(GAME_WIDTH - 76, GAME_HEIGHT - 76, '手雷', () => this.grenade());
       this.touchButton(GAME_WIDTH - 114, GAME_HEIGHT - 38, '醫療', () => this.medkit());
       this.touchButton(GAME_WIDTH - 38, GAME_HEIGHT - 114, '互動', () => this.interact());
@@ -630,14 +645,16 @@ export class ExploreFieldScene extends Phaser.Scene {
     return (r) => (bar.width = (w - 2) * Phaser.Math.Clamp(r, 0, 1));
   }
 
-  private touchButton(x: number, y: number, label: string, fn: () => void): void {
+  private touchButton(x: number, y: number, label: string, fn: () => void, onRelease?: () => void): Phaser.GameObjects.Text {
     const b = this.add.circle(x + 16, y + 16, 16, 0x000000, 0.45).setStrokeStyle(1, 0xffffff, 0.5).setScrollFactor(0).setDepth(200);
-    pixelText(this, x + 16, y + 16, label, 7).setOrigin(0.5).setScrollFactor(0).setDepth(201);
+    const text = pixelText(this, x + 16, y + 16, label, 7).setOrigin(0.5).setScrollFactor(0).setDepth(201);
     b.setInteractive().on('pointerdown', (_p: Phaser.Input.Pointer, _x: number, _y: number, e: Phaser.Types.Input.EventData) => {
       e.stopPropagation();
       fn();
     });
+    if (onRelease) b.on('pointerup', onRelease).on('pointerout', onRelease);
     this.unregister.push(registerUIRect({ x, y, w: 32, h: 32 }));
+    return text;
   }
 
   private refreshHud(): void {
@@ -647,8 +664,11 @@ export class ExploreFieldScene extends Phaser.Scene {
     this.setNoise(this.exp.noise / NOISE.max);
     const w = this.weapons.active;
     const res = this.weapons.reserve();
+    this.stanceLabel?.setText(this.melee.stance ? '持槍' : '持刀');
+    const ch = this.melee.chain;
+    const pips = ch.len > 1 ? '　' + Array.from({ length: ch.len }, (_, i) => (i < ch.idx ? '■' : '□')).join('') : '';
     this.ammoText.setText(
-      this.spec.meleeOnly ? `近戰：${this.melee.def.name}` : `${w.def.name}  ${w.ammo}/${w.def.magazine}  ${res === Infinity ? '∞' : res}${this.weapons.reloading ? '  換彈中…' : ''}`,
+      this.melee.stance ? `近戰：${this.melee.def.name}${pips}` : `${w.def.name}  ${w.ammo}/${w.def.magazine}  ${res === Infinity ? '∞' : res}${this.weapons.reloading ? '  換彈中…' : ''}`,
     );
     const s = GameState.data.supplies;
     const parts = [`手雷 ${s.grenade}`, `醫療 ${s.medkit}`];
@@ -698,20 +718,22 @@ export class ExploreFieldScene extends Phaser.Scene {
     // 潛入中：近戰鍵先拿來暗殺
     if (!this.alerted) this.updateSleepers(dt);
 
+    // 近戰模式切換先處理：近戰模式中按換槍是回到槍
+    const melee = this.melee.handleInput(inp);
     if (inp.selectWeapon >= 0) this.weapons.select(inp.selectWeapon);
     if (inp.nextWeapon) this.weapons.next();
-    if (inp.reloadPressed && !this.melee.busy) this.weapons.reload();
+    if (inp.reloadPressed && !this.melee.busy && !this.melee.stance) this.weapons.reload();
     this.weapons.update(dt);
-    if (inp.meleePressed && p.alive) {
+    if (melee.swing && p.alive) {
       this.weapons.cancelReload();
-      this.melee.trySwing(p);
+      this.melee.trySwing(p, inp.aimX);
     }
     const meleeRes = this.melee.update(dt, p, this.zombies);
     this.kills += meleeRes.kills;
     // 潛行時腳步放輕；奔跑變快、被抓住變超慢
     const heroMul = this.heroSys.update(dt, inp.moveX !== 0 || inp.moveY !== 0);
-    p.speedMul = (this.alerted ? this.weapons.active.def.moveMul : 0.75) * heroMul;
-    p.update(dt, inp.moveX, inp.moveY, inp.aimX, { minX: 20, maxX: this.worldW - 16 });
+    p.speedMul = (this.alerted ? this.melee.moveMul(this.weapons.active.def.moveMul) : 0.75) * heroMul;
+    p.update(dt, inp.moveX, inp.moveY, this.melee.aimX(p, inp.aimX), { minX: 20, maxX: this.worldW - 16 });
 
     // 手上的武器先擺好姿勢，子彈從真正的槍口射出
     this.rig.setWeapon(this.weapons.active.def.id);
@@ -722,7 +744,7 @@ export class ExploreFieldScene extends Phaser.Scene {
     const muzzleY = this.rig.muzzle.y;
     this.noGunCooldown = Math.max(0, this.noGunCooldown - realDt);
     if (this.spec.meleeOnly) {
-      if (inp.firePressed && this.noGunCooldown <= 0) {
+      if (inp.firePressed && !this.melee.stance && this.noGunCooldown <= 0) {
         this.noGunCooldown = 1.2;
         const warn = pixelText(this, GAME_WIDTH / 2, 52, this.sys.game.device.input.touch ? '不能開槍！按「近戰」' : '不能開槍！用近戰（E／右鍵）', 9, '#ff8a80')
           .setOrigin(0.5, 0)
@@ -732,7 +754,7 @@ export class ExploreFieldScene extends Phaser.Scene {
         this.tweens.add({ targets: warn, alpha: 0, delay: 700, duration: 400, onComplete: () => warn.destroy() });
       }
     } else {
-      const shot = p.alive && !this.melee.busy
+      const shot = p.alive && melee.gunAllowed
         ? this.weapons.tryFire(muzzleX, muzzleY, inp.aimX, inp.aimY, inp.fireHeld, inp.firePressed, this.zombies, p.moveFactor)
         : null;
       if (shot) {
@@ -746,7 +768,7 @@ export class ExploreFieldScene extends Phaser.Scene {
     }
     const aimDist = Phaser.Math.Distance.Between(muzzleX, muzzleY, inp.aimX, inp.aimY);
     const climbY = Math.tan(Phaser.Math.DegToRad(this.weapons.climbDeg)) * Math.abs(inp.aimX - muzzleX);
-    this.crosshair.update(realDt, inp.aimX, inp.aimY - climbY, this.weapons.spreadNow(p.moveFactor), aimDist, p.alive);
+    this.crosshair.update(realDt, inp.aimX, inp.aimY - climbY, this.weapons.spreadNow(p.moveFactor), aimDist, p.alive && !this.melee.stance);
     this.screenFx.update(realDt, p.hp, p.maxHp);
 
     this.updateFollowers(dt);

@@ -125,6 +125,6 @@ export class HeroSelectScene extends Phaser.Scene {
     // 標題畫面選好的據點地圖
     GameState.data.outpostMap = this.registry.get('outpostMap') ?? undefined;
     this.cameras.main.fadeOut(300, 0, 0, 0);
-    this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => this.scene.start('Defense'));
+    this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => this.scene.start('Defense', { tutorial: true }));
   }
 }

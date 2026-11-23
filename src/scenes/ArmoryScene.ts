@@ -343,11 +343,12 @@ export class ArmoryScene extends Phaser.Scene {
     if (m.stagger >= 0.6) tags.push(['打暈', TAG.control]);
     if (m.penetration >= 0.5) tags.push(['破頭盔', TAG.pierce]);
     if (m.staggerBonus > 1) tags.push(['處決暈眩', TAG.power]);
-    if (m.comboEvery) tags.push([`第 ${m.comboEvery} 下加重`, TAG.power]);
+    if (m.comboEvery > 1) tags.push([`${m.comboEvery} 連砍`, TAG.speed]);
+    if (m.heft > 0) tags.push(['每下重新掄', TAG.warn]);
     if (swing <= 0.4) tags.push(['出手快', TAG.speed]);
     if (swing >= 0.9) tags.push(['起手慢', TAG.warn]);
     y = this.chips(x, y, w, tags);
-    this.text(x, y + 2, '右鍵／V／E 隨時揮擊，每揮一次耗體力', 7, '#90a4ae');
+    this.text(x, y + 2, this.sys.game.device.input.touch ? '「近戰」鍵快揮，「持刀」切成近戰模式，按住連續揮' : '右鍵／V／E 快揮，4／X 切成近戰模式，按住連續揮', 7, '#90a4ae');
     const by = PY + PH - 58;
     if (!GameState.owns(m.id)) {
       const locked = !GameState.inShop(m.id);

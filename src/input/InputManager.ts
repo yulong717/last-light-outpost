@@ -21,6 +21,10 @@ export interface InputState {
   nextWeapon: boolean;
   /** 這一幀按下近戰（右鍵、V、E 或觸控按鈕；F 是夥伴指令） */
   meleePressed: boolean;
+  /** 近戰鍵按住不放（連續揮擊） */
+  meleeHeld: boolean;
+  /** 切換近戰模式（4、X 或觸控「持刀」鍵）：槍收起來，攻擊鍵改成揮擊 */
+  toggleMelee: boolean;
 }
 
 type Rect = { x: number; y: number; w: number; h: number };
@@ -60,15 +64,21 @@ function inRect(r: Rect, x: number, y: number): boolean {
 }
 
 /** 讓 UI 按鈕（換彈、換槍）也能送出動作。 */
-const queued = { reload: false, next: false, melee: false };
-export function queueAction(action: 'reload' | 'next' | 'melee'): void {
+const queued = { reload: false, next: false, melee: false, stance: false };
+export function queueAction(action: 'reload' | 'next' | 'melee' | 'stance'): void {
   queued[action] = true;
+}
+
+/** 觸控近戰鍵按住不放：連續揮擊 */
+const held = { melee: false };
+export function holdAction(action: 'melee', down: boolean): void {
+  held[action] = down;
 }
 
 export class InputManager {
   private scene: Phaser.Scene;
   private keys: Record<
-    'reload' | 'one' | 'two' | 'three' | 'swap' | 'melee' | 'melee2' | 'up' | 'down' | 'left' | 'right' | 'w' | 'a' | 's' | 'd',
+    'reload' | 'one' | 'two' | 'three' | 'four' | 'stance' | 'swap' | 'melee' | 'melee2' | 'up' | 'down' | 'left' | 'right' | 'w' | 'a' | 's' | 'd',
     Phaser.Input.Keyboard.Key
   > | null = null;
   private movePointerId: number | null = null;
@@ -88,6 +98,8 @@ export class InputManager {
     selectWeapon: -1,
     nextWeapon: false,
     meleePressed: false,
+    meleeHeld: false,
+    toggleMelee: false,
   };
 
   constructor(scene: Phaser.Scene) {
@@ -99,6 +111,8 @@ export class InputManager {
         one: kb.addKey(Phaser.Input.Keyboard.KeyCodes.ONE),
         two: kb.addKey(Phaser.Input.Keyboard.KeyCodes.TWO),
         three: kb.addKey(Phaser.Input.Keyboard.KeyCodes.THREE),
+        four: kb.addKey(Phaser.Input.Keyboard.KeyCodes.FOUR),
+        stance: kb.addKey(Phaser.Input.Keyboard.KeyCodes.X),
         melee: kb.addKey(Phaser.Input.Keyboard.KeyCodes.V),
         melee2: kb.addKey(Phaser.Input.Keyboard.KeyCodes.E),
         swap: kb.addKey(Phaser.Input.Keyboard.KeyCodes.Q),
@@ -116,6 +130,7 @@ export class InputManager {
     scene.input.mouse?.disableContextMenu();
 
     joystick.active = false;
+    held.melee = false;
     scene.input.on('pointerdown', (p: Phaser.Input.Pointer) => {
       // 滑鼠右鍵 = 近戰，不會開火
       if (!p.wasTouch && p.rightButtonDown()) {
@@ -203,9 +218,13 @@ export class InputManager {
     s.nextWeapon = (k ? jd(k.swap) : false) || queued.next;
     s.selectWeapon = k && jd(k.one) ? 0 : k && jd(k.two) ? 1 : k && jd(k.three) ? 2 : -1;
     s.meleePressed = (k ? jd(k.melee) || jd(k.melee2) : false) || queued.melee;
+    const rightHeld = !active.wasTouch && active.rightButtonDown() && !isPointerOverUI(active);
+    s.meleeHeld = (k ? k.melee.isDown || k.melee2.isDown : false) || rightHeld || held.melee;
+    s.toggleMelee = (k ? jd(k.four) || jd(k.stance) : false) || queued.stance;
     queued.reload = false;
     queued.next = false;
     queued.melee = false;
+    queued.stance = false;
     return s;
   }
 }

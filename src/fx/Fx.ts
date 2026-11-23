@@ -445,6 +445,41 @@ export class Fx {
     });
   }
 
+  /**
+   * 近戰命中：
+   * - slash：一道細白斜光劃過命中點＋幾點火星（快、輕）
+   * - heavy-slash：粗一點的十字光（斧頭、刀類收尾）
+   * - blunt：白色星芒閃一下＋往外擴散的壓扁衝擊環＋腳下揚塵（重、悶）
+   * 卡肉期間 tween 照跑，所以頓住的那一拍正好看到閃光。
+   */
+  meleeImpact(x: number, y: number, dirX: number, kind: 'slash' | 'heavy-slash' | 'blunt', floorY: number): void {
+    const s = this.scene;
+    const depth = DEPTH_BURST + 1;
+    if (kind === 'blunt') {
+      const star = s.add.star(x, y, 4, 2, 9, 0xffffff, 1).setDepth(depth).setAngle(Phaser.Math.Between(0, 45));
+      s.tweens.add({ targets: star, scale: 1.6, alpha: 0, duration: 140, ease: 'Quad.easeOut', onComplete: () => star.destroy() });
+      const ring = s.add.ellipse(x, y, 10, 6).setStrokeStyle(2, 0xfff3d0, 0.9).setDepth(depth);
+      s.tweens.add({ targets: ring, scaleX: 4.2, scaleY: 3.2, alpha: 0, duration: 220, ease: 'Quad.easeOut', onComplete: () => ring.destroy() });
+      this.dust(x + dirX * 6, floorY, 6);
+      return;
+    }
+    const heavy = kind === 'heavy-slash';
+    const g = s.add.graphics().setDepth(depth).setPosition(x, y);
+    const len = heavy ? 18 : 13;
+    const tilt = Phaser.Math.DegToRad(Phaser.Math.Between(25, 55)) * (Math.random() < 0.5 ? 1 : -1);
+    const cuts = heavy ? [tilt, tilt + Math.PI / 2.2] : [tilt];
+    for (const a of cuts) {
+      const cx = Math.cos(a) * len;
+      const cy = Math.sin(a) * len * 0.8;
+      g.lineStyle(heavy ? 4 : 3, 0xffffff, 0.35).lineBetween(-cx, -cy, cx, cy);
+      g.lineStyle(heavy ? 2 : 1, 0xffffff, 1).lineBetween(-cx, -cy, cx, cy);
+    }
+    g.setScale(0.4, 0.4);
+    s.tweens.add({ targets: g, scaleX: 1.15, scaleY: 1, duration: 60, ease: 'Quad.easeOut' });
+    s.tweens.add({ targets: g, alpha: 0, delay: 60, duration: heavy ? 150 : 100, onComplete: () => g.destroy() });
+    this.sparks(x, y, -dirX, floorY, heavy ? 5 : 3);
+  }
+
   /** 跳字：往上飄、放大再縮回 */
   popText(x: number, y: number, text: string, color: string): void {
     const t = pixelText(this.scene, x, y, text, 8, color).setOrigin(0.5).setDepth(60).setStroke('#000000', 3).setScale(0.6);

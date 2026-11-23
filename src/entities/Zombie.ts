@@ -63,6 +63,9 @@ const AGGRO_RANGE = 120;
 const REACH_X = 20;
 const REACH_Y = 9;
 
+/** 擊退滑行的衰減率（每秒）：越大停得越快 */
+const KNOCK_SLIDE_DECAY = 14;
+
 export class Zombie extends Phaser.GameObjects.Sprite {
   readonly def: EnemyDef;
   /** 這隻的職業、外觀、裝備、變異（見 ZombieFactory） */
@@ -82,6 +85,8 @@ export class Zombie extends Phaser.GameObjects.Sprite {
   private attackKey: string;
   /** 被打中時往後仰的角度，逐漸回正 */
   private hitLean = 0;
+  /** 被鈍器打飛的滑行速度（像素／秒） */
+  private knockVX = 0;
   /** 攻擊時往前撲的位移 */
   private lunge = 0;
   dead = false;
@@ -277,6 +282,13 @@ export class Zombie extends Phaser.GameObjects.Sprite {
 
   update(dt: number, ctx: ZombieContext): void {
     if (this.dead) return;
+    if (this.knockVX !== 0) {
+      // 被打飛滑行：速度指數衰減，總位移 ≈ knockVX / KNOCK_SLIDE_DECAY
+      this.footX += this.knockVX * dt;
+      this.x = this.footX;
+      this.knockVX *= Math.exp(-KNOCK_SLIDE_DECAY * dt);
+      if (Math.abs(this.knockVX) < 4) this.knockVX = 0;
+    }
     this.updateAbilities(dt, ctx);
     if (this.stunTimer > 0) {
       // 硬直：原地晃，不走也不打
@@ -728,7 +740,12 @@ export class Zombie extends Phaser.GameObjects.Sprite {
     const dealt = this.mitigate(amount, info);
     this.hp -= dealt;
     this.sinceHit = 0;
-    this.footX += knockback * (1 - this.spec.knockbackResist) * Math.sign(info.dirX ?? 1);
+    // 擊退：小的當下推開；大的（鈍器）先推一截、剩下的滑出去，看得到被打飛
+    const kb = knockback * (1 - this.spec.knockbackResist) * Math.sign(info.dirX ?? 1);
+    if (Math.abs(kb) > 12) {
+      this.footX += kb * 0.35;
+      this.knockVX += kb * 0.65 * KNOCK_SLIDE_DECAY;
+    } else this.footX += kb;
     this.x = this.footX;
     const fx = Fx.of(this.scene);
     if (this.hp <= 0) {
