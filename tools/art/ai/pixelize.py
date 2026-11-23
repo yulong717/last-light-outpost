@@ -73,17 +73,33 @@ def despill(rgba: Image.Image) -> Image.Image:
     return Image.fromarray(a, "RGBA")
 
 
+def remove_warm(rgba: Image.Image) -> Image.Image:
+    """Make saturated orange/brown pixels transparent (a prop the video model added, e.g. a bat)."""
+    import colorsys
+    a = np.array(rgba)
+    rgb = a[..., :3].astype(np.float64) / 255
+    mx, mn = rgb.max(-1), rgb.min(-1)
+    sat = (mx - mn) / np.maximum(mx, 1e-6)
+    r, g, b = rgb[..., 0], rgb[..., 1], rgb[..., 2]
+    warm = (r >= g) & (g >= b) & (sat > 0.45) & (mx > 0.35) & ((r - b) > 0.25)
+    a[warm & (a[..., 3] > 0), 3] = 0
+    return Image.fromarray(a, "RGBA")
+
+
 def figure_metrics(keyed: Image.Image):
     l, t, r, b = alpha_bounds(keyed)
     return {"bounds": (l, t, r, b), "center_x": torso_center_x(keyed, t, b), "foot": b + 1}
 
 
 def downscale(frames: list[Path], out: Path, scale: float, align: str = "hybrid",
-              height: int = CANVAS, foot_row: int = 61) -> list[dict]:
+              height: int = CANVAS, foot_row: int = 61, fixed_foot: float | None = None,
+              fixed_center: float | None = None, drop_warm: bool = False) -> list[dict]:
     """align: frame  = per-frame torso centre + per-frame foot (stills / pose_swap)
               action = one centre + one foot for the whole action (keeps the original motion)
               hybrid = one centre for the action, per-frame foot (video loops: no drift, no bob)"""
     keyed = [despill(key_magenta(Image.open(f))) for f in frames]
+    if drop_warm:
+        keyed = [remove_warm(k) for k in keyed]
     metrics = [figure_metrics(k) for k in keyed]
     # sources may be 512 or 1024 etc: scale is defined for 512 space, convert per source size
     cx_all = float(np.median([m["center_x"] for m in metrics]))
@@ -94,6 +110,10 @@ def downscale(frames: list[Path], out: Path, scale: float, align: str = "hybrid"
         s = scale * (512 / k.width) if scale else 512 / k.width
         cx = m["center_x"] if align == "frame" else cx_all
         foot = foot_all if align == "action" else m["foot"]
+        if fixed_center is not None:
+            cx = fixed_center
+        if fixed_foot is not None:
+            foot = fixed_foot
         img512 = place(k, s, foot, cx, canvas_h=height * SCALE, foot_row=foot_row)
         img64 = k_centroid(img512)
         img64.save(out / f"{i:02d}.png")
@@ -417,6 +437,72 @@ def harmonize(frames: list[Image.Image], ref_frames: list[Image.Image], feet: in
     return out, info
 
 
+# ---------------------------------------------------------------- region match / largest blob (zombie)
+
+def zombie_part(r: int, g: int, b: int) -> str:
+    """Same rules as tools/art/make_zombie_variants.py classify()."""
+    import colorsys
+    h, s, v = colorsys.rgb_to_hsv(r / 255, g / 255, b / 255)
+    hd = h * 360
+    if v < 0.11:
+        return "outline"
+    if s < 0.07 and v > 0.58:
+        return "shirt"
+    if 165 <= hd <= 230 and s > 0.15:
+        return "pants"
+    if 70 <= hd <= 165 and s >= 0.07:
+        return "skin"
+    return "other"
+
+
+def match_region(img: Image.Image, ref: Image.Image, part: str) -> Image.Image:
+    """Re-map the colours of one classify() region of `img` to the same region of `ref` by
+    luminance quantile (keeps the shading order, uses the reference's colours and proportions)."""
+    def lum(c):
+        return 0.299 * c[0] + 0.587 * c[1] + 0.114 * c[2]
+
+    def region(arr):
+        cnt = {}
+        for c in map(tuple, arr[arr[..., 3] > 0][:, :3]):
+            if zombie_part(*c) == part:
+                cnt[c] = cnt.get(c, 0) + 1
+        cols = sorted(cnt, key=lum)
+        tot = max(1, sum(cnt.values()))
+        out, cum = [], 0
+        for c in cols:
+            out.append((c, cum / tot, (cum + cnt[c]) / tot))
+            cum += cnt[c]
+        return out
+
+    a = np.array(img.convert("RGBA"))
+    ref_r = region(np.array(ref.convert("RGBA")))
+    tgt = region(a)
+    if not ref_r or not tgt:
+        return img
+    mp = {}
+    for c, lo, hi in tgt:
+        mid = (lo + hi) / 2
+        mp[c] = next((rc for rc, rlo, rhi in ref_r if rlo <= mid <= rhi), ref_r[-1][0])
+    flat = a.reshape(-1, 4)
+    for i in range(len(flat)):
+        if flat[i, 3] and tuple(flat[i, :3]) in mp:
+            flat[i, :3] = mp[tuple(flat[i, :3])]
+    return Image.fromarray(flat.reshape(a.shape), "RGBA")
+
+
+def keep_largest(img: Image.Image) -> Image.Image:
+    """Drop opaque blobs (8-connected) other than the largest one (stray props, specks)."""
+    from scipy import ndimage
+    a = np.array(img.convert("RGBA"))
+    lab, n = ndimage.label(a[..., 3] > 0, structure=np.ones((3, 3)))
+    if n <= 1:
+        return img
+    sizes = ndimage.sum(np.ones_like(lab), lab, range(1, n + 1))
+    keep = 1 + int(np.argmax(sizes))
+    a[(lab > 0) & (lab != keep), 3] = 0
+    return Image.fromarray(a, "RGBA")
+
+
 # ---------------------------------------------------------------- CLI
 
 def main():
@@ -431,6 +517,10 @@ def main():
     d.add_argument("--align", choices=["frame", "action", "hybrid"], default="hybrid")
     d.add_argument("--height", type=int, default=64, help="output canvas height (64 or 72)")
     d.add_argument("--foot-row", type=int, default=61, help="sprite row of the feet (61, or 69 on 64x72)")
+    d.add_argument("--fixed-foot", type=float, default=None,
+                   help="source-pixel ground edge used for EVERY frame (keeps jumps/airborne frames off the ground)")
+    d.add_argument("--fixed-center", type=float, default=None, help="source-pixel x used as centreline for every frame")
+    d.add_argument("--drop-warm", action="store_true", help="remove saturated orange/brown pixels (stray props)")
     p = sub.add_parser("palette")
     p.add_argument("dirs", nargs="+", type=Path)
     p.add_argument("--k", type=int, default=16)
@@ -451,6 +541,13 @@ def main():
     q.add_argument("--keep-outline", action="store_true", help="do not recolour edge pixels (art already has its outline)")
     q.add_argument("--lock-rows", type=int, default=0,
                    help="copy canvas rows [0, N) from frame 0 into every frame, no bob (head+hands+bat stay still)")
+    rg = sub.add_parser("region", help="zombie: match classify() regions to a reference frame, drop stray blobs")
+    rg.add_argument("dir", type=Path)
+    rg.add_argument("--ref", type=Path, required=True, help="reference sprite frame (RGBA)")
+    rg.add_argument("--parts", nargs="*", default=[], help="regions to re-map, e.g. pants")
+    rg.add_argument("--only", nargs="*", default=None, help="frame names (e.g. 00 01 02) to re-map; default all")
+    rg.add_argument("--keep-largest", action="store_true")
+    rg.add_argument("--out", type=Path, required=True)
     h = sub.add_parser("harmonize", help="match jersey colours + number 7 to a reference action")
     h.add_argument("dir", type=Path)
     h.add_argument("--ref", type=Path, required=True, help="reference action dir (e.g. idle frames)")
@@ -460,6 +557,20 @@ def main():
     h.add_argument("--stripe-pattern", default="", help='refill stripes on plain jersey white, e.g. "10100"')
     h.add_argument("--out", type=Path, required=True)
     a = ap.parse_args()
+
+    if a.cmd == "region":
+        ref = Image.open(a.ref).convert("RGBA")
+        a.out.mkdir(parents=True, exist_ok=True)
+        for f in load_frames([a.dir]):
+            im = Image.open(f).convert("RGBA")
+            if a.only is None or f.stem in a.only:
+                for part in a.parts:
+                    im = match_region(im, ref, part)
+            if a.keep_largest:
+                im = keep_largest(im)
+            im.save(a.out / f.name)
+        print(f"region -> {a.out}")
+        return
 
     if a.cmd == "harmonize":
         files = load_frames([a.dir])
@@ -478,7 +589,8 @@ def main():
         if a.ref_height:
             size = a.ref_size or Image.open(a.frames[0]).width
             scale = M_HEIGHT8 / (a.ref_height * 512 / size)  # in 512 space for a 512 source
-        info = downscale(a.frames, a.out, scale, a.align, a.height, a.foot_row)
+        info = downscale(a.frames, a.out, scale, a.align, a.height, a.foot_row,
+                         a.fixed_foot, a.fixed_center, a.drop_warm)
         print(json.dumps({"frames": len(info), "scale512": info[0]["scale512"]}))
     elif a.cmd == "palette":
         if a.base:

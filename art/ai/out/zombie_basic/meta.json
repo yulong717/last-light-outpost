@@ -1,0 +1,234 @@
+{
+ "spec": "docs/ai-art/ZOMBIE_REACT.md (round 5)",
+ "canvas": "64x64, feet row 62 (standing / kneeling), facing right, lying head-left",
+ "palette": "art/ai/refs/zombie_basic_palette.png (70 colours, hard mapped)",
+ "segments": {
+  "A_knockback": {
+   "workflow": "art/ai/workflows/h3_video_i2v.json (512x512, 56 frames, 8-step turbo)",
+   "first_frame": "art/ai/refs/zombie_basic_stand0_x8.png (x16 on magenta)",
+   "last_frame": "art/ai/refs/zombie_basic_down13_x8.png (x16 on magenta)",
+   "prompt": "... The zombie is the only thing in the frame: no weapon, no bat, no attacker, no objects, no effects. An invisible powerful blow hits the zombie in the chest from the right: its head snaps back, its upper body bends backward, it is knocked off its feet and flies backward to the left with its legs kicking forward, lands flat on its back with a small bounce, and ends lying on its back with the head on the left and the feet on the right.",
+   "seeds_tried": [
+    1,
+    2,
+    3,
+    4
+   ],
+   "seed": 2,
+   "picked": {
+    "3": 21,
+    "4": 28,
+    "5": 36,
+    "6": 48
+   },
+   "note": "first attempt (prompt mentioning a baseball bat) drew a bat in the frame; second prompt still drew it in 3/4 seeds briefly. Seed 2 has it only in video frames 6-9, which are not used; remaining orange pixels removed with --drop-warm and keep-largest."
+  },
+  "B_getup": {
+   "workflow": "art/ai/workflows/h3_video_i2v.json (512x512, 56 frames)",
+   "first_frame": "art/ai/refs/zombie_basic_down13_x8.png (x16)",
+   "last_frame": "art/ai/refs/zombie_basic_stand0_x8.png (x16)",
+   "prompt": "... The zombie lying on its back with the head on the left slowly pushes itself up, sits up, gets to one knee, and stands up hunched, ending in its shambling walking pose facing right. It stays in the same place in the frame.",
+   "seeds_tried": [
+    1,
+    2,
+    3,
+    4
+   ],
+   "seed": 1,
+   "picked": {
+    "7": 3,
+    "8": 12,
+    "9": 33,
+    "10": 51
+   }
+  },
+  "hit_keys": {
+   "workflow": "art/ai/workflows/h3_image_edit.json (1024x1024)",
+   "source": "art/ai/refs/zombie_basic_stand0_x8.png (x16)",
+   "why": "in segment A the zombie straightens up before the blow (61-62 px tall vs 57), so frames 0-2 would visibly grow when switching from walk; redone as H3 Image edits of the stand pose to keep the hunched size",
+   "frames": {
+    "0": {
+     "seed": 203,
+     "pose": "head snaps backward, chin up, arms fly up loosely in front, torso starts to tilt back"
+    },
+    "1": {
+     "seed": 203,
+     "pose": "upper body bent far backward in an arch, head thrown back, arms flung forward and up"
+    },
+    "2": {
+     "seed": 201,
+     "pose": "upper body coming forward again, almost back in the hunched stance"
+    }
+   },
+   "post": "pants re-mapped (before palette quantisation) to existing frame 0 pants colours by luminance quantile, because H3 drew brighter denim blue"
+  }
+ },
+ "post": "magenta key, fixed ground (video row 496 / image row 992 -> sprite row 62) and fixed centreline for every frame (airborne frames keep their height), /8 k-centroid, hard map to 70-colour palette, keep original outline, keep largest blob",
+ "frames": 11,
+ "frame_size": [
+  64,
+  64
+ ],
+ "labels": [
+  "hit",
+  "hit",
+  "hit",
+  "air",
+  "air",
+  "land",
+  "land",
+  "getup",
+  "getup",
+  "getup",
+  "getup"
+ ],
+ "bounds_xyxy": [
+  [
+   8,
+   5,
+   60,
+   62
+  ],
+  [
+   3,
+   6,
+   54,
+   62
+  ],
+  [
+   8,
+   6,
+   60,
+   62
+  ],
+  [
+   13,
+   4,
+   52,
+   58
+  ],
+  [
+   9,
+   7,
+   56,
+   49
+  ],
+  [
+   6,
+   23,
+   53,
+   57
+  ],
+  [
+   3,
+   31,
+   57,
+   61
+  ],
+  [
+   7,
+   28,
+   57,
+   62
+  ],
+  [
+   15,
+   25,
+   57,
+   62
+  ],
+  [
+   13,
+   19,
+   52,
+   62
+  ],
+  [
+   16,
+   4,
+   57,
+   62
+  ]
+ ],
+ "colours_used": 69,
+ "colours_outside_palette": 0,
+ "region_pixel_counts": {
+  "0": {
+   "outline": 425,
+   "skin": 371,
+   "shirt": 174,
+   "other": 33,
+   "pants": 189
+  },
+  "1": {
+   "outline": 457,
+   "skin": 408,
+   "shirt": 214,
+   "pants": 207,
+   "other": 15
+  },
+  "2": {
+   "outline": 386,
+   "skin": 316,
+   "pants": 194,
+   "other": 31,
+   "shirt": 178
+  },
+  "3": {
+   "outline": 355,
+   "skin": 190,
+   "other": 91,
+   "shirt": 120,
+   "pants": 140
+  },
+  "4": {
+   "outline": 380,
+   "skin": 166,
+   "other": 94,
+   "shirt": 108,
+   "pants": 143
+  },
+  "5": {
+   "outline": 302,
+   "skin": 239,
+   "other": 83,
+   "shirt": 108,
+   "pants": 139
+  },
+  "6": {
+   "outline": 331,
+   "skin": 186,
+   "other": 93,
+   "shirt": 100,
+   "pants": 146
+  },
+  "7": {
+   "outline": 296,
+   "skin": 235,
+   "other": 53,
+   "shirt": 99,
+   "pants": 89
+  },
+  "8": {
+   "outline": 295,
+   "skin": 218,
+   "other": 74,
+   "shirt": 127,
+   "pants": 97
+  },
+  "9": {
+   "outline": 352,
+   "skin": 190,
+   "other": 104,
+   "shirt": 142,
+   "pants": 80
+  },
+  "10": {
+   "outline": 427,
+   "skin": 259,
+   "other": 89,
+   "shirt": 149,
+   "pants": 166
+  }
+ }
+}
