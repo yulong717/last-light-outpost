@@ -6,7 +6,7 @@ import { ANIMAL_FRAMES } from '../art/AnimalArt';
 import { Fx } from '../fx/Fx';
 import { CameraFeel } from '../feel/CameraFeel';
 import { ZOMBIE_NECK_ROW } from '../art/sprites';
-import { FOOT_ROW, GEAR_TEXTURE, HAT_ART, HEAD_ANCHORS } from '../art/ZombieComposer';
+import { FOOT_ROW, GEAR_TEXTURE, HAT_ART, HEAD_ANCHORS, REACT_FRAMES } from '../art/ZombieComposer';
 import { GameEvents } from '../systems/GameEvents';
 import { armorAfter, type DamageInfo } from '../combat/Damage';
 import type { ZombieSpec } from '../systems/ZombieFactory';
@@ -68,6 +68,8 @@ const REACH_Y = 9;
 const KNOCK_SLIDE_DECAY = 14;
 /** 擊飛：重力、落地彈跳保留的速度、倒地多久才爬起來 */
 const LAUNCH = { gravity: 900, bounce: 0.35, airDecay: 2.5, down: 0.8 };
+/** 受擊動作、爬起動作的秒數（有 H3 影格時） */
+const REACT = { hit: 0.24, getup: 0.5 };
 /** 被打飛的霧屍撞到別隻：一次最多撞倒幾隻 */
 const BOWL_MAX = 3;
 
@@ -103,6 +105,11 @@ export class Zombie extends Phaser.GameObjects.Sprite {
   private airborne = false;
   private bounces = 0;
   private bowled = new Set<Zombie>();
+  /** 受擊動作剩餘秒數；倒地中（落地後到爬起來）；目前蓋掉動畫的影格（-1 沒有） */
+  private hitT = 0;
+  private downed = false;
+  private bouncing = false;
+  private reactFrame = -1;
   dead = false;
   /** 下次低吼前的秒數（給音效用） */
   private groanIn = 1 + Math.random() * 6;
@@ -296,6 +303,8 @@ export class Zombie extends Phaser.GameObjects.Sprite {
 
   update(dt: number, ctx: ZombieContext): void {
     if (this.dead) return;
+    this.hitT = Math.max(0, this.hitT - dt);
+    if (this.downed && this.stunTimer <= 0) this.downed = false;
     if (this.airborne) this.updateAir(dt);
     if (this.knockVX !== 0) {
       // 被打飛滑行：速度指數衰減，總位移 ≈ knockVX / KNOCK_SLIDE_DECAY；空中幾乎不減速
@@ -666,7 +675,37 @@ export class Zombie extends Phaser.GameObjects.Sprite {
       this.angle = Math.sin((this.walkPhase += dt * 3)) * 1.5 + this.hitLean;
     }
     this.setDepth(depthForY(this.footY));
+    this.applyReactFrame();
     this.syncGear();
+  }
+
+  /** 有 H3 受擊影格的霧屍（一般人形）：受擊、擊飛、落地、爬起直接換格，不靠程式傾斜 */
+  private get hasReact(): boolean {
+    return this.spec.body === 'human' && this.texture.has(String(REACT_FRAMES.getup[3]));
+  }
+
+  private applyReactFrame(): void {
+    if (!this.hasReact) return;
+    let f = -1;
+    if (this.airborne) f = this.bouncing ? REACT_FRAMES.bounce : this.liftVy < 0 ? REACT_FRAMES.rise : REACT_FRAMES.fall;
+    else if (this.downed) {
+      const g = REACT_FRAMES.getup;
+      const k = 1 - this.stunTimer / REACT.getup;
+      f = k < 0 ? REACT_FRAMES.down : g[Math.min(g.length - 1, Math.floor(k * g.length))];
+    } else if (this.hitT > 0) {
+      const h = REACT_FRAMES.hit;
+      const k = 1 - this.hitT / REACT.hit;
+      f = h[k < 0.25 ? 0 : k < 0.65 ? 1 : 2];
+    }
+    if (f >= 0) {
+      if (this.anims.isPlaying) this.anims.pause();
+      this.setFrame(f);
+    } else if (this.reactFrame >= 0) {
+      // 動作播完：回到原本的動畫
+      if (this.anims.currentAnim) this.anims.play(this.anims.currentAnim.key, true);
+      else this.setFrame(0);
+    }
+    this.reactFrame = f;
   }
 
   /**
@@ -835,7 +874,8 @@ export class Zombie extends Phaser.GameObjects.Sprite {
     });
     this.scene.time.delayedCall(140, () => this.active && !this.dead && this.restoreTint());
     fx?.squash(this, this.s, info.headshot ? 1.4 : 1, this.s * (this.spec.widthMul ?? 1));
-    if (!this.airborne) this.hitLean = (info.headshot ? 12 : 7) * Math.sign(info.dirX ?? 1) * (1 - this.spec.knockbackResist * 0.5);
+    if (this.hasReact && !this.airborne && !this.downed) this.hitT = REACT.hit;
+    if (!this.airborne && !this.downed) this.hitLean = (info.headshot ? 12 : 7) * Math.sign(info.dirX ?? 1) * (1 - this.spec.knockbackResist * 0.5) * (this.hasReact ? 0.3 : 1);
     return false;
   }
 
@@ -865,7 +905,9 @@ export class Zombie extends Phaser.GameObjects.Sprite {
     this.bowled.clear();
     const air = (2 * power * k) / LAUNCH.gravity;
     this.knockVX = (Math.sign(dir) || 1) * ((dist * k) / Math.max(0.15, air));
-    this.hitLean = (Math.sign(dir) || 1) * 35;
+    this.hitLean = this.hasReact ? 0 : (Math.sign(dir) || 1) * 35;
+    this.bouncing = false;
+    this.downed = false;
     this.stunTimer = Math.max(this.stunTimer, 3);
   }
 
@@ -873,8 +915,8 @@ export class Zombie extends Phaser.GameObjects.Sprite {
     this.liftVy += LAUNCH.gravity * dt;
     this.lift -= this.liftVy * dt;
     const dir = Math.sign(this.knockVX) || 1;
-    // 空中慢慢往後倒
-    this.hitLean += (dir * 80 - this.hitLean) * Math.min(1, dt * 6);
+    // 空中慢慢往後倒（有擊飛影格就用影格的姿勢）
+    if (!this.hasReact) this.hitLean += (dir * 80 - this.hitLean) * Math.min(1, dt * 6);
     if (this.lift > 0 || this.liftVy < 0) return;
     this.lift = 0;
     const fx = Fx.of(this.scene);
@@ -884,6 +926,7 @@ export class Zombie extends Phaser.GameObjects.Sprite {
       this.bounces--;
       this.liftVy = -this.liftVy * LAUNCH.bounce;
       this.knockVX *= 0.6;
+      this.bouncing = true;
       CameraFeel.of(this.scene)?.addTrauma(0.08);
       return;
     }
@@ -891,8 +934,16 @@ export class Zombie extends Phaser.GameObjects.Sprite {
     this.airborne = false;
     this.liftVy = 0;
     this.knockVX = dir * 60;
-    this.hitLean = dir * 85;
-    this.stunTimer = LAUNCH.down;
+    this.bouncing = false;
+    if (this.hasReact) {
+      // 躺著 → 爬起影格（硬直最後 REACT.getup 秒播爬起）
+      this.hitLean = 0;
+      this.downed = true;
+      this.stunTimer = LAUNCH.down + REACT.getup;
+    } else {
+      this.hitLean = dir * 85;
+      this.stunTimer = LAUNCH.down;
+    }
   }
 
   /** 被打飛／高速滑行時撞到路徑上的霧屍：對方被撞歪、小硬直，最多撞倒 BOWL_MAX 隻 */
