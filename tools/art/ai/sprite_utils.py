@@ -63,16 +63,17 @@ def torso_center_x(img: Image.Image, top: int, bottom: int) -> float:
 
 
 def place(img: Image.Image, scale: float, foot_y: int, center_x: float,
-          canvas: int = CANVAS8) -> Image.Image:
+          canvas: int = CANVAS8, canvas_h: int | None = None, foot_row: int = FOOT_Y) -> Image.Image:
     """Scale an RGBA image by `scale` (nearest) and paste it so that its foot row lands on
-    FOOT_Y8 and center_x lands on MID_X8 of a transparent canvas."""
+    sprite row `foot_row` (default 61) and center_x lands on MID_X8 of a transparent canvas
+    (canvas x canvas_h in 8x space; canvas_h defaults to square)."""
     w, h = img.size
     nw, nh = max(1, round(w * scale)), max(1, round(h * scale))
     scaled = img.resize((nw, nh), Image.NEAREST)
-    out = Image.new("RGBA", (canvas, canvas), (0, 0, 0, 0))
+    out = Image.new("RGBA", (canvas, canvas_h or canvas), (0, 0, 0, 0))
     dx = round(MID_X8 - center_x * scale)
-    # foot_y is the bottom EDGE (last opaque row + 1); row FOOT_Y spans [FOOT_Y8, FOOT_Y8+SCALE)
-    dy = round(FOOT_Y8 + SCALE - foot_y * scale)
+    # foot_y is the bottom EDGE (last opaque row + 1); row foot_row spans [foot_row*8, foot_row*8+8)
+    dy = round((foot_row + 1) * SCALE - foot_y * scale)
     out.paste(scaled, (dx, dy), scaled)
     return out
 

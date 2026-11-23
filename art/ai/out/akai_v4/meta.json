@@ -1,0 +1,242 @@
+{
+ "idle": {
+  "look": "old in-game akai (hero_student), REVIEW-03",
+  "source_video": "art/ai/raw/v3/idle_s3",
+  "seed": 3,
+  "workflow": "art/ai/workflows/h3_video_i2v.json",
+  "length": 56,
+  "res": 512,
+  "key_image": "art/ai/raw/v3/akai_noarm.png",
+  "picks": [
+   6,
+   11,
+   16,
+   22
+  ],
+  "seeds_tried": [
+   1,
+   2,
+   3,
+   4
+  ],
+  "palette": "akai_oldlook_64.png exact colours (62) + 3 extra (bat)",
+  "post": "headlock 42 rows, keep original outline, feet y=61",
+  "frames": 4,
+  "fps": 10,
+  "loop": true,
+  "colours": 56,
+  "foot_rows": [
+   61,
+   61,
+   61,
+   61
+  ]
+ },
+ "walk": {
+  "look": "old in-game akai (hero_student), REVIEW-03",
+  "source_video": "art/ai/raw/v3/walk_s1",
+  "seed": 1,
+  "workflow": "art/ai/workflows/h3_video_i2v.json",
+  "length": 56,
+  "res": 512,
+  "key_image": "art/ai/raw/v3/akai_walkkey.png",
+  "picks": [
+   29,
+   32,
+   35,
+   39,
+   42,
+   45,
+   49,
+   52
+  ],
+  "seeds_tried": [
+   1,
+   2,
+   3,
+   4
+  ],
+  "palette": "akai_oldlook_64.png exact colours (62) + 3 extra (bat)",
+  "post": "headlock 42 rows, keep original outline, feet y=61",
+  "frames": 8,
+  "fps": 10,
+  "loop": true,
+  "colours": 64,
+  "foot_rows": [
+   61,
+   61,
+   61,
+   61,
+   61,
+   61,
+   61,
+   61
+  ]
+ },
+ "idle_bat": {
+  "look": "old in-game akai, REVIEW-04",
+  "canvas": "64x72, feet row 69",
+  "source_video": "art/ai/raw/v4/idlebat_s2",
+  "seed": 2,
+  "workflow": "art/ai/workflows/h3_video_i2v.json (512x576)",
+  "length": 56,
+  "key_image": "art/ai/raw/v4/meleeready_72.png (first=last)",
+  "picks": [
+   12,
+   18,
+   25,
+   32
+  ],
+  "seeds_tried": [
+   1,
+   2,
+   3,
+   4
+  ],
+  "palette": "art/ai/out/akai_v3/palette.png (oldlook 62 + 3 bat)",
+  "post": "lock rows 0-50 (head+hands+bat), harmonize jersey+7 to idle, stripes refilled with idle pattern 10100",
+  "harmonize": {
+   "mapping": {
+    "#F6FAFC": "#F6FAFC",
+    "#C9CED3": "#7A8CC0",
+    "#A2B7D8": "#7A8CC0"
+   },
+   "seven_pasted_frames": [
+    0,
+    1,
+    2,
+    3
+   ]
+  },
+  "frames": 4,
+  "fps": 10,
+  "loop": true,
+  "colours": 41,
+  "foot_rows": [
+   69,
+   69,
+   69,
+   69
+  ]
+ },
+ "walk_bat": {
+  "look": "old in-game akai, REVIEW-04",
+  "canvas": "64x72, feet row 69",
+  "source_video": "art/ai/raw/v4/walkbat_s3",
+  "seed": 3,
+  "workflow": "art/ai/workflows/h3_video_i2v.json (512x576)",
+  "length": 56,
+  "key_image": "art/ai/raw/v4/walkbatkey.png (first=last)",
+  "picks": [
+   29,
+   32,
+   35,
+   39,
+   42,
+   45,
+   49,
+   52
+  ],
+  "seeds_tried": [
+   1,
+   2,
+   3,
+   4
+  ],
+  "palette": "art/ai/out/akai_v3/palette.png (oldlook 62 + 3 bat)",
+  "post": "lock rows 0-50 (head+hands+bat), harmonize jersey+7 to idle, stripes refilled with idle pattern 10100",
+  "harmonize": {
+   "mapping": {
+    "#F6FAFC": "#F6FAFC",
+    "#F4F6F6": "#F6FAFC",
+    "#F4F4F4": "#F6FAFC",
+    "#C9CED3": "#7A8CC0",
+    "#A2B7D8": "#7A8CC0",
+    "#9CA0A4": "#766F8E",
+    "#668B8F": "#766F8E"
+   },
+   "seven_pasted_frames": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7
+   ]
+  },
+  "frames": 8,
+  "fps": 10,
+  "loop": true,
+  "colours": 61,
+  "foot_rows": [
+   69,
+   69,
+   69,
+   69,
+   69,
+   69,
+   69,
+   69
+  ]
+ },
+ "melee": {
+  "look": "old in-game akai, REVIEW-04",
+  "canvas": "64x72, feet row 69",
+  "source_video": "art/ai/raw/v4/meleeb_s3",
+  "seed": 3,
+  "workflow": "art/ai/workflows/h3_video_i2v.json (512x576)",
+  "length": 39,
+  "key_image": "art/ai/raw/v4/meleeready_72b.png (first only, feet on row 69)",
+  "picks": [
+   8,
+   14,
+   17,
+   21,
+   26,
+   31
+  ],
+  "seeds_tried": [
+   1,
+   2,
+   3,
+   4
+  ],
+  "palette": "art/ai/out/akai_v3/palette.png (oldlook 62 + 3 bat)",
+  "post": "no lock, harmonize jersey+7 to idle, stripes refilled with idle pattern 10100",
+  "harmonize": {
+   "mapping": {
+    "#F6FAFC": "#F6FAFC",
+    "#F4F6F6": "#F4F6F6",
+    "#F4F4F4": "#7A8CC0",
+    "#E6E8E9": "#7A8CC0",
+    "#E8E8E2": "#7A8CC0",
+    "#EDE0E4": "#7A8CC0",
+    "#C9CED3": "#7A8CC0",
+    "#A2B7D8": "#7A8CC0",
+    "#8E9296": "#766F8E"
+   },
+   "seven_pasted_frames": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5
+   ]
+  },
+  "frames": 6,
+  "fps": 12,
+  "loop": false,
+  "colours": 62,
+  "foot_rows": [
+   69,
+   69,
+   69,
+   69,
+   69,
+   69
+  ]
+ }
+}

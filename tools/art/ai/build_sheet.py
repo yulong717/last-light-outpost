@@ -34,44 +34,46 @@ def main():
     ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--zoom", type=int, default=4)
     ap.add_argument("--meta", type=Path)
+    ap.add_argument("--foot-row", type=int, default=FOOT_Y, help="feet row (61 on 64x64, 69 on 64x72)")
     a = ap.parse_args()
 
     frames = [Image.open(p).convert("RGBA") for p in sorted(a.dir.glob("[0-9][0-9].png"))]
     n, z = len(frames), a.zoom
+    FW, FH = frames[0].size
     a.out.mkdir(parents=True, exist_ok=True)
 
-    strip = Image.new("RGBA", (CANVAS * n, CANVAS), (0, 0, 0, 0))
+    strip = Image.new("RGBA", (FW * n, FH), (0, 0, 0, 0))
     for i, f in enumerate(frames):
-        strip.paste(f, (i * CANVAS, 0))
+        strip.paste(f, (i * FW, 0))
     strip.save(a.out / f"{a.name}.png")
     (a.out / f"{a.name}.json").write_text(json.dumps(
-        {"frameWidth": CANVAS, "frameHeight": CANVAS, "frames": n, "fps": a.fps, "loop": a.loop}, indent=1),
+        {"frameWidth": FW, "frameHeight": FH, "frames": n, "fps": a.fps, "loop": a.loop}, indent=1),
         encoding="utf-8")
 
-    cell = CANVAS * z
-    sheet = Image.new("RGB", (cell * n, cell + 16), (20, 20, 20))
+    cell, cellh = FW * z, FH * z
+    sheet = Image.new("RGB", (cell * n, cellh + 16), (20, 20, 20))
     d = ImageDraw.Draw(sheet)
     for i, f in enumerate(frames):
         bg = Image.new("RGBA", f.size, BG + (255,))
         bg.alpha_composite(f)
-        tile = bg.convert("RGB").resize((cell, cell), Image.NEAREST)
+        tile = bg.convert("RGB").resize((cell, cellh), Image.NEAREST)
         td = ImageDraw.Draw(tile)
-        fy = (FOOT_Y + 1) * z - 1
+        fy = (a.foot_row + 1) * z - 1
         td.line([(0, fy), (cell, fy)], fill=(0, 255, 0))
-        td.line([(MID_X * z, 0), (MID_X * z, cell)], fill=(0, 128, 255))
-        hy = (FOOT_Y - M_HEIGHT + 1) * z
+        td.line([(MID_X * z, 0), (MID_X * z, cellh)], fill=(0, 128, 255))
+        hy = (a.foot_row - M_HEIGHT + 1) * z
         td.line([(0, hy), (cell, hy)], fill=(255, 255, 255))
         sheet.paste(tile, (i * cell, 16))
         d.text((i * cell + 3, 2), str(i), fill="white")
         if i:
-            d.line([(i * cell, 0), (i * cell, cell + 16)], fill=(90, 90, 90))
+            d.line([(i * cell, 0), (i * cell, cellh + 16)], fill=(90, 90, 90))
     sheet.save(a.out / f"contact_{a.name}.png")
 
     gif = []
     for f in frames:
         bg = Image.new("RGBA", f.size, BG + (255,))
         bg.alpha_composite(f)
-        gif.append(bg.convert("RGB").resize((cell, cell), Image.NEAREST))
+        gif.append(bg.convert("RGB").resize((cell, cellh), Image.NEAREST))
     gif[0].save(a.out / f"{a.name}.gif", save_all=True, append_images=gif[1:],
                 duration=round(1000 / a.fps), loop=0 if a.loop else 1, disposal=1)
 

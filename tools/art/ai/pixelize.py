@@ -78,7 +78,8 @@ def figure_metrics(keyed: Image.Image):
     return {"bounds": (l, t, r, b), "center_x": torso_center_x(keyed, t, b), "foot": b + 1}
 
 
-def downscale(frames: list[Path], out: Path, scale: float, align: str = "hybrid") -> list[dict]:
+def downscale(frames: list[Path], out: Path, scale: float, align: str = "hybrid",
+              height: int = CANVAS, foot_row: int = 61) -> list[dict]:
     """align: frame  = per-frame torso centre + per-frame foot (stills / pose_swap)
               action = one centre + one foot for the whole action (keeps the original motion)
               hybrid = one centre for the action, per-frame foot (video loops: no drift, no bob)"""
@@ -93,7 +94,7 @@ def downscale(frames: list[Path], out: Path, scale: float, align: str = "hybrid"
         s = scale * (512 / k.width) if scale else 512 / k.width
         cx = m["center_x"] if align == "frame" else cx_all
         foot = foot_all if align == "action" else m["foot"]
-        img512 = place(k, s, foot, cx)
+        img512 = place(k, s, foot, cx, canvas_h=height * SCALE, foot_row=foot_row)
         img64 = k_centroid(img512)
         img64.save(out / f"{i:02d}.png")
         info.append({"src": str(frames[i]).replace("\\", "/"), "scale512": s, "center_x": cx, "foot": foot,
@@ -321,6 +322,101 @@ def headlock(frames: list[Image.Image], head_rows: int, ref: Image.Image) -> lis
     return out
 
 
+# ---------------------------------------------------------------- harmonize (REVIEW-04 #3)
+
+def _jersey_mask(a: np.ndarray, feet: int, top_off: int = 43, bot_off: int = 18) -> np.ndarray:
+    """Jersey candidates: light neutral or bluish pixels in the band [feet-top_off, feet-bot_off)
+    (skin, red and wood are excluded because they are clearly warmer: r > b + 40)."""
+    H = a.shape[0]
+    band = np.zeros(a.shape[:2], bool)
+    band[max(feet - top_off, 0): max(feet - bot_off, 0)] = True
+    op = a[..., 3] > 0
+    px = a[..., :3].astype(int)
+    lab = srgb_to_oklab(a[..., :3].reshape(-1, 3)).reshape(H, a.shape[1], 3)
+    chroma = np.hypot(lab[..., 1], lab[..., 2])
+    return band & op & (lab[..., 0] > 0.55) & (chroma < 0.12) & ~(px[..., 0] > px[..., 2] + 40)
+
+
+def _red_mask(a: np.ndarray, feet: int) -> np.ndarray:
+    band = np.zeros(a.shape[:2], bool)
+    band[max(feet - 43, 0): max(feet - 18, 0)] = True
+    px = a[..., :3].astype(int)
+    return band & (a[..., 3] > 0) & (px[..., 0] > 150) & (px[..., 1] < 110) & (px[..., 2] < 120)
+
+
+def harmonize(frames: list[Image.Image], ref_frames: list[Image.Image], feet: int, ref_feet: int,
+              paste_seven: bool = True, min_red: int = 4, stripe_pattern: str = "",
+              stripe_x0: int = 32) -> tuple[list[Image.Image], dict]:
+    """Map jersey colours of `frames` to the reference action's jersey colours by brightness quantile,
+    and paste the reference frame-0 number 7 onto every frame where a 7 is visible."""
+    def hist(imgs, ft):
+        cnt = {}
+        for im in imgs:
+            a = np.array(im)
+            for c in map(tuple, a[_jersey_mask(a, ft)][:, :3]):
+                cnt[c] = cnt.get(c, 0) + 1
+        cols = sorted(cnt, key=lambda c: -srgb_to_oklab(np.array([c], np.uint8))[0, 0])  # light -> dark
+        tot = sum(cnt.values())
+        cum, out = 0, []
+        for c in cols:
+            out.append((c, cum / tot, (cum + cnt[c]) / tot))
+            cum += cnt[c]
+        return out
+
+    ref = hist(ref_frames, ref_feet)
+    tgt = hist(frames, feet)
+    mapping = {}
+    for c, lo, hi in tgt:
+        mid = (lo + hi) / 2
+        for rc, rlo, rhi in ref:
+            if rlo <= mid <= rhi:
+                mapping[c] = rc
+                break
+        else:
+            mapping[c] = ref[-1][0]
+
+    r0 = np.array(ref_frames[0])
+    rred = _red_mask(r0, ref_feet)
+    ry, rx = np.where(rred)
+    seven = r0[rred][:, :3] if len(ry) else None
+    jersey_main = np.array(ref[0][0], np.uint8)  # most common light colour = jersey base
+    # stripe colour = the most frequent non-base jersey colour of the reference
+    stripe_rgb = np.array(max(ref[1:], key=lambda t: t[2] - t[1])[0] if len(ref) > 1 else ref[0][0], np.uint8)
+
+    out, pasted = [], []
+    for i, im in enumerate(frames):
+        a = np.array(im)
+        jm = _jersey_mask(a, feet)
+        if jm.any():
+            src = a[jm][:, :3]
+            a[jm, :3] = np.array([mapping[tuple(c)] for c in src], np.uint8)
+        if stripe_pattern:
+            # refill pinstripes on plain jersey white with the reference spacing (e.g. "10100" = idle's
+            # stripe, white, stripe, white, white), anchored to the canvas centreline so they never crawl
+            op = a[..., 3] > 0
+            edge = op & (sum(shifted(~op, dy, dx, True) for dy, dx in N4) > 0)
+            white = _jersey_mask(a, feet) & (a[..., :3] == jersey_main).all(-1) & ~edge
+            per = len(stripe_pattern)
+            cols = np.array([stripe_pattern[(x - stripe_x0) % per] == "1" for x in range(a.shape[1])])
+            a[white & cols[None, :], :3] = stripe_rgb
+        if paste_seven and seven is not None:
+            red = _red_mask(a, feet)
+            if red.sum() >= min_red:
+                ty, tx = np.where(red)
+                a[red, :3] = jersey_main  # clear the generated 7
+                dy = int(round(ty.mean() - ry.mean()))
+                dx = int(round(tx.mean() - rx.mean()))
+                ok = _jersey_mask(a, feet) | red  # only on jersey (never on arms / skin)
+                for (y, x), c in zip(zip(ry + dy, rx + dx), seven):
+                    if 0 <= y < a.shape[0] and 0 <= x < a.shape[1] and ok[y, x]:
+                        a[y, x, :3] = c
+                pasted.append(i)
+        out.append(Image.fromarray(a, "RGBA"))
+    info = {"mapping": {"#%02X%02X%02X" % k: "#%02X%02X%02X" % v for k, v in mapping.items()},
+            "seven_pasted_frames": pasted}
+    return out, info
+
+
 # ---------------------------------------------------------------- CLI
 
 def main():
@@ -333,6 +429,8 @@ def main():
     d.add_argument("--ref-height", type=float, default=None, help="source px height of idle frame 0")
     d.add_argument("--ref-size", type=int, default=None, help="source canvas size for --ref-height")
     d.add_argument("--align", choices=["frame", "action", "hybrid"], default="hybrid")
+    d.add_argument("--height", type=int, default=64, help="output canvas height (64 or 72)")
+    d.add_argument("--foot-row", type=int, default=61, help="sprite row of the feet (61, or 69 on 64x72)")
     p = sub.add_parser("palette")
     p.add_argument("dirs", nargs="+", type=Path)
     p.add_argument("--k", type=int, default=16)
@@ -351,14 +449,36 @@ def main():
     q.add_argument("--stripe-color", default="#7C8AA8")
     q.add_argument("--stripe-every", type=int, default=3)
     q.add_argument("--keep-outline", action="store_true", help="do not recolour edge pixels (art already has its outline)")
+    q.add_argument("--lock-rows", type=int, default=0,
+                   help="copy canvas rows [0, N) from frame 0 into every frame, no bob (head+hands+bat stay still)")
+    h = sub.add_parser("harmonize", help="match jersey colours + number 7 to a reference action")
+    h.add_argument("dir", type=Path)
+    h.add_argument("--ref", type=Path, required=True, help="reference action dir (e.g. idle frames)")
+    h.add_argument("--feet", type=int, default=61)
+    h.add_argument("--ref-feet", type=int, default=61)
+    h.add_argument("--no-seven", action="store_true")
+    h.add_argument("--stripe-pattern", default="", help='refill stripes on plain jersey white, e.g. "10100"')
+    h.add_argument("--out", type=Path, required=True)
     a = ap.parse_args()
+
+    if a.cmd == "harmonize":
+        files = load_frames([a.dir])
+        imgs, info = harmonize([Image.open(f).convert("RGBA") for f in files],
+                               [Image.open(f).convert("RGBA") for f in load_frames([a.ref])],
+                               a.feet, a.ref_feet, not a.no_seven, stripe_pattern=a.stripe_pattern)
+        a.out.mkdir(parents=True, exist_ok=True)
+        for f, im in zip(files, imgs):
+            im.save(a.out / f.name)
+        (a.out / "harmonize.json").write_text(json.dumps(info, indent=1), encoding="utf-8")
+        print(json.dumps(info))
+        return
 
     if a.cmd == "downscale":
         scale = a.scale
         if a.ref_height:
             size = a.ref_size or Image.open(a.frames[0]).width
             scale = M_HEIGHT8 / (a.ref_height * 512 / size)  # in 512 space for a 512 source
-        info = downscale(a.frames, a.out, scale, a.align)
+        info = downscale(a.frames, a.out, scale, a.align, a.height, a.foot_row)
         print(json.dumps({"frames": len(info), "scale512": info[0]["scale512"]}))
     elif a.cmd == "palette":
         if a.base:
@@ -378,6 +498,14 @@ def main():
             imgs = [draw_stripes(im, pal, (y0, y1), sc, a.stripe_every) for im in imgs]
         if a.headlock:
             imgs = headlock(imgs, a.headlock, imgs[0])
+        if a.lock_rows:
+            ref = np.array(imgs[0])
+            locked = []
+            for im in imgs:
+                arr = np.array(im)
+                arr[: a.lock_rows] = ref[: a.lock_rows]
+                locked.append(Image.fromarray(arr, "RGBA"))
+            imgs = locked
         a.out.mkdir(parents=True, exist_ok=True)
         for f, im in zip(files, imgs):
             im.save(a.out / f.name)
