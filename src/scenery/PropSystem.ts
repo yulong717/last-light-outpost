@@ -211,13 +211,10 @@ export class PropSystem {
       const hx = o.x - (o.w / 2) * p.facing;
       const hy = o.y - o.h / 2;
       this.damage(o, heavy ? 30 : 18, hx, hy, p.facing, 'melee');
-      // 打在硬物上也要有手感：卡肉、鏡頭頓一下、手震回來、道具晃
+      // 打在硬物上也要有手感：卡肉、手震回來、道具晃（鏡頭不晃）
       const fx = Fx.of(this.scene);
       fx?.freeze(heavy ? 70 : 50);
       fx?.meleeImpact(hx, hy, p.facing, 'blunt', o.y);
-      const cam = CameraFeel.of(this.scene);
-      cam?.addTrauma(heavy ? 0.16 : 0.1);
-      cam?.kick(p.facing > 0 ? Math.PI : 0, heavy ? 4 : 2);
       rumble(heavy ? 40 : 20, heavy ? 0.7 : 0.4);
       p.impact(heavy ? 1 : 0.6);
       p.push(-p.facing * 40);

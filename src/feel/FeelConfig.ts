@@ -36,7 +36,8 @@ export const FEEL = {
     knockback: 150,
     /** 被打時的卡肉（毫秒） */
     hitStop: 45,
-    trauma: 0.5,
+    /** 被打時鏡頭只輕晃一下（太大會暈） */
+    trauma: 0.2,
     /** 低於這個比例算低血量：畫面紅邊跟著心跳 */
     lowHpRatio: 0.3,
   },

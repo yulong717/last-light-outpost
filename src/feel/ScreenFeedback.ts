@@ -33,7 +33,8 @@ export class ScreenFeedback {
 
   /** 被打的瞬間呼叫；strength 0..1 */
   hurt(strength = 1): void {
-    this.flash = Math.max(this.flash, 0.55 + 0.45 * strength);
+    // 只亮邊框、而且淡：整片紅閃太刺眼
+    this.flash = Math.max(this.flash, 0.3 + 0.25 * strength);
   }
 
   /** 每幀呼叫，傳入目前血量；回傳是否剛好跨過低血量門檻 */

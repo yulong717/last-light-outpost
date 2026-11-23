@@ -4,7 +4,6 @@ import type { DamageInfo } from '../combat/Damage';
 import { STAMINA, getMelee, type MeleeDef, type MeleeStep } from '../data/weapons';
 import type { Player } from '../entities/Player';
 import type { Zombie } from '../entities/Zombie';
-import { CameraFeel } from '../feel/CameraFeel';
 import { rumble } from '../feel/Haptics';
 import type { InputState } from '../input/InputManager';
 import { Fx } from '../fx/Fx';
@@ -371,7 +370,11 @@ export class MeleeSystem {
       const b = this.swingBonus;
       const stepMul = st ? st.damageMul : fin ? d.comboMul : 1;
       const mul = (this.tired ? STAMINA.tiredDamage : 1) * stepMul * (execute ? d.staggerBonus : 1) * b.damageMul;
+      // 受力分級：收尾或處決＝重（打飛），鈍器／重武器＝中（滑出去），其他＝輕
+      // 有招式表的武器只有收尾那招會打飛（連段中途打飛就接不下去了）
+      const tier = (st ? st.launch : fin || execute) ? 'heavy' : blunt || heavy ? 'mid' : 'light';
       const info: DamageInfo = {
+        heavy: tier === 'heavy',
         amount: d.damage * mul,
         type: d.damageType,
         penetration: d.penetration,
@@ -387,9 +390,6 @@ export class MeleeSystem {
       fx?.blood(hx, hy, this.facing, z.footY, blunt ? 4 : fin ? 10 : 6, blunt ? 0.8 : fin ? 1.4 : 1.1);
       fx?.meleeImpact(hx, hy, this.facing, blunt ? 'blunt' : heavy || fin ? 'heavy-slash' : 'slash', z.footY);
       const killed = z.takeHit(info);
-      // 受力分級：收尾或處決＝重（打飛），鈍器／重武器＝中（滑出去），其他＝輕
-      // 有招式表的武器只有收尾那招會打飛（連段中途打飛就接不下去了）
-      const tier = (st ? st.launch : fin || execute) ? 'heavy' : blunt || heavy ? 'mid' : 'light';
       if (!killed) {
         if (tier === 'heavy' && (blunt || heavy)) {
           z.launch(this.facing, LAUNCH_HIT.power, LAUNCH_HIT.dist);
@@ -416,11 +416,7 @@ export class MeleeSystem {
       fx?.freeze(stop);
       // 卡肉時只有被打的那隻在抖，攻擊者定格
       for (const v of victims) v.z.hitShake(stop + 20, VICTIM_SHAKE[v.tier]);
-      const cam = CameraFeel.of(this.scene);
-      if (launchNow || fin) cam?.punch(LAUNCH_HIT.zoom, LAUNCH_HIT.zoomMs);
-      cam?.addTrauma((st ? st.trauma : d.trauma * (fin ? 1.8 : 1)) * (1 + 0.2 * (hitsNow - 1)));
-      // 鏡頭往打擊方向推一下：鈍器推得多
-      cam?.kick(this.facing > 0 ? Math.PI : 0, heavy ? 6 + hitsNow * 1.5 : fin ? 4 : 1.5);
+      // 鏡頭不晃、不推、不放大（全畫面晃動刺眼又暈），力道全靠卡肉、被打的那隻抖和身體反應
       // 攻擊者也吃到反作用力：身體壓扁一下（卡肉時定格在壓扁的樣子）
       player.impact(heavy || fin ? 1 : 0.6);
       // 被打的腳下揚塵，看得出力道傳到地上
