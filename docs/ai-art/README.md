@@ -11,6 +11,7 @@
 | --- | --- |
 | [`SETUP.md`](SETUP.md) | Windows 11 + RTX 5060 Ti 16GB 的安裝步驟、節點、模型下載清單、Claude Code 連 ComfyUI |
 | [`TEST_SPEC.md`](TEST_SPEC.md) | 角色規格（64×64、腳底線）、兩個角色的描述與動作清單、生成流程、後處理、驗收標準 |
+| [`CLEANUP.md`](CLEANUP.md) | 清掉 H3 主線用不到的模型、釋放硬碟空間（先列清單、使用者確認才刪） |
 | [`COLLAB.md`](COLLAB.md) | 產出放哪、怎麼回傳（分支 / PR）、雲端這邊怎麼審圖與接進遊戲 |
 | `../../art/ai/refs/` | 參考圖（8 倍放大、洋紅底）：阿凱身體底圖、霧屍走路第 0 格、主角射擊第 0 格、畫布基準線 |
 | `../../art/ai/characters/*.yaml` | 兩個角色的設定清單（描述、體型、動作、格數） |
