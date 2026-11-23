@@ -580,7 +580,9 @@ export class DefenseScene extends Phaser.Scene {
       const rel = Phaser.Math.Angle.Wrap(a - Math.PI);
       a = Math.PI + Phaser.Math.Clamp(rel, -lim, lim);
     }
-    this.rig.setVisible(p.alive);
+    // 沒有槍（阿凱開局）就不畫槍，近戰武器照樣畫
+    const armed = this.weapons ? !this.weapons.unarmed : GameState.data.armory.loadout.length > 0;
+    this.rig.setVisible(p.alive && armed);
     this.rig.update(dt, { footX: p.footX, footY: p.footY, facing: p.facing, aim: a, bob: p.bob, depth: p.sprite.depth });
   }
 

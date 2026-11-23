@@ -47,10 +47,11 @@ export const HEROES: Record<HeroId, HeroDef> = {
     title: '高中生',
     blurb: '棒球隊的板凳球員。跑得快、反應快，靠一根球棒殺出學校。',
     maxHp: 100,
-    guns: ['m1911'],
+    // 完全沒有槍：靠近戰撐到撿到第一把槍（第二章的左輪）
+    guns: [],
     melee: 'bat',
     infinitePistol: false,
-    ammo: { '9mm': 14 },
+    ammo: {},
     supplies: { medkit: 1 },
     startZone: 'school',
     skills: [
