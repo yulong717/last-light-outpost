@@ -15,6 +15,9 @@ import { createHeroTextures } from '../art/HeroArt';
  * 之後把真正的像素圖放進 public/assets/，在 preload() 用同一個 key 載入，
  * 下面的佔位圖就會自動略過，遊戲程式不用改。
  */
+/** 已經做好 AI 影格的近戰武器與招式（交一把加一行） */
+const AKAI_WEAPON_SHEETS: [string, string[]][] = [['knife', ['1', '2', '3', '4', 'dash']]];
+
 export class BootScene extends Phaser.Scene {
   constructor() {
     super('Boot');
@@ -39,6 +42,12 @@ export class BootScene extends Phaser.Scene {
     this.load.spritesheet('akai_ai_melee3', 'assets/sprites/akai_ai_melee3.png', { frameWidth: 64, frameHeight: 72 });
     this.load.spritesheet('akai_ai_idle_bat', 'assets/sprites/akai_ai_idle_bat.png', { frameWidth: 64, frameHeight: 72 });
     this.load.spritesheet('akai_ai_walk_bat', 'assets/sprites/akai_ai_walk_bat.png', { frameWidth: 64, frameHeight: 72 });
+    // 其他近戰武器（docs/ai-art/MELEE_WEAPONS.md）：持武器待機 4 格、走路 8 格、每招 6 格
+    for (const [id, steps] of AKAI_WEAPON_SHEETS) {
+      this.load.spritesheet(`akai_ai_idle_${id}`, `assets/sprites/akai_ai_idle_${id}.png`, { frameWidth: 64, frameHeight: 72 });
+      this.load.spritesheet(`akai_ai_walk_${id}`, `assets/sprites/akai_ai_walk_${id}.png`, { frameWidth: 64, frameHeight: 72 });
+      for (const st of steps) this.load.spritesheet(`akai_ai_melee_${id}_${st}`, `assets/sprites/akai_ai_melee_${id}_${st}.png`, { frameWidth: 64, frameHeight: 72 });
+    }
     this.load.spritesheet('player_reload', 'assets/sprites/player_reload.png', { frameWidth: 64, frameHeight: 64 });
     // 霧屍：PixelLab 走路圖經程式換色、加寬、做出攻擊影格的三種變體
     for (const key of ZOMBIE_SHEETS) {
@@ -84,6 +93,11 @@ export class BootScene extends Phaser.Scene {
       this.anims.create({ key: 'akai_ai_walk', frames: this.anims.generateFrameNumbers('akai_ai_walk', { start: 0, end: 7 }), frameRate: 10, repeat: -1 });
       this.anims.create({ key: 'akai_ai_idle_bat', frames: this.anims.generateFrameNumbers('akai_ai_idle_bat', { start: 0, end: 3 }), frameRate: 6, repeat: -1 });
       this.anims.create({ key: 'akai_ai_walk_bat', frames: this.anims.generateFrameNumbers('akai_ai_walk_bat', { start: 0, end: 7 }), frameRate: 10, repeat: -1 });
+      for (const [id] of AKAI_WEAPON_SHEETS) {
+        if (!this.textures.exists(`akai_ai_idle_${id}`)) continue;
+        this.anims.create({ key: `akai_ai_idle_${id}`, frames: this.anims.generateFrameNumbers(`akai_ai_idle_${id}`, { start: 0, end: 3 }), frameRate: 6, repeat: -1 });
+        this.anims.create({ key: `akai_ai_walk_${id}`, frames: this.anims.generateFrameNumbers(`akai_ai_walk_${id}`, { start: 0, end: 7 }), frameRate: 10, repeat: -1 });
+      }
     }
     for (const key of ZOMBIE_SHEETS) {
       if (this.textures.get(key).frameTotal < 7) continue; // 沒載到圖時用色塊

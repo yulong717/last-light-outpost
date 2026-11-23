@@ -27,6 +27,8 @@ export interface HitInfo {
   hitY?: number;
   /** 重擊：斷肢機率提高、擊殺時可能炸頭 */
   heavy?: boolean;
+  /** 斷肢機率倍率 */
+  gore?: number;
 }
 
 /** 霧屍每幀需要知道的戰場資訊 */
@@ -831,6 +833,7 @@ export class Zombie extends Phaser.GameObjects.Sprite {
       penetration: info.penetration,
       hitY: info.hitY,
       heavy: info.heavy,
+      gore: info.gore,
     });
   }
 
@@ -948,7 +951,7 @@ export class Zombie extends Phaser.GameObjects.Sprite {
     if (part === 'leg' && this.legLost) part = info.hitY === undefined ? 'arm' : null;
     if (!part || (part === 'arm' && this.armLost) || (part === 'leg' && this.legLost)) return;
     const base = GORE.chance[type] ?? GORE.chance.ballistic;
-    const chance = Math.min(GORE.max, base * (info.heavy ? GORE.heavyMul : 1) * Phaser.Math.Clamp((dealt / this.maxHp) * 3, 0.4, 1.6));
+    const chance = Math.min(GORE.max, base * (info.gore ?? 1) * (info.heavy ? GORE.heavyMul : 1) * Phaser.Math.Clamp((dealt / this.maxHp) * 3, 0.4, 1.6));
     if (Math.random() >= chance) return;
     const dir = (info.dirX ?? 1) >= 0 ? 1 : -1;
     if (part === 'arm') this.loseArm(dir);

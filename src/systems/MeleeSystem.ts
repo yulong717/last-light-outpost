@@ -111,12 +111,15 @@ export class MeleeSystem {
   }
 
   /** 揮擊姿勢給 WeaponRig 畫手上的武器；近戰模式沒在揮時是「備戰」姿勢 */
-  get pose(): { phase: 'ready' | 'windup' | 'active' | 'recovery'; k: number; dir: number; thrust: boolean; contact: boolean; step: number } | null {
-    if (this.phase === 'idle') return this.stance ? { phase: 'ready', k: 0, dir: this.dir, thrust: false, contact: false, step: 0 } : null;
+  get pose(): { phase: 'ready' | 'windup' | 'active' | 'recovery'; k: number; dir: number; thrust: boolean; contact: boolean; step: number; weapon: string; dash: boolean } | null {
+    const weapon = this.def.id;
+    if (this.phase === 'idle') return this.stance ? { phase: 'ready', k: 0, dir: this.dir, thrust: false, contact: false, step: 0, weapon, dash: false } : null;
     const len = this.phaseLen(this.phase);
     // 打中之後判定段停在「打到」那一格，卡肉時看得到球棒壓在對方身上
     const contact = this.phase === 'active' && this.hitCount > 0;
-    return { phase: this.phase, k: Math.min(1, this.t / Math.max(0.001, len)), dir: this.dir, thrust: this.finisher && !this.def.steps, contact, step: this.dashSwing ? 1 : this.chainIdx };
+    const st = this.step;
+    const thrust = st ? !!st.thrust : this.finisher;
+    return { phase: this.phase, k: Math.min(1, this.t / Math.max(0.001, len)), dir: this.dir, thrust, contact, step: this.dashSwing ? 1 : this.chainIdx, weapon, dash: this.dashSwing };
   }
 
   get busy(): boolean {
@@ -290,6 +293,8 @@ export class MeleeSystem {
           player.push(this.facing * (this.step ? this.step.lunge : d.lunge * (this.finisher ? 2.2 : 1)));
           GameEvents.of(this.scene).emit('player:melee-active', { x: player.footX, y: player.footY, heavy: heavy || this.finisher });
           this.drawTrail(player);
+          const sl = this.step?.slam;
+          if (sl) this.slamFx(player.footX + this.facing * 16, player.footY, sl);
         }
         break;
       }
@@ -334,20 +339,30 @@ export class MeleeSystem {
   /** 判定期間每幀掃一次扇形，同一刀同一隻只打一次 */
   private sweep(player: Player, zombies: Zombie[], res: MeleeResult): void {
     const d = this.def;
-    if (this.hitCount >= d.maxTargets) return;
     const st = this.step;
+    const maxTargets = st?.maxTargets ?? d.maxTargets;
+    if (this.hitCount >= maxTargets) return;
     const halfArc = Phaser.Math.DegToRad((st ? st.arc : d.arc) / 2);
     const reachMul = st ? st.reach / d.reach : this.finisher ? 1.25 : 1;
+    // 砸地：以前方落點為圓心；迴旋：以自己為圓心、前後都算
+    const slam = st?.slam ?? 0;
+    const ox = player.footX + (slam ? this.facing * 16 : 0);
     const cands: { z: Zombie; dist: number }[] = [];
     for (const z of zombies) {
       if (z.dead || this.hitSet.has(z)) continue;
       const s = z.def.scale ?? 1;
-      const fwd = (z.footX - player.footX) * this.facing;
+      const fwd = (z.footX - ox) * this.facing;
       const side = (z.footY - player.footY) * 2;
       const dist = Math.hypot(fwd, side);
-      if (dist > d.reach * reachMul + 10 * s || fwd < -6) continue;
-      const ang = Math.atan2(Math.abs(side), Math.max(0.01, fwd));
-      if (ang > halfArc && dist > 10) continue;
+      if (slam) {
+        if (dist > slam + 8 * s) continue;
+      } else if (st?.spin) {
+        if (dist > d.reach * reachMul + 10 * s) continue;
+      } else {
+        if (dist > d.reach * reachMul + 10 * s || fwd < -6) continue;
+        const ang = Math.atan2(Math.abs(side), Math.max(0.01, fwd));
+        if (ang > halfArc && dist > 10) continue;
+      }
       cands.push({ z, dist });
     }
     cands.sort((a, b) => a.dist - b.dist);
@@ -362,13 +377,17 @@ export class MeleeSystem {
     let execNow = false;
     let launchNow = false;
     const victims: { z: Zombie; tier: 'light' | 'mid' | 'heavy' }[] = [];
-    for (const { z } of cands) {
-      if (this.hitCount >= d.maxTargets) break;
+    for (const { z, dist } of cands) {
+      if (this.hitCount >= maxTargets) break;
+      // 迴旋、砸地：被打的往遠離自己（落點）的方向飛
+      const away = st?.spin || slam ? Math.sign(z.footX - ox) || this.facing : this.facing;
       this.hitSet.add(z);
       this.hitCount++;
       const execute = z.stunned && d.staggerBonus > 1;
       const b = this.swingBonus;
-      const stepMul = st ? st.damageMul : fin ? d.comboMul : 1;
+      // 砸地：離落點越遠越輕（邊緣剩六成）
+      const slamMul = slam ? 1 - 0.4 * Math.min(1, dist / slam) : 1;
+      const stepMul = (st ? st.damageMul : fin ? d.comboMul : 1) * slamMul;
       const mul = (this.tired ? STAMINA.tiredDamage : 1) * stepMul * (execute ? d.staggerBonus : 1) * b.damageMul;
       // 受力分級：收尾或處決＝重（打飛），鈍器／重武器＝中（滑出去），其他＝輕
       // 有招式表的武器只有收尾那招會打飛（連段中途打飛就接不下去了）
@@ -381,18 +400,19 @@ export class MeleeSystem {
         knockback: (st ? st.knockback : fin ? d.finisherKnock : d.knockback) + b.knockback,
         stagger: Math.max((st ? st.stagger : d.stagger * (fin ? 2 : 1)) * (this.tired ? 0.5 : 1), b.stagger),
         headshot: false,
-        dirX: this.facing,
+        dirX: away,
         source: 'player',
         weaponId: d.id,
+        gore: d.gore,
       };
-      const hx = z.footX - 4 * this.facing;
-      const hy = z.footY - 30 * (z.def.scale ?? 1);
-      fx?.blood(hx, hy, this.facing, z.footY, blunt ? 4 : fin ? 10 : 6, blunt ? 0.8 : fin ? 1.4 : 1.1);
-      fx?.meleeImpact(hx, hy, this.facing, blunt ? 'blunt' : heavy || fin ? 'heavy-slash' : 'slash', z.footY);
+      const hx = z.footX - 4 * away;
+      const hy = z.footY - (slam ? 14 : 30) * (z.def.scale ?? 1);
+      fx?.blood(hx, hy, away, z.footY, blunt ? 4 : fin ? 10 : 6, blunt ? 0.8 : fin ? 1.4 : 1.1);
+      fx?.meleeImpact(hx, hy, away, blunt ? 'blunt' : heavy || fin ? 'heavy-slash' : 'slash', z.footY);
       const killed = z.takeHit(info);
       if (!killed) {
         if (tier === 'heavy' && (blunt || heavy)) {
-          z.launch(this.facing, LAUNCH_HIT.power, LAUNCH_HIT.dist);
+          z.launch(away, LAUNCH_HIT.power * (slam ? 0.8 : 1), LAUNCH_HIT.dist * (slam ? 0.6 : 1));
           launchNow = true;
         }
         victims.push({ z, tier });
@@ -458,6 +478,19 @@ export class MeleeSystem {
     this.scene.tweens.add({ targets: t, scale: 1, duration: 140, ease: 'Back.easeOut' });
   }
 
+  /** 砸地：落點一圈震波（扁橢圓往外擴、淡掉）＋ 一圈揚塵（只在地上，不晃鏡頭） */
+  private slamFx(x: number, y: number, r: number): void {
+    const sc = this.scene;
+    const ring = sc.add.ellipse(x, y, 8, 3).setStrokeStyle(1, 0xd8cbb0, 0.9).setDepth(3);
+    sc.tweens.add({ targets: ring, width: r * 2, height: r * 0.7, alpha: 0, duration: 260, ease: 'Quad.easeOut', onComplete: () => ring.destroy() });
+    const fx = Fx.of(sc);
+    for (let i = 0; i < 8; i++) {
+      const a = (i / 8) * Math.PI * 2;
+      fx?.dust(x + Math.cos(a) * r * 0.6, y + Math.sin(a) * r * 0.2, 2);
+    }
+    rumble(60, 0.9);
+  }
+
   /**
    * 揮擊軌跡：只畫幾條細的速度線（不畫整片白弧，免得擋住畫面）。
    * 左揮、右揮是壓扁的橫向弧（方向相反），下揮是直立的弧，刀類收尾突刺是幾條直線。
@@ -488,7 +521,21 @@ export class MeleeSystem {
       }
     };
     const deg = Math.PI / 180;
-    if (st?.launch && !this.dashSwing) {
+    if (st?.slam) {
+      // 砸地：從頭頂直直砸到落點（地上的震波另外畫）
+      arc(-100 * deg, 60 * deg, (st.reach ?? d.reach) + 4, 0.7, 0.75, 4);
+    } else if (st?.spin) {
+      // 迴旋：繞身體一圈的細線（只畫一條、半透明，不要整圈白）
+      g.lineStyle(1, color, 0.4);
+      g.strokeEllipse(cx, cy + 10, (st.reach + 4) * 2, (st.reach + 4) * 0.7);
+    } else if (st?.thrust) {
+      // 刺擊：幾條往前的直線
+      const len = st.reach + 8;
+      for (let i = -1; i <= 1; i++) {
+        g.lineStyle(1, i === 0 ? 0xffffff : color, i === 0 ? 0.8 : 0.45);
+        g.lineBetween(cx + f * 8, cy + 2 + i * 2, cx + f * (len - Math.abs(i) * 6), cy + 2 + i * 2);
+      }
+    } else if (st?.launch && !this.dashSwing) {
       // 下揮：從頭頂劈到前方地面
       arc(-110 * deg, 35 * deg, (st.reach ?? d.reach) + 6, 0.8, 0.7, 6);
     } else if (this.finisher && !st) {
