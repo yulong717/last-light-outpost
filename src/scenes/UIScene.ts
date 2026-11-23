@@ -6,6 +6,8 @@ import { GameState } from '../state/GameState';
 import { pixelText } from '../utils/text';
 import { AudioManager } from '../audio/AudioManager';
 import type { HudData } from './DefenseScene';
+import type { TutorialHud } from '../systems/Tutorial';
+import type { TutorialFocus } from '../data/tutorial';
 
 /** HUD 疊在遊戲場景上方。手機與電腦共用，按鈕至少 24×24 邏輯像素。 */
 export class UIScene extends Phaser.Scene {
@@ -39,13 +41,26 @@ export class UIScene extends Phaser.Scene {
   private stanceLabel!: Phaser.GameObjects.Text;
   private stanceBg!: Phaser.GameObjects.Rectangle;
   private medkitLabel!: Phaser.GameObjects.Text;
+  /** 按鈕位置（教學時閃框提示用） */
+  private buttonRects: Partial<Record<Exclude<TutorialFocus, null>, { x: number; y: number; w: number; h: number }>> = {};
+  /** 開局教學的提示框 */
+  private tut?: {
+    panel: Phaser.GameObjects.Rectangle;
+    head: Phaser.GameObjects.Text;
+    hint: Phaser.GameObjects.Text;
+    progress: Phaser.GameObjects.Text;
+    focus: Phaser.GameObjects.Graphics;
+    current: TutorialFocus;
+  };
 
   constructor() {
     super('UI');
   }
 
-  create(): void {
+  create(data: { tutorial?: boolean } = {}): void {
     this.unregister = [];
+    this.buttonRects = {};
+    this.tut = undefined;
     pixelText(this, 6, 4, '生命', 8);
     this.add.rectangle(40, 7, 80, 6, 0x000000).setOrigin(0);
     this.playerBar = this.add.rectangle(41, 8, 78, 4, 0xef5350).setOrigin(0);
@@ -83,10 +98,10 @@ export class UIScene extends Phaser.Scene {
     // 目前手上的槍（圖示放大兩倍，在武器名稱上面）
     this.weaponIcon = this.add.image(wx, GAME_HEIGHT - 47, '__DEFAULT').setOrigin(0, 1).setScale(2).setVisible(false);
 
-    this.button(GAME_WIDTH - 38, GAME_HEIGHT - 38, '換彈', () => queueAction('reload'));
-    this.button(GAME_WIDTH - 76, GAME_HEIGHT - 38, '換槍', () => queueAction('next'));
+    this.buttonRects.reload = this.button(GAME_WIDTH - 38, GAME_HEIGHT - 38, '換彈', () => queueAction('reload')).rect;
+    this.buttonRects.swap = this.button(GAME_WIDTH - 76, GAME_HEIGHT - 38, '換槍', () => queueAction('next')).rect;
     // 近戰鍵：點一下揮一刀，按住連續揮
-    this.button(
+    this.buttonRects.melee = this.button(
       GAME_WIDTH - 38,
       GAME_HEIGHT - 76,
       '近戰',
@@ -95,12 +110,15 @@ export class UIScene extends Phaser.Scene {
         holdAction('melee', true);
       },
       () => holdAction('melee', false),
-    );
+    ).rect;
     // 一鍵切換近戰模式：槍收起來，點畫面就是揮（電腦 4／X）
     const st = this.button(GAME_WIDTH - 76, GAME_HEIGHT - 114, '持刀', () => queueAction('stance'));
     this.stanceLabel = st.label;
     this.stanceBg = st.bg;
+    this.buttonRects.stance = st.rect;
     if (!this.touchUI) pixelText(this, GAME_WIDTH - 60, GAME_HEIGHT - 116, '4/X', 7, '#90a4ae').setOrigin(0.5, 1);
+    this.buttonRects.joystick = { x: JOYSTICK_ZONE.x + 52 - JOYSTICK_RADIUS - 4, y: JOYSTICK_ZONE.y + JOYSTICK_ZONE.h - 52 - JOYSTICK_RADIUS - 4, w: JOYSTICK_RADIUS * 2 + 8, h: JOYSTICK_RADIUS * 2 + 8 };
+    this.buttonRects.fire = { x: 300, y: 150, w: 180, h: 110 };
     // 主角技能鍵：阿凱奔跑（切換）、馬克擊倒（放在夥伴指令鍵左邊，不要疊在一起）
     const heroId = GameState.data.hero;
     if (heroId === 'student') this.button(GAME_WIDTH - 152, GAME_HEIGHT - 38, '奔跑', () => (heroTouch.sprint = !heroTouch.sprint));
@@ -119,10 +137,13 @@ export class UIScene extends Phaser.Scene {
     const defense = this.scene.get('Defense');
     defense.events.on('hud', this.onHud, this);
     defense.events.on('wave-start', this.onWaveStart, this);
+    if (data.tutorial) this.buildTutorial();
+    defense.events.on('tutorial', this.onTutorial, this);
 
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       defense.events.off('hud', this.onHud, this);
       defense.events.off('wave-start', this.onWaveStart, this);
+      defense.events.off('tutorial', this.onTutorial, this);
       this.scale.off(Phaser.Scale.Events.ORIENTATION_CHANGE, this.checkOrientation, this);
       this.unregister.forEach((fn) => fn());
     });
@@ -158,13 +179,62 @@ export class UIScene extends Phaser.Scene {
     return label;
   }
 
+  /** 開局教學：上方提示框＋右上「跳過教學」 */
+  private buildTutorial(): void {
+    const w = 300;
+    const x = (GAME_WIDTH - w) / 2;
+    const y = 20;
+    const panel = this.add.rectangle(x, y, w, 40, 0x0d0f14, 0.82).setOrigin(0).setStrokeStyle(1, 0xf5d76e, 0.7).setDepth(95);
+    const head = pixelText(this, x + 8, y + 6, '', 10, '#f5d76e').setDepth(96);
+    const progress = pixelText(this, x + w - 8, y + 7, '', 8, '#9ad17a').setOrigin(1, 0).setDepth(96);
+    const hint = pixelText(this, x + 8, y + 23, '', 8, '#e8e8e8').setDepth(96).setWordWrapWidth(w - 16, true);
+    const focus = this.add.graphics().setDepth(97);
+    this.tut = { panel, head, hint, progress, focus, current: null };
+    // 跳過教學（電腦也可按 Esc）
+    const bw = 64;
+    const bx = GAME_WIDTH - bw - 36;
+    const by = 20;
+    const bg = this.add.rectangle(bx, by, bw, 24, 0x000000, 0.45).setOrigin(0).setStrokeStyle(1, 0xffffff, 0.4).setInteractive();
+    pixelText(this, bx + bw / 2, by + 12, this.touchUI ? '跳過教學' : '跳過 Esc', 8, '#b0bec5').setOrigin(0.5);
+    bg.on('pointerdown', () => this.scene.get('Defense').events.emit('tutorial-skip'));
+    this.unregister.push(registerUIRect({ x: bx, y: by, w: bw, h: 24 }));
+  }
+
+  private onTutorial(t: TutorialHud): void {
+    const u = this.tut;
+    if (!u) return;
+    u.head.setText(`${t.cleared ? '✓ ' : ''}${t.title}`).setColor(t.cleared ? '#9ad17a' : '#f5d76e');
+    u.hint.setText(t.hint);
+    u.progress.setText(`${t.progress ? t.progress + '　' : ''}${t.step}/${t.total}`);
+    u.panel.setSize(u.panel.width, 30 + u.hint.height);
+    u.panel.setStrokeStyle(1, t.cleared ? 0x9ad17a : 0xf5d76e, 0.7);
+    // 手機才閃框提示按鈕／搖桿／射擊區（電腦版看文字的按鍵就好）
+    u.current = this.touchUI && !t.cleared ? t.focus : null;
+  }
+
+  /** 教學提示：在要按的地方畫一個會呼吸的黃框 */
+  private drawTutorialFocus(): void {
+    const u = this.tut;
+    if (!u) return;
+    const g = u.focus;
+    g.clear();
+    const r = u.current ? this.buttonRects[u.current] : undefined;
+    if (!r) return;
+    const a = 0.45 + 0.45 * Math.sin(this.time.now / 160);
+    const pad = 2 + 2 * Math.sin(this.time.now / 160);
+    g.lineStyle(2, 0xffd24a, a).strokeRect(r.x - pad, r.y - pad, r.w + pad * 2, r.h + pad * 2);
+    if (u.current === 'fire') {
+      g.fillStyle(0xffd24a, 0.08 * a).fillRect(r.x, r.y, r.w, r.h);
+    }
+  }
+
   private button(
     x: number,
     y: number,
     label: string,
     onPress: () => void,
     onRelease?: () => void,
-  ): { bg: Phaser.GameObjects.Rectangle; label: Phaser.GameObjects.Text } {
+  ): { bg: Phaser.GameObjects.Rectangle; label: Phaser.GameObjects.Text; rect: { x: number; y: number; w: number; h: number } } {
     const size = 32;
     const bg = this.add
       .rectangle(x, y, size, size, 0x000000, 0.45)
@@ -182,11 +252,13 @@ export class UIScene extends Phaser.Scene {
     });
     bg.on('pointerup', up);
     bg.on('pointerout', up);
-    this.unregister.push(registerUIRect({ x, y, w: size, h: size }));
-    return { bg, label: text };
+    const rect = { x, y, w: size, h: size };
+    this.unregister.push(registerUIRect(rect));
+    return { bg, label: text, rect };
   }
 
   update(): void {
+    this.drawTutorialFocus();
     const g = this.stick;
     g.clear();
     if (!this.touchUI) return;
@@ -299,7 +371,7 @@ export class UIScene extends Phaser.Scene {
       if (GameState.data.hero === 'student' && !hh.grabbed && !hh.sprinting) parts.push(this.touchUI ? '' : 'Shift 奔跑');
       this.heroText.setText(parts.filter(Boolean).join('　')).setColor(hh.grabbed ? '#ff6b6b' : '#c8c8c8');
     }
-    this.waveText.setText(`第 ${GameState.data.day} 夜　第 ${h.wave} / ${h.totalWaves} 波`);
+    this.waveText.setText(h.tutorial ? '開局教學' : `第 ${GameState.data.day} 夜　第 ${h.wave} / ${h.totalWaves} 波`);
     this.killText.setText(`廢料 ${GameState.data.scrap}　擊殺 ${h.kills}`);
     const s = GameState.data.supplies;
     this.grenadeLabel.setText(`手雷\n${s.grenade}`).setAlpha(s.grenade > 0 ? 1 : 0.4);
@@ -307,6 +379,7 @@ export class UIScene extends Phaser.Scene {
   }
 
   private onWaveStart(wave: number, total: number): void {
+    if (this.tut) return;
     const t = pixelText(this, GAME_WIDTH / 2, 120, wave === total ? '最後一波！' : `第 ${wave} 波來襲`, 16, '#ff8a80').setOrigin(0.5);
     this.tweens.add({ targets: t, alpha: 0, delay: 900, duration: 600, onComplete: () => t.destroy() });
   }

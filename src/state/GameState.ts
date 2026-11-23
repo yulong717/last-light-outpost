@@ -42,6 +42,8 @@ export interface GameStateData {
   story: StoryProgress;
   /** 選的主角（見 src/data/heroes.ts）；舊存檔沒有就當作馬克 */
   hero: HeroId;
+  /** 開局教學戰鬥打完或跳過了（見 src/data/tutorial.ts） */
+  tutorialDone?: boolean;
 }
 
 export interface StoryProgress {

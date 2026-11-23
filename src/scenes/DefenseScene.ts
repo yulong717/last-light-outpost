@@ -53,10 +53,24 @@ import { outpostScenery } from '../scenery/locations';
 import type { SceneryResult } from '../scenery/SceneryBuilder';
 import { ZombieDrops } from '../systems/ZombieDrops';
 import { RescueEvent } from '../systems/RescueEvent';
+import { Tutorial } from '../systems/Tutorial';
+import type { AmmoType } from '../data/weapons';
+import type { SupplyId } from '../data/explore';
 
 /** 從結算畫面進來時帶的資料：newDay 代表撐過一夜、進入新的一天 */
 export interface DefenseSceneData {
   newDay?: boolean;
+  /** 新遊戲：看完序章先打一場開局教學，打完才進入第一天白天 */
+  tutorial?: boolean;
+}
+
+/** 教學開打前的存檔快照：打完還原，教學不消耗子彈、用品與路障 */
+interface TutorialSnapshot {
+  ammo: Record<AmmoType, number>;
+  supplies: Record<SupplyId, number>;
+  barricadeHp: number;
+  baseHp: number;
+  buildings: { slot: string; hp: number }[];
 }
 
 /** 給 UIScene 讀的 HUD 資料 */
@@ -95,6 +109,8 @@ export interface HudData {
   companionOrder: CompanionOrder;
   /** 主角技能與糾纏狀態 */
   hero?: HeroHud;
+  /** 開局教學中（上方改顯示「開局教學」） */
+  tutorial?: boolean;
 }
 
 const BASE_X = 44;
@@ -138,6 +154,9 @@ export class DefenseScene extends Phaser.Scene {
   private drops!: ZombieDrops;
   /** 夜裡隨機的拯救倖存者事件（入夜才建立） */
   private rescue?: RescueEvent;
+  /** 開局教學（只有新遊戲第一場） */
+  private tutorial?: Tutorial;
+  private tutorialSnap?: TutorialSnapshot;
 
   constructor() {
     super('Defense');
@@ -146,6 +165,8 @@ export class DefenseScene extends Phaser.Scene {
   create(data: DefenseSceneData = {}): void {
     this.zombies = [];
     this.rescue = undefined;
+    this.tutorial = undefined;
+    this.tutorialSnap = undefined;
     this.kills = 0;
     this.headshots = 0;
     this.ended = false;
@@ -213,7 +234,60 @@ export class DefenseScene extends Phaser.Scene {
       this.scene.stop('UI');
       this.scene.stop('BuildUI');
     });
-    this.startDay(!!data.newDay);
+    if (data.tutorial) this.startTutorial();
+    else this.startDay(!!data.newDay);
+  }
+
+  /**
+   * 開局教學：先播序章，接著直接入夜，在據點前一步一步練移動、射擊、換彈、近戰，
+   * 最後清掉一小波霧屍。打完回到正常的第一天白天（第一章開場在那時才播）。
+   */
+  private startTutorial(): void {
+    this.dusk = this.add.rectangle(0, 0, GAME_WIDTH, GAME_HEIGHT, 0xff9a4a, 0.1).setOrigin(0).setScrollFactor(0).setDepth(89);
+    const begin = () => this.time.delayedCall(200, () => this.startNight(true));
+    if (GameState.pendingIntro() !== 'prologue') {
+      begin();
+      return;
+    }
+    const data: StoryData = {
+      ...PROLOGUES[GameState.data.hero],
+      art: illustrationFor(OPENINGS[GameState.data.hero]?.zone),
+      hero: GameState.data.hero,
+      objective: '先熟悉操作：據點外的霧屍已經聞到你了',
+      onClose: () => {
+        GameState.markIntroSeen();
+        GameState.save();
+        begin();
+      },
+    };
+    this.scene.launch('Story', data);
+    this.scene.bringToTop('Story');
+  }
+
+  /** 教學打完（或跳過）：還原快照，進入第一天白天 */
+  private finishTutorial(skipped = false): void {
+    if (this.ended) return;
+    this.ended = true;
+    this.weapons?.unloadAll();
+    const st = GameState.data;
+    const snap = this.tutorialSnap;
+    if (snap) {
+      st.armory.ammo = snap.ammo;
+      st.supplies = snap.supplies;
+      st.barricadeHp = snap.barricadeHp;
+      st.baseHp = snap.baseHp;
+      for (const b of st.buildings) b.hp = snap.buildings.find((s) => s.slot === b.slot)?.hp ?? b.hp;
+    }
+    st.tutorialDone = true;
+    GameState.save();
+    GameEvents.of(this).emit('game:over', { survived: true });
+    const banner = pixelText(this, GAME_WIDTH / 2, 130, skipped ? '跳過教學' : '教學完成！', 16, '#9ad17a').setOrigin(0.5);
+    const sub = pixelText(this, GAME_WIDTH / 2, 152, skipped ? '' : `擊殺 ${this.kills}・廢料 +${this.scrapEarned}　天亮了，開始布置據點`, 8, '#e0e0e0').setOrigin(0.5);
+    for (const t of [banner, sub]) t.setScrollFactor(0).setDepth(400).setStroke('#000000', 3);
+    this.time.delayedCall(skipped ? 400 : 1800, () => {
+      this.cameras.main.fadeOut(400, 0, 0, 0);
+      this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => this.scene.start('Defense', {} as DefenseSceneData));
+    });
   }
 
   /** 白天：布置據點。新的一天先入帳白天搜刮的廢料 */
@@ -292,13 +366,24 @@ export class DefenseScene extends Phaser.Scene {
   }
 
   /** 入夜：收起布置介面，開始出怪 */
-  private startNight(): void {
+  private startNight(tutorial = false): void {
     if (this.phase === 'night' || this.ended || this.scene.isActive('Story')) return;
     this.phase = 'night';
     this.build.exit();
-    this.idleBonus();
-    this.outpost.persist();
-    GameState.save();
+    if (tutorial) {
+      const st = GameState.data;
+      this.tutorialSnap = {
+        ammo: { ...st.armory.ammo },
+        supplies: { ...st.supplies },
+        barricadeHp: this.barricade.hp,
+        baseHp: st.baseHp,
+        buildings: st.buildings.map((b) => ({ slot: b.slot, hp: b.hp })),
+      };
+    } else {
+      this.idleBonus();
+      this.outpost.persist();
+      GameState.save();
+    }
     this.scene.stop('BuildUI');
     this.scene.stop('Armory');
     if (this.dusk) this.tweens.add({ targets: this.dusk, alpha: 0, duration: 800, onComplete: () => this.dusk?.destroy() });
@@ -317,8 +402,30 @@ export class DefenseScene extends Phaser.Scene {
     this.input2 = new InputManager(this);
     // 準星會隱藏滑鼠游標，白天要點槽位，所以入夜才建立
     this.crosshair = new Crosshair(this);
-    this.spawner.start();
     this.companions.active = true;
+    if (tutorial) {
+      // 教學中不會倒下：任何傷害最多打到剩 1 血
+      this.player.minHp = 1;
+      this.tutorial = new Tutorial({
+        scene: this,
+        player: this.player,
+        weapons: () => this.weapons,
+        zombies: () => this.zombies,
+        spawn: (id, x) => this.spawnZombie(id, x),
+        barricadeX: BARRICADE_X,
+        touch: this.sys.game.device.input.touch,
+        unarmed: GameState.data.armory.loadout.length === 0,
+        onDone: () => this.finishTutorial(),
+      });
+      this.events.once('tutorial-skip', () => this.finishTutorial(true));
+      this.input.keyboard?.once('keydown-ESC', () => this.finishTutorial(true));
+      this.scene.launch('UI', { tutorial: true });
+      // UIScene 要先建好才收得到第一則提示
+      this.time.delayedCall(50, () => this.tutorial?.start());
+      this.wireNightSupplies();
+      return;
+    }
+    this.spawner.start();
     // 拯救倖存者：今晚會不會發生、什麼時候發生，建立時就擲好
     this.rescue = new RescueEvent(this, {
       blockX: () => (this.barricade.alive ? this.barricade.frontX : BASE_X),
@@ -334,6 +441,10 @@ export class DefenseScene extends Phaser.Scene {
     // 開發測試：網址加 ?rescue 會在入夜 3 秒後觸發
     if (new URLSearchParams(location.search).has('rescue')) this.rescue.forceSoon(3);
     this.scene.launch('UI');
+    this.wireNightSupplies();
+  }
+
+  private wireNightSupplies(): void {
     // 輔助用品：G 手榴彈、H 醫療包（觸控在 UIScene 的按鈕）
     this.input.keyboard?.on('keydown-G', this.nightGrenade, this);
     this.input.keyboard?.on('keydown-H', this.nightMedkit, this);
@@ -379,11 +490,11 @@ export class DefenseScene extends Phaser.Scene {
     return loot;
   }
 
-  private spawnZombie(id: string): void {
+  private spawnZombie(id: string, atX?: number): void {
     if (this.ended) return;
     // 在鏡頭右緣外生成，主角在據點附近時節奏不會被拉長
     const right = Math.min(WORLD_WIDTH, this.cameras.main.scrollX + GAME_WIDTH);
-    const x = right + 20 + Phaser.Math.Between(0, 20);
+    const x = atX ?? right + 20 + Phaser.Math.Between(0, 20);
     const y = Phaser.Math.Between(LANE_TOP, LANE_BOTTOM);
     // 職業／動物＋隨機外觀、體型、性別＋變異（見 src/systems/ZombieFactory.ts）
     const z = spawnEnemy(this, id, x, y, { day: GameState.data.day });
@@ -553,6 +664,16 @@ export class DefenseScene extends Phaser.Scene {
     for (let i = 0; i < this.zombies.length; i++) {
       for (let j = i + 1; j < this.zombies.length; j++) Zombie.separate(this.zombies[i], this.zombies[j]);
     }
+    if (this.tutorial) {
+      this.tutorial.update(dt);
+      // 血太少就補一點，讓新手專心練操作
+      if (p.hp < p.maxHp * 0.3) {
+        p.heal(p.maxHp * 0.5);
+        this.fx.popText(p.footX, p.footY - 56, '教學中不會倒下', '#9ad17a');
+      }
+      this.events.emit('hud', this.hud());
+      return;
+    }
     this.spawner.update(this.zombies.length);
 
     this.events.emit('hud', this.hud());
@@ -687,8 +808,9 @@ export class DefenseScene extends Phaser.Scene {
       meleeBusy: this.melee.busy,
       reloading: this.weapons.reloading,
       reloadProgress: this.weapons.reloadProgress,
-      wave: Math.max(1, this.spawner.waveIndex + 1),
-      totalWaves: this.spawner.totalWaves,
+      wave: this.tutorial ? 1 : Math.max(1, this.spawner.waveIndex + 1),
+      totalWaves: this.tutorial ? 1 : this.spawner.totalWaves,
+      tutorial: !!this.tutorial,
       kills: this.kills,
       companions: this.companions.hud(),
       companionOrder: this.companions.order,
