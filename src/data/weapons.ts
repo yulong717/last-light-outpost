@@ -155,6 +155,27 @@ export interface FirearmDef {
   cycleSound?: 'pump' | 'bolt';
 }
 
+/**
+ * 連段裡的一招（鈍器的「橫掃 → 回掃 → 下劈」）：每一招的速度、幅度、判定都不同。
+ * 沒寫的欄位沿用武器本身的數值；damageMul 是對 damage 的倍率。
+ */
+export interface MeleeStep {
+  name: string;
+  windup: number;
+  active: number;
+  recovery: number;
+  reach: number;
+  arc: number;
+  damageMul: number;
+  knockback: number;
+  stagger: number;
+  hitStop: number;
+  trauma: number;
+  lunge: number;
+  /** 這一招打中會把霧屍打飛（收尾） */
+  launch?: boolean;
+}
+
 export interface MeleeDef {
   kind: 'melee';
   id: string;
@@ -205,6 +226,8 @@ export interface MeleeDef {
   trailColor: number;
   /** 揮擊音：輕／重 */
   swing: 'light' | 'heavy';
+  /** 連段招式表：有寫的話 comboEvery = steps.length，每一下是不同的招 */
+  steps?: MeleeStep[];
 }
 
 export type WeaponDef = FirearmDef | MeleeDef;
@@ -741,7 +764,7 @@ export const MELEE: MeleeDef[] = [
     kind: 'melee',
     id: 'bat',
     name: '鋁棒',
-    desc: '一棒把整排打飛、打暈；每棒要重新掄，連不起來但最好控場',
+    desc: '橫掃、回掃、下劈三段連擊，最後一下把霧屍打飛；打暈控場最好用',
     damage: 22,
     damageType: 'blunt',
     penetration: 0,
@@ -755,14 +778,20 @@ export const MELEE: MeleeDef[] = [
     knockback: 34,
     stagger: 0.75,
     staggerBonus: 1.3,
-    comboEvery: 0,
-    chainCancel: 1,
+    comboEvery: 3,
+    chainCancel: 0.35,
     heft: 0.12,
     finisherKnock: 0,
     comboMul: 1,
     hitStop: 50,
     trauma: 0.14,
     lunge: 30,
+    // 三段連段：順勢橫掃 → 借反彈力道快速回掃（範圍大、傷害低）→ 蓄力下劈把霧屍打飛
+    steps: [
+      { name: '橫掃', windup: 0.14, active: 0.1, recovery: 0.3, reach: 30, arc: 130, damageMul: 1, knockback: 20, stagger: 0.6, hitStop: 50, trauma: 0.12, lunge: 26 },
+      { name: '回掃', windup: 0.08, active: 0.09, recovery: 0.28, reach: 28, arc: 150, damageMul: 0.85, knockback: 24, stagger: 0.6, hitStop: 45, trauma: 0.12, lunge: 34 },
+      { name: '下劈', windup: 0.22, active: 0.12, recovery: 0.48, reach: 34, arc: 90, damageMul: 1.6, knockback: 40, stagger: 1, hitStop: 90, trauma: 0.24, lunge: 46, launch: true },
+    ],
     price: 25,
     unlockDay: 1,
     trailColor: 0xb8c4cf,
