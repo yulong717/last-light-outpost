@@ -61,26 +61,44 @@ export class Player {
   /** 依近戰階段挑揮擊影格；回傳 true 表示由角色影格自己畫手與球棒 */
   /** 揮擊用哪張影格表：連段第 2、3 招有自己的影格就用（akai_ai_melee2／3），沒有就借第 1 招的格子 */
   aiMeleeKey = 'akai_ai_melee';
+  /** 持武器待機／走路影格的後綴（鋁棒 '_bat'；其他武器 '_knife' 等，見 docs/ai-art/MELEE_WEAPONS.md） */
+  private aiHoldSuffix = '_bat';
 
-  setMeleePose(mp: { phase: string; k: number; contact?: boolean; step?: number } | null): boolean {
-    if (!this.aiAnim || !this.scene.textures.exists('akai_ai_melee') || !mp) {
+  /**
+   * 每把近戰武器的影格表名稱。鋁棒沿用原本的檔名；其他武器是
+   * akai_ai_idle_<id>、akai_ai_walk_<id>、akai_ai_melee_<id>_<招>（衝刺攻擊是 _dash）。
+   */
+  private static meleeKeys(weapon: string): { hold: string; step: (n: number, dash: boolean) => string } {
+    if (weapon === 'bat') return { hold: '_bat', step: (n) => (n > 1 ? `akai_ai_melee${n}` : 'akai_ai_melee') };
+    return { hold: `_${weapon}`, step: (n, dash) => `akai_ai_melee_${weapon}_${dash ? 'dash' : n}` };
+  }
+
+  setMeleePose(mp: { phase: string; k: number; contact?: boolean; step?: number; weapon?: string; dash?: boolean } | null): boolean {
+    const keys = Player.meleeKeys(mp?.weapon ?? 'bat');
+    // 這把武器還沒有 AI 影格：交給 WeaponRig 用程式畫手和武器
+    if (!this.aiAnim || !mp || !this.scene.textures.exists(`akai_ai_idle${keys.hold}`)) {
       this.aiMeleeFrame = -1;
       return false;
     }
+    this.aiHoldSuffix = keys.hold;
     const k = Math.min(0.999, Math.max(0, mp.k));
     if (mp.phase === 'ready') {
-      this.aiMeleeFrame = 99; // 持棒待機／走路
+      this.aiMeleeFrame = 99; // 持武器待機／走路
       return true;
     }
     const step = mp.step ?? 1;
-    const own = step > 1 ? `akai_ai_melee${step}` : 'akai_ai_melee';
+    const own = keys.step(step, !!mp.dash && mp.weapon !== 'bat');
+    if (!this.scene.textures.exists(own) && !this.scene.textures.exists(keys.step(1, false))) {
+      this.aiMeleeFrame = 99;
+      return true;
+    }
     if (this.scene.textures.exists(own)) {
       // 每招自己的影格表：起手 0–1、出手 2（命中格）–3、收招 4–5
       this.aiMeleeKey = own;
       this.aiMeleeFrame = MELEE_FRAMES.own(mp.phase, k, !!mp.contact);
     } else {
       // 還沒有專屬影格：借第 1 招的格子排出不同的順序
-      this.aiMeleeKey = 'akai_ai_melee';
+      this.aiMeleeKey = keys.step(1, false);
       this.aiMeleeFrame = (step === 2 ? MELEE_FRAMES.back : step === 3 ? MELEE_FRAMES.chop : MELEE_FRAMES.own)(mp.phase, k, !!mp.contact);
     }
     return true;
@@ -313,11 +331,12 @@ export class Player {
       s.setTexture(this.aiMeleeKey, this.aiMeleeFrame);
     } else if (this.aiAnim) {
       const bat = this.aiMeleeFrame === 99;
-      const want = (this.walkPhase > 0 ? 'akai_ai_walk' : 'akai_ai_idle') + (bat ? '_bat' : '');
+      const want = (this.walkPhase > 0 ? 'akai_ai_walk' : 'akai_ai_idle') + (bat ? this.aiHoldSuffix : '');
       if (s.anims.currentAnim?.key !== want || !s.anims.isPlaying) s.play(want);
     }
     // 64×64 影格腳底在第 61 列，持棒／揮擊的 64×72 影格腳底在第 69 列
-    if (this.aiAnim) s.setOrigin(0.5, s.height > 64 ? 70 / 72 : 62 / 64);
+    // 高舉武器的招用 64×80（腳底第 77 列）：一律是「從底部往上第 3 列」
+    if (this.aiAnim) s.setOrigin(0.5, s.height > 64 ? (s.height - 2) / s.height : 62 / 64);
     // AI 影格本身有上下起伏，不再疊加程式顛簸
     const bob = this.walkPhase > 0 && !this.aiAnim ? Math.abs(Math.sin(this.walkPhase)) * 1.5 : 0;
     s.x = this.footX - this.recoil * this.facing;

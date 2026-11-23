@@ -42,6 +42,8 @@ export interface DamageInfo {
   hitY?: number;
   /** 重擊（近戰收尾、衝刺打、處決）：斷肢機率提高、擊殺時可能炸頭 */
   heavy?: boolean;
+  /** 斷肢機率倍率（武器特性，開山刀最高） */
+  gore?: number;
 }
 
 /** 霧屍個體的護甲（0..1 = 減傷比例） */
