@@ -43,7 +43,7 @@ export class Player {
   aiMeleeFrame = -1;
 
   /** 依近戰階段挑揮擊影格；回傳 true 表示由角色影格自己畫手與球棒 */
-  setMeleePose(mp: { phase: string; k: number } | null): boolean {
+  setMeleePose(mp: { phase: string; k: number; contact?: boolean } | null): boolean {
     if (!this.aiAnim || !this.scene.textures.exists('akai_ai_melee') || !mp) {
       this.aiMeleeFrame = -1;
       return false;
@@ -51,7 +51,7 @@ export class Player {
     const k = Math.min(0.999, Math.max(0, mp.k));
     if (mp.phase === 'ready') this.aiMeleeFrame = 99; // 持棒待機／走路
     else if (mp.phase === 'windup') this.aiMeleeFrame = k < 0.5 ? 0 : 1;
-    else if (mp.phase === 'active') this.aiMeleeFrame = k < 0.5 ? 2 : 3;
+    else if (mp.phase === 'active') this.aiMeleeFrame = mp.contact || k < 0.5 ? 2 : 3; // 打中就停在命中格
     else this.aiMeleeFrame = k < 0.5 ? 4 : 5;
     return this.aiMeleeFrame >= 0;
   }

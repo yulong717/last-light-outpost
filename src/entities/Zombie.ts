@@ -4,6 +4,7 @@ import type { EnemyDef } from '../data/enemies';
 import { BURST, CHARGE, CROW, ENRAGE, HEAL_AURA, POUNCE, type ArmorPiece } from '../data/zombies';
 import { ANIMAL_FRAMES } from '../art/AnimalArt';
 import { Fx } from '../fx/Fx';
+import { CameraFeel } from '../feel/CameraFeel';
 import { ZOMBIE_NECK_ROW } from '../art/sprites';
 import { FOOT_ROW, GEAR_TEXTURE, HAT_ART, HEAD_ANCHORS } from '../art/ZombieComposer';
 import { GameEvents } from '../systems/GameEvents';
@@ -65,6 +66,10 @@ const REACH_Y = 9;
 
 /** 擊退滑行的衰減率（每秒）：越大停得越快 */
 const KNOCK_SLIDE_DECAY = 14;
+/** 擊飛：重力、落地彈跳保留的速度、倒地多久才爬起來 */
+const LAUNCH = { gravity: 900, bounce: 0.35, airDecay: 2.5, down: 0.8 };
+/** 被打飛的霧屍撞到別隻：一次最多撞倒幾隻 */
+const BOWL_MAX = 3;
 
 export class Zombie extends Phaser.GameObjects.Sprite {
   readonly def: EnemyDef;
@@ -89,6 +94,15 @@ export class Zombie extends Phaser.GameObjects.Sprite {
   private knockVX = 0;
   /** 攻擊時往前撲的位移 */
   private lunge = 0;
+  /** 卡肉抖動：到這個時間（真實時間 ms）前原地左右抖，幅度 px */
+  private shakeUntil = 0;
+  private shakeAmp = 0;
+  /** 擊飛：離地高度、垂直速度、還能彈幾次、這次撞倒了誰 */
+  private lift = 0;
+  private liftVy = 0;
+  private airborne = false;
+  private bounces = 0;
+  private bowled = new Set<Zombie>();
   dead = false;
   /** 下次低吼前的秒數（給音效用） */
   private groanIn = 1 + Math.random() * 6;
@@ -282,12 +296,17 @@ export class Zombie extends Phaser.GameObjects.Sprite {
 
   update(dt: number, ctx: ZombieContext): void {
     if (this.dead) return;
+    if (this.airborne) this.updateAir(dt);
     if (this.knockVX !== 0) {
-      // 被打飛滑行：速度指數衰減，總位移 ≈ knockVX / KNOCK_SLIDE_DECAY
+      // 被打飛滑行：速度指數衰減，總位移 ≈ knockVX / KNOCK_SLIDE_DECAY；空中幾乎不減速
       this.footX += this.knockVX * dt;
       this.x = this.footX;
-      this.knockVX *= Math.exp(-KNOCK_SLIDE_DECAY * dt);
-      if (Math.abs(this.knockVX) < 4) this.knockVX = 0;
+      this.knockVX *= Math.exp(-(this.airborne ? LAUNCH.airDecay : KNOCK_SLIDE_DECAY) * dt);
+      if (Math.abs(this.knockVX) < 4) {
+        this.knockVX = 0;
+        if (!this.airborne) this.bowled.clear();
+      }
+      if (dt > 0 && (this.airborne || Math.abs(this.knockVX) > 140)) this.bowl(ctx);
     }
     this.updateAbilities(dt, ctx);
     if (this.stunTimer > 0) {
@@ -590,6 +609,7 @@ export class Zombie extends Phaser.GameObjects.Sprite {
    */
   static separate(a: Zombie, b: Zombie): void {
     if (a.dead || b.dead) return;
+    if (a.airborne || b.airborne) return;
     // 飛在天上的不推擠
     if (a.spec.body === 'crow' || b.spec.body === 'crow') return;
     const Y_WEIGHT = 2;
@@ -633,7 +653,12 @@ export class Zombie extends Phaser.GameObjects.Sprite {
       this.syncGear();
       return;
     }
-    if (walking) {
+    const now = this.scene.game.loop.time;
+    if (now < this.shakeUntil) this.x += (Math.floor(now / 30) % 2 ? 1 : -1) * this.shakeAmp;
+    if (this.airborne || this.lift > 0) {
+      this.y = this.footY - this.lift;
+      this.angle = this.hitLean;
+    } else if (walking) {
       this.y = this.footY - Math.abs(Math.sin(this.walkPhase)) * this.s;
       this.angle = Math.sin(this.walkPhase) * (this.anims.isPlaying ? 1.5 : 4) + this.hitLean;
     } else {
@@ -742,10 +767,9 @@ export class Zombie extends Phaser.GameObjects.Sprite {
     this.sinceHit = 0;
     // 擊退：小的當下推開；大的（鈍器）先推一截、剩下的滑出去，看得到被打飛
     const kb = knockback * (1 - this.spec.knockbackResist) * Math.sign(info.dirX ?? 1);
-    if (Math.abs(kb) > 12) {
-      this.footX += kb * 0.35;
-      this.knockVX += kb * 0.65 * KNOCK_SLIDE_DECAY;
-    } else this.footX += kb;
+    // 大的擊退整段用滑的：卡肉時原地抖，停頓結束才飛出去（街機的打法）
+    if (Math.abs(kb) > 12) this.knockVX += kb * KNOCK_SLIDE_DECAY;
+    else this.footX += kb;
     this.x = this.footX;
     const fx = Fx.of(this.scene);
     if (this.hp <= 0) {
@@ -801,12 +825,94 @@ export class Zombie extends Phaser.GameObjects.Sprite {
       GameEvents.of(this.scene).emit('enemy:enrage', { enemyId: this.def.id, x: this.footX, y: this.footY });
       if (this.anims.isPlaying) this.anims.timeScale *= ENRAGE.speedMul;
     }
-    // 受擊：閃白 + 擠壓 + 往後一仰
+    // 受擊：閃白 → 轉紅 → 回正 + 擠壓 + 往後一仰
     this.setTintFill(0xffffff);
     this.hat?.setTintFill(0xffffff);
-    this.scene.time.delayedCall(50, () => this.active && this.restoreTint());
+    this.scene.time.delayedCall(60, () => {
+      if (!this.active || this.dead) return;
+      this.setTint(0xff7a6a);
+      this.hat?.setTint(0xff7a6a);
+    });
+    this.scene.time.delayedCall(140, () => this.active && !this.dead && this.restoreTint());
     fx?.squash(this, this.s, info.headshot ? 1.4 : 1, this.s * (this.spec.widthMul ?? 1));
-    this.hitLean = (info.headshot ? 12 : 7) * Math.sign(info.dirX ?? 1) * (1 - this.spec.knockbackResist * 0.5);
+    if (!this.airborne) this.hitLean = (info.headshot ? 12 : 7) * Math.sign(info.dirX ?? 1) * (1 - this.spec.knockbackResist * 0.5);
     return false;
+  }
+
+  /** 卡肉期間原地左右抖（用真實時間，畫面停住也照抖） */
+  hitShake(ms: number, amp: number): void {
+    this.shakeUntil = this.scene.game.loop.time + ms;
+    this.shakeAmp = amp;
+  }
+
+  get inAir(): boolean {
+    return this.airborne;
+  }
+
+  /**
+   * 重擊打飛：拋物線飛起 → 落地彈一次 → 滑行 → 倒地一段時間再爬起來。
+   * power 是起飛的垂直速度（px/s），dist 是大約的水平距離。動物和重量級（擊退抗性高）飛不高。
+   */
+  launch(dir: number, power: number, dist: number): void {
+    if (this.dead || this.spec.body === 'crow') return;
+    const res = this.spec.knockbackResist;
+    if (res >= 0.8) return;
+    // 空中追打（浮空連段）：再被打只會小彈一下，不會越打越高
+    const k = (1 - res) * (this.airborne || this.lift > 0 ? 0.55 : 1);
+    this.airborne = true;
+    this.liftVy = -power * k;
+    this.bounces = 1;
+    this.bowled.clear();
+    const air = (2 * power * k) / LAUNCH.gravity;
+    this.knockVX = (Math.sign(dir) || 1) * ((dist * k) / Math.max(0.15, air));
+    this.hitLean = (Math.sign(dir) || 1) * 35;
+    this.stunTimer = Math.max(this.stunTimer, 3);
+  }
+
+  private updateAir(dt: number): void {
+    this.liftVy += LAUNCH.gravity * dt;
+    this.lift -= this.liftVy * dt;
+    const dir = Math.sign(this.knockVX) || 1;
+    // 空中慢慢往後倒
+    this.hitLean += (dir * 80 - this.hitLean) * Math.min(1, dt * 6);
+    if (this.lift > 0 || this.liftVy < 0) return;
+    this.lift = 0;
+    const fx = Fx.of(this.scene);
+    fx?.dust(this.footX, this.footY, 6);
+    if (this.bounces > 0) {
+      // 落地彈一下
+      this.bounces--;
+      this.liftVy = -this.liftVy * LAUNCH.bounce;
+      this.knockVX *= 0.6;
+      CameraFeel.of(this.scene)?.addTrauma(0.08);
+      return;
+    }
+    // 倒地：躺著滑一段，倒地時間到再爬起來（硬直結束後 hitLean 回正＝爬起）
+    this.airborne = false;
+    this.liftVy = 0;
+    this.knockVX = dir * 60;
+    this.hitLean = dir * 85;
+    this.stunTimer = LAUNCH.down;
+  }
+
+  /** 被打飛／高速滑行時撞到路徑上的霧屍：對方被撞歪、小硬直，最多撞倒 BOWL_MAX 隻 */
+  private bowl(ctx: ZombieContext): void {
+    if (!ctx.zombies || this.bowled.size >= BOWL_MAX) return;
+    const dir = Math.sign(this.knockVX) || 1;
+    for (const o of ctx.zombies) {
+      if (o === this || o.dead || o.airborne || this.bowled.has(o) || o.spec.body === 'crow') continue;
+      const dx = (o.footX - this.footX) * dir;
+      if (dx < -2 || dx > 12 * Math.max(this.s, o.s) || Math.abs(o.footY - this.footY) > 7) continue;
+      this.bowled.add(o);
+      o.bowled.add(this);
+      const dmg = Math.min(4, o.hp - 1);
+      o.takeDamage(Math.max(0, dmg), 30 * dir, { dirX: dir, type: 'blunt' });
+      o.stagger(0.45);
+      o.hitShake(70, 1);
+      Fx.of(this.scene)?.meleeImpact(o.footX - dir * 4, o.footY - 26 * o.s, dir, 'blunt', o.footY);
+      CameraFeel.of(this.scene)?.addTrauma(0.06);
+      this.knockVX *= 0.8;
+      if (this.bowled.size >= BOWL_MAX) break;
+    }
   }
 }
