@@ -320,8 +320,9 @@ export const SFX: Record<string, SfxDef> = {
     maxVoices: 3,
     minGapMs: 30,
     recipe: (fs, r) => {
-      const b = new Buf(fs, 0.35);
-      thud(b, 0, 70, 0.07, r, 1.2, 500);
+      const b = new Buf(fs, 0.4);
+      // 低頻再沉一點、拖長一點，打下去比較「實」
+      thud(b, 0, 58, 0.1, r, 1.4, 450);
       const hp = new Biquad('hp', fs, 1500);
       b.add(0.01, 0.08, (t) => hp.run(noise(r)) * env(t, 0.012, 0.0005) * 0.8);
       return b.saturate(1.8).normalize(0.9);

@@ -766,7 +766,7 @@ export const MELEE: MeleeDef[] = [
     kind: 'melee',
     id: 'bat',
     name: '鋁棒',
-    desc: '橫掃、回掃、下劈三段連擊，最後一下把霧屍打飛；打暈控場最好用',
+    desc: '左揮、右揮、下揮三段連擊，每段速度和範圍不同，最後一下把霧屍打飛',
     damage: 22,
     damageType: 'blunt',
     penetration: 0,
@@ -788,14 +788,14 @@ export const MELEE: MeleeDef[] = [
     hitStop: 50,
     trauma: 0.14,
     lunge: 30,
-    // 三段連段：順勢橫掃 → 借反彈力道快速回掃（範圍大、傷害低）→ 蓄力下劈把霧屍打飛
+    // 三段連段：左揮（標準）→ 右揮（借反彈力道，最快、最寬、最短）→ 下揮（蓄力最久、最遠、最窄，把霧屍打飛）
     steps: [
-      { name: '橫掃', windup: 0.14, active: 0.1, recovery: 0.3, reach: 30, arc: 130, damageMul: 1, knockback: 20, stagger: 0.6, hitStop: 50, trauma: 0.12, lunge: 26 },
-      { name: '回掃', windup: 0.08, active: 0.09, recovery: 0.28, reach: 28, arc: 150, damageMul: 0.85, knockback: 24, stagger: 0.6, hitStop: 45, trauma: 0.12, lunge: 34 },
-      { name: '下劈', windup: 0.22, active: 0.12, recovery: 0.48, reach: 34, arc: 90, damageMul: 1.6, knockback: 40, stagger: 1, hitStop: 90, trauma: 0.24, lunge: 46, launch: true },
+      { name: '左揮', windup: 0.14, active: 0.1, recovery: 0.3, reach: 30, arc: 120, damageMul: 1, knockback: 20, stagger: 0.6, hitStop: 75, trauma: 0.17, lunge: 26 },
+      { name: '右揮', windup: 0.07, active: 0.08, recovery: 0.26, reach: 26, arc: 160, damageMul: 0.85, knockback: 24, stagger: 0.6, hitStop: 65, trauma: 0.16, lunge: 34 },
+      { name: '下揮', windup: 0.24, active: 0.12, recovery: 0.5, reach: 38, arc: 70, damageMul: 1.6, knockback: 40, stagger: 1, hitStop: 120, trauma: 0.3, lunge: 46, launch: true },
     ],
     // 衝刺攻擊：幾乎不用起手，帶著衝勁往前滑一大段，判定長、把前方一排撞飛
-    dashStep: { name: '衝刺打', windup: 0.05, active: 0.16, recovery: 0.4, reach: 38, arc: 110, damageMul: 1.3, knockback: 44, stagger: 0.9, hitStop: 80, trauma: 0.22, lunge: 90, launch: true },
+    dashStep: { name: '衝刺打', windup: 0.05, active: 0.16, recovery: 0.4, reach: 38, arc: 110, damageMul: 1.3, knockback: 44, stagger: 0.9, hitStop: 105, trauma: 0.28, lunge: 90, launch: true },
     price: 25,
     unlockDay: 1,
     trailColor: 0xb8c4cf,

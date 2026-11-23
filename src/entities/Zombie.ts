@@ -664,7 +664,7 @@ export class Zombie extends Phaser.GameObjects.Sprite {
       return;
     }
     const now = this.scene.game.loop.time;
-    if (now < this.shakeUntil) this.x += (Math.floor(now / 30) % 2 ? 1 : -1) * this.shakeAmp;
+    if (now < this.shakeUntil) this.x += (Math.floor(now / 25) % 2 ? 1 : -1) * this.shakeAmp;
     if (this.airborne || this.lift > 0) {
       this.y = this.footY - this.lift;
       this.angle = this.hitLean;
@@ -701,6 +701,8 @@ export class Zombie extends Phaser.GameObjects.Sprite {
     if (f >= 0) {
       if (this.anims.isPlaying) this.anims.pause();
       this.setFrame(f);
+      // 動作影格本身就是姿勢，不再疊程式搖晃
+      this.angle = 0;
     } else if (this.reactFrame >= 0) {
       // 動作播完：回到原本的動畫
       if (this.anims.currentAnim) this.anims.play(this.anims.currentAnim.key, true);
@@ -866,17 +868,13 @@ export class Zombie extends Phaser.GameObjects.Sprite {
       if (this.anims.isPlaying) this.anims.timeScale *= ENRAGE.speedMul;
     }
     // 受擊：閃白 → 轉紅 → 回正 + 擠壓 + 往後一仰
-    this.setTintFill(0xffffff);
-    this.hat?.setTintFill(0xffffff);
-    this.scene.time.delayedCall(60, () => {
-      if (!this.active || this.dead) return;
-      this.setTint(0xff7a6a);
-      this.hat?.setTint(0xff7a6a);
-    });
+    // 受擊只染紅一下（整隻閃白太搶眼、會擋畫面）
+    this.setTint(0xff7a6a);
+    this.hat?.setTint(0xff7a6a);
     this.scene.time.delayedCall(140, () => this.active && !this.dead && this.restoreTint());
     fx?.squash(this, this.s, info.headshot ? 1.4 : 1, this.s * (this.spec.widthMul ?? 1));
     if (this.hasReact && !this.airborne && !this.downed) this.hitT = REACT.hit;
-    if (!this.airborne && !this.downed) this.hitLean = (info.headshot ? 12 : 7) * Math.sign(info.dirX ?? 1) * (1 - this.spec.knockbackResist * 0.5) * (this.hasReact ? 0.3 : 1);
+    if (!this.airborne && !this.downed) this.hitLean = (info.headshot ? 12 : 7) * Math.sign(info.dirX ?? 1) * (1 - this.spec.knockbackResist * 0.5) * (this.hasReact ? 0 : 1);
     return false;
   }
 

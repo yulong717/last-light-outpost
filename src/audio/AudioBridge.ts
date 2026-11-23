@@ -94,8 +94,10 @@ export function attachAudio(scene: Phaser.Scene): void {
       const combo = e.combo ?? 1;
       const semi = e.execute ? -3 : e.finisher ? -2 : e.type === 'blunt' ? 0 : Math.min(4, (combo - 1) * 1.5);
       play(e.type === 'blunt' ? 'melee_blunt' : 'melee_slash', e.x, { semitones: semi });
-      // 收尾重擊與處決：疊一層悶響，聽得出「這下很重」
-      if (e.finisher || e.execute) play('melee_blunt', e.x, { volume: 0.55, semitones: -4 });
+      // 鈍器每一下都疊上打肉聲，聽起來是打在身體上而不是打空氣
+      if (e.type === 'blunt') play('flesh_hit', e.x, { volume: 0.6, semitones: -2 });
+      // 收尾重擊與處決：再疊一層更低的悶響，聽得出「這下很重」
+      if (e.finisher || e.execute) play('melee_blunt', e.x, { volume: 0.7, semitones: -6 });
     })
     .on('player:exhausted', () => play('exhausted'))
     .on('player:weapon-switch', () => play('weapon_switch'))

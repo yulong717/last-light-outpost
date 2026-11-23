@@ -456,18 +456,16 @@ export class Fx {
     const s = this.scene;
     const depth = DEPTH_BURST + 1;
     if (kind === 'blunt') {
-      // 大而短的白芯衝擊光：卡肉期間 tween 停住，正好定格在最亮的那一下
-      const flash = s.add.circle(x, y, 7, 0xffffff, 1).setDepth(depth + 1);
-      s.tweens.add({ targets: flash, scale: 0.2, alpha: 0, duration: 50, onComplete: () => flash.destroy() });
-      const star = s.add.star(x, y, 4, 3, 14, 0xffffff, 1).setDepth(depth).setAngle(Phaser.Math.Between(0, 45));
-      s.tweens.add({ targets: star, scale: 1.5, alpha: 0, duration: 120, ease: 'Quad.easeOut', onComplete: () => star.destroy() });
+      // 小星芒＋往打擊方向噴的速度線（不做大片白光，免得擋住畫面）
+      const star = s.add.star(x, y, 4, 1, 6, 0xffffff, 0.9).setDepth(depth).setAngle(Phaser.Math.Between(0, 45));
+      s.tweens.add({ targets: star, scale: 1.4, alpha: 0, duration: 100, ease: 'Quad.easeOut', onComplete: () => star.destroy() });
       for (let i = 0; i < 3; i++) {
         // 往打擊方向噴出的速度線
         const a = Phaser.Math.DegToRad(Phaser.Math.Between(-35, 35)) + (dirX > 0 ? 0 : Math.PI);
         const line = s.add.rectangle(x + Math.cos(a) * 6, y + Math.sin(a) * 4, 10, 1, 0xfff3d0, 1).setDepth(depth).setRotation(a).setOrigin(0, 0.5);
         s.tweens.add({ targets: line, x: x + Math.cos(a) * 22, y: y + Math.sin(a) * 14, scaleX: 0.3, alpha: 0, duration: 130, onComplete: () => line.destroy() });
       }
-      const ring = s.add.ellipse(x, y, 10, 6).setStrokeStyle(2, 0xfff3d0, 0.9).setDepth(depth);
+      const ring = s.add.ellipse(x, y, 10, 6).setStrokeStyle(1, 0xfff3d0, 0.6).setDepth(depth);
       s.tweens.add({ targets: ring, scaleX: 4.2, scaleY: 3.2, alpha: 0, duration: 220, ease: 'Quad.easeOut', onComplete: () => ring.destroy() });
       this.dust(x + dirX * 6, floorY, 6);
       return;
@@ -480,8 +478,7 @@ export class Fx {
     for (const a of cuts) {
       const cx = Math.cos(a) * len;
       const cy = Math.sin(a) * len * 0.8;
-      g.lineStyle(heavy ? 4 : 3, 0xffffff, 0.35).lineBetween(-cx, -cy, cx, cy);
-      g.lineStyle(heavy ? 2 : 1, 0xffffff, 1).lineBetween(-cx, -cy, cx, cy);
+      g.lineStyle(1, 0xffffff, 0.9).lineBetween(-cx, -cy, cx, cy);
     }
     g.setScale(0.4, 0.4);
     s.tweens.add({ targets: g, scaleX: 1.15, scaleY: 1, duration: 60, ease: 'Quad.easeOut' });

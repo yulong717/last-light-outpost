@@ -26,6 +26,8 @@ export interface GameEventMap {
   'player:cycle': { weaponId: string; kind: 'pump' | 'bolt'; x: number; y: number; delay: number };
   /** 近戰揮擊（起手時發） */
   'player:melee-swing': { weaponId: string; x: number; y: number; heavy: boolean; tired: boolean; combo?: number; finisher?: boolean };
+  /** 揮擊進入判定段（球棒揮到前方）的那一刻：場景道具在這時候算打中 */
+  'player:melee-active': { x: number; y: number; heavy: boolean };
   /** 近戰打中（每隻各一次）；type 是傷害類型（slash / blunt） */
   'player:melee-hit': { weaponId: string; x: number; y: number; type: string; killed: boolean; execute: boolean; combo?: number; finisher?: boolean };
   /** 體力不夠還硬揮 */
