@@ -1,3 +1,4 @@
+import type { IconId } from '../art/EventArt';
 import { crewStats } from '../data/crewLoadout';
 import { COMPANION_ROLES, type CompanionRole, type CrewMember } from '../data/companions';
 import {
@@ -300,6 +301,18 @@ export function describeLoot(l: Loot): string[] {
   for (const id of l.weapons ?? []) out.push(`武器：${getWeapon(id)?.name ?? id}`);
   for (const n of l.named ?? []) out.push(`${n.name}（${COMPANION_ROLES[n.role].title}）`);
   for (const r of l.survivors ?? []) out.push(`倖存者（${COMPANION_ROLES[r].title}）`);
+  return out;
+}
+
+/** 同 describeLoot，但每行附上對應的小圖示（事件卡的戰利品清單用） */
+export function lootEntries(l: Loot): { icon: IconId; text: string }[] {
+  const out: { icon: IconId; text: string }[] = [];
+  if (l.scrap) out.push({ icon: 'scrap', text: `廢料 +${l.scrap}` });
+  for (const [k, n] of Object.entries(l.ammo ?? {})) if (n) out.push({ icon: 'ammo', text: `${AMMO[k as AmmoType].name} +${n}` });
+  for (const [k, n] of Object.entries(l.supplies ?? {})) if (n) out.push({ icon: k as SupplyId, text: `${supplyName(k as SupplyId)} +${n}` });
+  for (const id of l.weapons ?? []) out.push({ icon: getWeapon(id)?.kind === 'melee' ? 'melee' : 'gun', text: `武器：${getWeapon(id)?.name ?? id}` });
+  for (const n of l.named ?? []) out.push({ icon: 'survivor', text: `${n.name}（${COMPANION_ROLES[n.role].title}）` });
+  for (const r of l.survivors ?? []) out.push({ icon: 'survivor', text: `倖存者（${COMPANION_ROLES[r].title}）` });
   return out;
 }
 

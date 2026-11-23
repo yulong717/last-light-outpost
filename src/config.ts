@@ -15,9 +15,25 @@ export const LANE_BOTTOM = 346;
 /** 戰場寬度（世界座標），比畫面寬，鏡頭跟著主角捲動。 */
 export const WORLD_WIDTH = 1280;
 
-/** 把腳底 y 夾在地面帶之內。 */
+/**
+ * 單軸（橫向捲軸）模式：所有人的腳底都壓在同一條線上，只能左右移動。
+ * 探索的「沿街前進」與窄走廊事件會打開，場景結束時關掉。
+ */
+export const SINGLE_LANE_Y = 290;
+let laneLock: [number, number] | null = null;
+
+export function setSingleLane(on: boolean): void {
+  laneLock = on ? [SINGLE_LANE_Y - 2, SINGLE_LANE_Y + 2] : null;
+}
+
+export function singleLane(): boolean {
+  return laneLock !== null;
+}
+
+/** 把腳底 y 夾在地面帶之內（單軸模式時夾在那條線上）。 */
 export function clampLaneY(y: number): number {
-  return Math.min(LANE_BOTTOM, Math.max(LANE_TOP, y));
+  const [top, bottom] = laneLock ?? [LANE_TOP, LANE_BOTTOM];
+  return Math.min(bottom, Math.max(top, y));
 }
 
 /** 依腳底 y 算出繪製深度；特效、HUD 用更大的固定值蓋在上面。 */
