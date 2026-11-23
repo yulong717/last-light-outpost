@@ -1,9 +1,9 @@
 # AI 像素角色生成：本地 Claude Code 交接包
 
-這個資料夾是給**使用者電腦上的 Claude Code** 讀的。目標：在本機用 ComfyUI 生成兩個測試角色（阿凱、一般霧屍）的完整動作 sprite，比較兩條模型路線的效果，並驗證整套流程。
+這個資料夾是給**使用者電腦上的 Claude Code** 讀的。目標：在本機用 ComfyUI 生成兩個測試角色（阿凱、一般霧屍）的完整動作 sprite，並驗證整套流程。
 
 > 背景與研究結論在 [`../AI_ART_PIPELINE.md`](../AI_ART_PIPELINE.md)。本資料夾是「照著做」的版本。
-> **授權問題先擱置**，這階段只看效果和流程。
+> 這階段只看效果和流程。模型定案為 **MiniMax H3**。
 
 ## 檔案
 
@@ -28,7 +28,7 @@
 照順序執行：
 1. 檢查環境並回報（GPU 驅動、Python、git、磁碟空間、是否已有 ComfyUI）
 2. 依 SETUP.md 安裝 ComfyUI、節點、模型，每個模型用最小工作流試跑並記錄速度與 VRAM
-3. 依 TEST_SPEC.md 先做 M 體型人台，再跑阿凱、一般霧屍，A、B 兩條路線都跑
+3. 依 TEST_SPEC.md 先做 M 體型人台，再用 H3 跑阿凱、一般霧屍
 4. 依 COLLAB.md 把結果推到分支 ai-art/test-01 並更新 art/ai/out/REPORT.md
 每完成一個階段停下來給我看對照表，再繼續。
 ```

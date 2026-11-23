@@ -6,7 +6,7 @@
 | --- | --- |
 | **本地 Claude Code**（使用者電腦） | 安裝、跑 ComfyUI、寫與調整 `tools/art/ai/` 腳本與 `art/ai/workflows/`、產出 sprite、寫 `REPORT.md` |
 | **專案 thread 的 Claude**（雲端） | 審對照表與 GIF、提出修改意見、把通過的 sprite 接進遊戲（BootScene、動畫定義、WeaponRig 對位）、錄前後對比 |
-| **使用者** | 決定哪條路線、哪些結果可以用；在兩邊之間說一句話轉達即可 |
+| **使用者** | 決定 H3 設定與哪些結果可以用；在兩邊之間說一句話轉達即可 |
 
 ## 1. 分支與資料夾
 
@@ -22,11 +22,9 @@ art/ai/
   out/
     REPORT.md                本輪報告（見第 3 節）
     compare_lineup.png       兩角色並排
-    compare_routes.png       A/B 路線並排
-    A/akai/<action>.png|.json|.gif, contact_<action>.png, meta.json
-    A/zombie_basic/...
-    B/akai/...
-    B/zombie_basic/...
+    compare_settings.png     H3 設定比較（LoRA 有無、倍率、循環方式）
+    akai/<action>.png|.json|.gif, contact_<action>.png, meta.json
+    zombie_basic/...
 tools/art/ai/*.py            腳本
 ```
 
@@ -56,7 +54,7 @@ tools/art/ai/*.py            腳本
 | 模型 | 解析度/幀數 | 耗時 | VRAM 峰值 | 備註 |
 
 ## 結果
-| 角色 | 動作 | 路線 | 品質 1–5 | 重抽次數 | 耗時 | 問題 |
+| 角色 | 動作 | 設定 | 品質 1–5 | 重抽次數 | 耗時 | 問題 |
 
 ## 驗收清單
 （貼 TEST_SPEC 第 7 節，逐項打勾）
@@ -65,7 +63,7 @@ tools/art/ai/*.py            腳本
 - 問題、錯誤訊息、怎麼繞過
 
 ## 建議
-- 哪條路線、哪些步驟要改、全部角色的時間估算
+- 哪組 H3 設定、哪些步驟要改、全部角色的時間估算
 ```
 
 ## 4. 雲端這邊會怎麼審
@@ -84,6 +82,6 @@ tools/art/ai/*.py            腳本
 
 ## 6. 何時回到雲端討論
 
-- 兩條路線的比較結果出來時（決定主力路線）。
+- H3 設定比較結果出來時（決定 LoRA、倍率、循環方式）。
 - 某個動作反覆失敗（例如 5 次以上都不合格），需要調整規格或改用手修。
 - 要開始量產其他角色之前。

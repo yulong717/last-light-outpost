@@ -123,7 +123,7 @@ Keep Picture 2's pose, size and foot position exactly.
 5. **調色盤**：收集該角色所有動作的像素，OKLab k-means 取 ≤16 色，全部格套同一組，避免閃色。
 6. **清理**：去除孤立單點、外框修成 1 px、補外框斷點；走路時頭部若變形，用 idle 頭部覆蓋（headlock）。
 7. **輸出** `build_sheet.py`：
-   - `art/ai/out/<route>/<character>/<action>.png`：橫向 strip，每格 64×64
+   - `art/ai/out/<character>/<action>.png`：橫向 strip，每格 64×64
    - 同名 `.json`：`{frameWidth:64, frameHeight:64, frames:N, fps, loop}`
    - `contact_<action>.png`：放大 4 倍、疊腳底線與中線
    - `<action>.gif`：放大 4 倍預覽

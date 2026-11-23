@@ -1,6 +1,5 @@
 # 本地 AI 像素角色生成流程（ComfyUI + Claude Code）規劃
 
-> 狀態：第一階段（資料搜集與規劃）完成，硬體已確認（RTX 5060 Ti 16 GB、64 GB RAM、Windows 11），待確認授權方向後進入第二階段「兩個角色全流程測試」。
 > 資料查證日期：2026-11-23。模型更新很快，第二階段開工前要再確認一次版本。
 
 > **要在本機開始測試？** 照 [`docs/ai-art/README.md`](ai-art/README.md) 的交接包做（給本地 Claude Code 讀）。
@@ -13,39 +12,20 @@
 | 比例不一致 | 每次生成都是獨立的，AI 自己決定頭身比；體型再靠程式拉伸 | 先定「體型模板（人台）」，所有角色都在模板上「換裝」，動作也從模板出發 |
 | 效果普通、雜點多 | AI 圖直接縮小 → 糊、顏色多、外框不乾淨 | 固定的後處理：8 倍生成 → 格點縮小 → 共用調色盤 → 清雜點與外框 |
 
-## 2. 名詞查證：「MiniMax image / H3」指的是什麼
+## 2. 模型：MiniMax H3（定案）
 
-查證結果：你說的應該是 **MiniMax H3** 系列，有兩個模型，都已開放權重、ComfyUI 原生支援。
+使用者選定 **MiniMax H3** 為唯一主線，理由是品質與速度都最好；不做跨模型比對。
 
-| 模型 | 發布 | 能做什麼 | 檔案大小（最小版） | ComfyUI |
-| --- | --- | --- | --- | --- |
-| **MiniMax H3**（影片） | 2026-08-03 | 文字/圖片/參考圖轉影片、首尾幀控制、Pose/Depth ControlNet、動作轉移 | DiT `w6a8` 16 GB（另有 int8/fp8 21 GB、bf16 40 GB）、4 步 turbo LoRA | 0.30+，ControlNet 要 0.35+ |
-| **MiniMax H3 Image**（圖片） | 2026-11-10 | 文生圖＋編輯同一個模型，最多 16 張參考圖（"Picture 1"…），用來鎖角色身分 | DiT `w4a8` 12.5 GB ＋ 文字編碼器 Qwen3-VL-32B NVFP4 15.7 GB | v0.45.0+ |
+| 模型 | 用途 | 你電腦上的實測（test-01） |
+| --- | --- | --- |
+| **H3 Image**（2026-11-10，33B，最多 16 張參考圖） | 角色設定稿、換裝到人台、姿勢關鍵格 | 1024² 熱跑 9 秒，換裝最準 |
+| **H3 影片**（2026-08，首尾幀、參考圖、Pose ControlNet） | 走、跑、待機、近戰、受擊、死亡 | 512²／56 幀熱跑 29 秒 |
 
-另一個可能的「H3」是騰訊 **HunyuanImage 3.x**：3.0 本地版是 83B 參數（社群 NF4 量化也非常吃資源），3.5 只有 API（雲端付費）。**不建議**用在這個專案。
-
-### ⚠️ H3 授權是最大風險（必讀）
-
-- H3 影片：在本地生成的圖要商用，若**你在美國/歐盟/英國/韓國以外、年營收 < 2000 萬美元**，可用免費社群授權，但要標「Powered by MiniMax H3」，而且**產出物被使用的地區也受同樣限制**。在上述四地使用要買授權（專業版每月 5,000 美元起）。
-- 社群上已有作者因為這條限制，不公開 H3 產出（comfy-sprite-lab）。
-- H3 Image 的授權全文本次未取得，條款可能類似，要再確認。
-- **結論**：遊戲若要上 Steam 給全球玩家（含美國、歐盟），H3 的產出直接放進遊戲有風險。建議 **主力用 Apache-2.0 的模型（Qwen、Wan 2.2、FLUX.2 klein、Z-Image）**，H3 只當「找靈感、出設定稿」的輔助，或等授權確認後再升級。
-
-## 3. 推薦的模型組合
-
-> **2026-11-23 更新**：本節為初版，已被 [`ai-art/SETUP.md`](ai-art/SETUP.md) 第 3 節取代：**定案以 MiniMax H3 為單一主線**（H3 Image＋H3 影片＋pixelart8x LoRA＋PixelForge-H3 節點），不再跨模型比對。以下保留作為紀錄。
-
-
-| 用途 | 主力 | 備案 / 低 VRAM | 授權 |
-| --- | --- | --- | --- |
-| 角色設計、換裝到人台 | **Qwen-Image-Edit-2511**（多參考圖、角色一致性強）＋ Lightning 4 步 LoRA | GGUF Q4/Q5（12 GB 可跑）；H3 Image（授權待確認） | Apache-2.0 |
-| 像素風格出圖 | **FLUX.2 klein 4B ＋ pixel-art sprite LoRA**（4 步、直接透明背景） | Z-Image Turbo ＋ elusarca pixel LoRA | Apache-2.0 |
-| 循環動作（走、跑、待機） | **Wan 2.2 I2V 14B（GGUF）＋ lightx2v 4 步 LoRA**，可加 `styly-agents/Wan2-2-pixel-animate` 像素動畫 LoRA | Wan 2.2 5B；H3 影片（授權風險） | Apache-2.0（LoRA 依 Wan 授權） |
-| 短動作關鍵格（近戰、受擊、死亡） | **姿勢模板換人**：Qwen-Image-Edit 以「角色圖＋同比例的姿勢模板圖」重畫 | Wan 2.2 首尾幀補中間格 | Apache-2.0 |
-| 去背 | 洋紅色底＋色相去背（最乾淨） | BiRefNet `toonout`（ComfyUI-RMBG） | MIT 等 |
-| 像素化 | 自寫 Python：÷8 k-centroid、OKLab 調色盤 | ComfyUI-PixelArt-Detector | — |
-
-不用的：AnyPose LoRA（官方寫明對像素/扁平風格失敗）、AI 放大器（會亂補細節）、Nano Banana 類雲端模板（付費，也沒有真正的像素格點）。
+H3 配套（細節見 [`ai-art/SETUP.md`](ai-art/SETUP.md) 第 3 節）：
+- `pixelart8x-h3-lora`：8px 格點的真像素動畫 LoRA
+- `sprite-from-prompt-h3` 工作流：sprite＋動作描述直接出 sprite sheet
+- PixelForge-H3 節點：去背、格點還原、量化、防閃色、對齊、打包
+- HyperFlow H3 Flash：太慢或爆 VRAM 時的加速版
 
 ## 4. 統一角色規格（解決比例問題）
 
@@ -213,7 +193,6 @@ tools/art/ai/
 
 | 風險 | 可能性 | 對策 |
 | --- | --- | --- |
-| H3 授權限制商用地區 | 確定存在 | 主力用 Apache-2.0 模型；H3 只做參考 |
 | 64 px 太小，臉糊成一團 | 高 | 設計時就用「大色塊、粗外框、簡化五官」提示詞；臉部 2–3 格交給清理腳本鎖定或手修 |
 | 影片模型轉成 3/4 視角或鏡頭移動 | 中 | 提示詞鎖側面＋固定鏡頭；用像素動畫 LoRA；不合格直接換 seed |
 | 跨格閃色 | 中 | 整個角色共用一組調色盤，加時間平滑 |
