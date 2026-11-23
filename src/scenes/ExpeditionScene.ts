@@ -3,13 +3,15 @@ import { GAME_HEIGHT, GAME_WIDTH } from '../config';
 import { AudioManager } from '../audio/AudioManager';
 import { COMPANION_ROLES } from '../data/companions';
 import { crewStats } from '../data/crewLoadout';
-import { getZone, MEDKIT_HEAL, NOISE, SUPPLIES, type EventOption, type ExploreEvent, type Outcome } from '../data/explore';
-import { Expedition, playerExploreHp, describeLoot, type Resolution } from '../explore/Expedition';
+import { getZone, MEDKIT_HEAL, NOISE, SUPPLIES, WALK, type EventOption, type ExploreEvent, type Outcome } from '../data/explore';
+import { Expedition, playerExploreHp, describeLoot, lootEntries, type Resolution } from '../explore/Expedition';
+import { ensureEventArt, icon, VIG_H, VIG_W, type IconId } from '../art/EventArt';
+import { ensureIllustration, illustrationFor, ILLUS_H, ILLUS_W } from '../art/IllustrationArt';
 import { uiBar, uiButton, uiPanel } from '../explore/ui';
 import { GameState } from '../state/GameState';
 import type { Chapter } from '../data/story';
 import { getWeapon } from '../data/weapons';
-import { pixelText } from '../utils/text';
+import { pixelText, wrapCJK } from '../utils/text';
 import { backdropScenery } from '../scenery/locations';
 import { placeStaticProps } from '../scenery/SceneryBuilder';
 import type { DefenseSceneData } from './DefenseScene';
@@ -18,9 +20,14 @@ import type { QteData } from './QteScene';
 
 /** 事件卡放右邊，左邊留給場景插圖（事件寫到的東西都畫在這裡） */
 const CARD_X = 316;
-const CARD_Y = 84;
+const CARD_Y = 76;
 const CARD_W = GAME_WIDTH - CARD_X - 12;
-const CARD_H = 262;
+const CARD_H = 270;
+/** 卡片最上方的事件插圖（284×86） */
+const ART_X = CARD_X + 14;
+const ART_Y = CARD_Y + 10;
+/** 有插圖時標題的位置 */
+const BODY_Y = ART_Y + VIG_H + 6;
 /** 插圖擺件的範圍 */
 const ART_SPAN: [number, number] = [24, 296];
 
@@ -155,11 +162,92 @@ export class ExpeditionScene extends Phaser.Scene {
     this.card.removeAll(true);
   }
 
-  private cardFrame(title: string, text: string, color = '#f5d76e'): void {
+  /**
+   * 卡片外框＋最上方的插圖＋標題＋說明。art：事件 id（畫事件插圖）、'zone'（這一區的章節插圖）或不畫。
+   * 回傳說明文字的底部 y，呼叫端接著往下排。
+   */
+  private cardFrame(title: string, text: string, color = '#f5d76e', art?: string): number {
     this.clearCard();
     this.card.add(uiPanel(this, CARD_X, CARD_Y, CARD_W, CARD_H));
-    this.card.add(pixelText(this, CARD_X + 14, CARD_Y + 10, title, 11, color));
-    this.card.add(pixelText(this, CARD_X + 14, CARD_Y + 32, text, 8, '#e0e0e0').setWordWrapWidth(CARD_W - 28, true).setLineSpacing(3));
+    let y = CARD_Y + 10;
+    if (art) {
+      this.drawArt(art);
+      y = BODY_Y;
+    }
+    this.card.add(pixelText(this, CARD_X + 14, y, title, 11, color));
+    const t = wrapCJK(pixelText(this, CARD_X + 14, y + 19, text, 8, '#e0e0e0').setLineSpacing(2), CARD_W - 28);
+    this.card.add(t);
+    return t.y + t.height;
+  }
+
+  /** 卡片頂端的插圖：外框像一格漫畫分鏡，淡入時輕輕往上滑 */
+  private drawArt(art: string): void {
+    let img: Phaser.GameObjects.Image;
+    if (art === 'zone') {
+      // 章節插圖是 400×120：裁中間一塊
+      const key = ensureIllustration(this, illustrationFor(this.exp.zone.id));
+      const cx = Math.round((ILLUS_W - VIG_W) / 2);
+      const cy = ILLUS_H - VIG_H - 4;
+      img = this.add.image(ART_X - cx, ART_Y - cy, key).setOrigin(0).setCrop(cx, cy, VIG_W, VIG_H);
+    } else {
+      img = this.add.image(ART_X, ART_Y, ensureEventArt(this, art, this.exp.zone.id)).setOrigin(0);
+    }
+    img.setDepth(100);
+    const frame = this.add.rectangle(ART_X - 1, ART_Y - 1, VIG_W + 2, VIG_H + 2).setOrigin(0).setStrokeStyle(1, 0x000000, 1).setDepth(101);
+    const inner = this.add.rectangle(ART_X, ART_Y, VIG_W, VIG_H).setOrigin(0).setStrokeStyle(1, 0xf5d76e, 0.25).setDepth(101);
+    this.card.add([img, frame, inner]);
+    img.setAlpha(0);
+    const y0 = img.y;
+    img.y += 3;
+    this.tweens.add({ targets: img, alpha: 1, y: y0, duration: 260, ease: 'Quad.easeOut' });
+  }
+
+  /** 按鈕左邊加一個小圖示 */
+  private withIcon(objs: Phaser.GameObjects.GameObject[], x: number, y: number, h: number, id: IconId, enabled = true): Phaser.GameObjects.GameObject[] {
+    const im = icon(this, x + 11, y + h / 2, id);
+    if (im) {
+      if (!enabled) im.setAlpha(0.35);
+      objs.push(im);
+    }
+    return objs;
+  }
+
+  /** 戰利品／代價清單：小圖示＋文字，排成兩欄 */
+  private iconList(entries: { icon: IconId; text: string; color: string }[], y: number, maxRows: number): void {
+    const colW = (CARD_W - 28) / 2;
+    const rows = Math.min(maxRows, Math.ceil(entries.length / 2));
+    const twoCol = entries.length > maxRows;
+    entries.slice(0, twoCol ? rows * 2 : maxRows).forEach((e, i) => {
+      const col = twoCol ? Math.floor(i / rows) : 0;
+      const row = twoCol ? i % rows : i;
+      const x = CARD_X + 18 + col * colW;
+      const yy = y + row * 15;
+      const im = icon(this, x + 6, yy + 6, e.icon);
+      if (im) this.card.add(im);
+      this.card.add(pixelText(this, x + 16, yy, e.text, 8, e.color));
+    });
+  }
+
+  /** 選項的圖示：看它會做什麼（QTE 種類、潛入、戰鬥、檢定、消耗用品…） */
+  private optionIcon(opt: EventOption): IconId {
+    const a = opt.action;
+    if (opt.consume) return opt.consume;
+    switch (a.type) {
+      case 'qte':
+        return a.qte.kind === 'timing' ? 'timing' : a.qte.kind === 'sequence' ? 'arrows' : 'mash';
+      case 'field':
+        if (a.field.mode === 'stealth') return 'stealth';
+        if (a.field.meleeOnly) return 'melee';
+        if (a.field.goal === 'protect') return 'protect';
+        if (a.field.goal === 'survive') return 'survive';
+        return 'fight';
+      case 'check':
+        return 'check';
+      case 'outcome':
+        if (a.outcome.scrapCost) return 'trade';
+        if (a.outcome.loot || a.outcome.bonus || a.outcome.survivor) return 'bag';
+        return 'leave';
+    }
   }
 
   /** 兩站之間：前進、撤退、用醫療包 */
@@ -175,18 +263,62 @@ export class ExpeditionScene extends Phaser.Scene {
     if (e.chapter && first) text += `\n\n主線　${e.chapter.title}：${e.chapter.objective}（在最後一站）`;
     if (e.intel && first) text += `\n\n情報：${e.intel.name}。${e.intel.desc}`;
     if (e.noise >= NOISE.max) text += '\n\n四周的吼聲越來越近……噪音太大，屍潮正在逼近！';
-    this.cardFrame(title, text);
-    const bw = (CARD_W - 28 - 16) / 3;
-    const by = CARD_Y + CARD_H - 40;
-    this.card.add(uiButton(this, CARD_X + 14, by, bw, 28, '前進 ▶', () => this.enterNode(), { fill: 0x7a2a22, size: 9 }));
-    const meds = GameState.data.supplies.medkit;
+    this.cardFrame(title, text.replace(/\n\n/g, '\n'), '#f5d76e', first ? 'zone' : 'walk');
+    // 2×2：沿街前進（橫向捲軸）／抄近路（直接看事件）／醫療包／撤退
+    const gap = 8;
+    const bw = (CARD_W - 28 - gap) / 2;
+    const bh = 28;
+    const x0 = CARD_X + 14;
+    const x1 = x0 + bw + gap;
+    const y1 = CARD_Y + CARD_H - 12 - bh;
+    const y0 = y1 - bh - 6;
+    const stop = e.isFinale ? '大獎' : `第 ${e.index + 1} 站`;
     this.card.add(
-      uiButton(this, CARD_X + 22 + bw, by, bw, 28, `用醫療包（${meds}）`, () => this.useMedkit(), {
-        enabled: meds > 0 && e.hp < playerExploreHp(),
-        sub: `+${MEDKIT_HEAL} 生命`,
-      }),
+      this.withIcon(uiButton(this, x0, y0, bw, bh, '沿街前進 ▶', () => this.walk(stop), { fill: 0x7a2a22, size: 9, sub: '橫向推進・路上能搜刮' }), x0, y0, bh, 'walk'),
     );
-    this.card.add(uiButton(this, CARD_X + 30 + bw * 2, by, bw, 28, first ? '回據點' : '撤退回據點', () => this.retreat(), { fill: 0x3a3f4a, sub: '帶著背包回家' }));
+    this.card.add(this.withIcon(uiButton(this, x1, y0, bw, bh, '抄近路', () => this.enterNode(), { sub: `直接到${stop}` }), x1, y0, bh, 'fast'));
+    const meds = GameState.data.supplies.medkit;
+    const canHeal = meds > 0 && e.hp < playerExploreHp();
+    this.card.add(
+      this.withIcon(
+        uiButton(this, x0, y1, bw, bh, `醫療包（${meds}）`, () => this.useMedkit(), { enabled: canHeal, sub: `+${MEDKIT_HEAL} 生命` }),
+        x0,
+        y1,
+        bh,
+        'medkit',
+        canHeal,
+      ),
+    );
+    this.card.add(
+      this.withIcon(uiButton(this, x1, y1, bw, bh, first ? '回據點' : '撤退回據點', () => this.retreat(), { fill: 0x3a3f4a, sub: '帶著背包回家' }), x1, y1, bh, 'leave'),
+    );
+  }
+
+  /**
+   * 沿街前進：先抽好這一站的事件，再進入橫向捲軸的街道（只能左右走），
+   * 走到右邊的路牌才翻開事件卡。路上的霧屍、箱子都是實際要處理的東西。
+   */
+  private walk(stop: string): void {
+    AudioManager.ui('confirm');
+    const ev = this.exp.nextEvent();
+    this.event = ev;
+    const data: ExploreFieldData = {
+      spec: { mode: 'fight', goal: 'reach', title: `沿街前進：走到${stop}`, zombies: WALK.zombies, walk: true, axis: 'single', exitLabel: stop },
+      onDone: (r: FieldResult) => {
+        this.scene.wake();
+        this.cameras.main.fadeIn(250, 0, 0, 0);
+        AudioManager.setMood('menu');
+        if (r.result === 'down') {
+          this.exp.hp = 0;
+          this.showDown();
+          return;
+        }
+        this.showEvent(ev);
+      },
+    };
+    this.clearCard();
+    this.scene.sleep();
+    this.scene.launch('ExploreField', data);
   }
 
   private useMedkit(): void {
@@ -205,10 +337,10 @@ export class ExpeditionScene extends Phaser.Scene {
   private showEvent(ev: ExploreEvent): void {
     this.drawBackdrop(ev.id);
     this.refreshHud();
-    this.cardFrame(ev.title, ev.text, ev.id === 'horde' ? '#ff6b6b' : '#f5d76e');
+    this.cardFrame(ev.title, ev.text, ev.id === 'horde' ? '#ff6b6b' : '#f5d76e', ev.id);
     const n = ev.options.length;
-    const bh = 30;
-    const gap = 6;
+    const bh = n >= 3 ? 27 : 30;
+    const gap = n >= 3 ? 4 : 6;
     const y0 = CARD_Y + CARD_H - 12 - n * bh - (n - 1) * gap;
     ev.options.forEach((opt, i) => {
       const blocked = this.exp.blocked(opt);
@@ -216,12 +348,20 @@ export class ExpeditionScene extends Phaser.Scene {
       if (opt.consume) sub = `消耗${SUPPLIES[opt.consume].name}（剩 ${GameState.data.supplies[opt.consume]}）${sub ? '・' + sub : ''}`;
       if (opt.action.type === 'check') sub += `・成功率 ${Math.round(this.exp.checkChance(opt.action) * 100)}%`;
       if (blocked) sub = `${blocked === '沒有' && opt.consume ? `沒有${SUPPLIES[opt.consume].name}` : blocked}`;
+      const by = y0 + i * (bh + gap);
       this.card.add(
-        uiButton(this, CARD_X + 14, y0 + i * (bh + gap), CARD_W - 28, bh, opt.label, () => this.choose(ev, opt), {
-          enabled: !blocked,
-          sub,
-          subColor: opt.consume ? '#ffd24a' : undefined,
-        }),
+        this.withIcon(
+          uiButton(this, CARD_X + 14, by, CARD_W - 28, bh, opt.label, () => this.choose(ev, opt), {
+            enabled: !blocked,
+            sub,
+            subColor: opt.consume ? '#ffd24a' : undefined,
+          }),
+          CARD_X + 14,
+          by,
+          bh,
+          this.optionIcon(opt),
+          !blocked,
+        ),
       );
     });
   }
@@ -296,22 +436,22 @@ export class ExpeditionScene extends Phaser.Scene {
     this.showResult(ev, res);
   }
 
-  private resultLines(res: Resolution): string[] {
-    const lines = describeLoot(res.gained).map((l) => `＋ ${l}`);
-    if (res.hurt) lines.push(`你受傷了 −${res.hurt}`);
-    for (const c of res.crewHurt) lines.push(`${c.name} 受傷 −${c.amount}${c.downed ? '，倒下了（回據點後休養）' : ''}`);
-    if (res.noise) lines.push(`噪音 +${res.noise}`);
+  private resultLines(res: Resolution): { icon: IconId; text: string; color: string }[] {
+    const lines = lootEntries(res.gained).map((l) => ({ ...l, color: '#9ad17a' }));
+    const bad = '#ff8a80';
+    if (res.hurt) lines.push({ icon: 'hurt', text: `你受傷 −${res.hurt}`, color: bad });
+    for (const c of res.crewHurt) lines.push({ icon: 'hurt', text: `${c.name} −${c.amount}${c.downed ? ' 倒下' : ''}`, color: bad });
+    if (res.noise) lines.push({ icon: 'noise', text: `噪音 +${res.noise}`, color: bad });
     return lines;
   }
 
   private showResult(ev: ExploreEvent, res: Resolution): void {
-    this.cardFrame(ev.title, res.text);
+    const bottom = this.cardFrame(ev.title, res.text, '#f5d76e', ev.id);
     const lines = this.resultLines(res);
-    lines.slice(0, 7).forEach((l, i) => {
-      const bad = l.includes('−') || l.startsWith('噪音');
-      this.card.add(pixelText(this, CARD_X + 24, CARD_Y + 70 + i * 14, l, 8, bad ? '#ff8a80' : '#9ad17a'));
-    });
-    if (lines.length === 0) this.card.add(pixelText(this, CARD_X + 24, CARD_Y + 70, '（什麼也沒得到）', 8, '#90a4ae'));
+    const y = bottom + 6;
+    const room = Math.max(1, Math.floor((CARD_Y + CARD_H - 46 - y) / 15));
+    this.iconList(lines, y, room);
+    if (lines.length === 0) this.card.add(pixelText(this, CARD_X + 24, y, '（什麼也沒得到）', 8, '#90a4ae'));
     const by = CARD_Y + CARD_H - 40;
     if (this.exp.finished) {
       this.card.add(uiButton(this, CARD_X + 14, by, CARD_W - 28, 28, '滿載而歸，回據點 ▶', () => this.goHome(true), { fill: 0x3a4a2a, size: 9 }));
@@ -328,7 +468,7 @@ export class ExpeditionScene extends Phaser.Scene {
       solo ? '眼前一黑。等你醒來，已經拖著身子爬回了據點……背包裡的東西全都丟在了路上。' : '眼前一黑。等你醒來，已經被隊員拖回了據點……背包裡的東西全都丟在了路上。',
       '#ff6b6b',
     );
-    if (res) this.resultLines(res).slice(0, 5).forEach((l, i) => this.card.add(pixelText(this, CARD_X + 24, CARD_Y + 80 + i * 14, l, 8, '#ff8a80')));
+    if (res) this.iconList(this.resultLines(res).filter((l) => l.color !== '#9ad17a'), CARD_Y + 80, 5);
     this.exp.fail();
     this.bagText.setText('背包：全部丟失').setColor('#ff8a80');
     if (this.exp.squad.length) this.card.add(pixelText(this, CARD_X + 24, CARD_Y + CARD_H - 58, '同行隊員為了把你拖回來都掛了彩，要休養 1 天。', 8, '#ef9a9a'));
@@ -343,15 +483,19 @@ export class ExpeditionScene extends Phaser.Scene {
   private goHome(full: boolean): void {
     const e = this.exp;
     const bagLines = describeLoot(e.bag);
+    const bagSnapshot = JSON.parse(JSON.stringify(e.bag)) as typeof e.bag;
     const res = e.bank();
     AudioManager.play(full ? 'stinger_win' : 'ui_confirm');
     this.cardFrame(full ? '滿載而歸' : '撤退回據點', bagLines.length ? '帶回來的東西都收進了據點：' : '這趟空手而回。');
-    const lines = [...bagLines];
-    if (res.overflowScrap) lines.push(`（放不下的換成廢料 +${res.overflowScrap}）`);
-    for (const r of res.recruits) lines.push(`${r.name}（${COMPANION_ROLES[r.role].title}）加入了隊伍！`);
+    const good = '#9ad17a';
+    const lines: { icon: IconId; text: string; color: string }[] = lootEntries(bagSnapshot)
+      .filter((l) => l.icon !== 'survivor')
+      .map((l) => ({ ...l, color: good }));
+    if (res.overflowScrap) lines.push({ icon: 'scrap', text: `放不下的換廢料 +${res.overflowScrap}`, color: good });
+    for (const r of res.recruits) lines.push({ icon: 'survivor', text: `${r.name}（${COMPANION_ROLES[r.role].title}）入隊`, color: '#f5d76e' });
     const injured = e.squad.filter((m) => (e.crewHp.get(m.id) ?? 0) <= 0);
-    for (const m of injured) lines.push(`${m.name} 負傷，休養 1 天`);
-    lines.slice(0, 9).forEach((l, i) => this.card.add(pixelText(this, CARD_X + 24, CARD_Y + 52 + i * 13, l, 8, l.includes('負傷') ? '#ef9a9a' : '#9ad17a')));
+    for (const m of injured) lines.push({ icon: 'hurt', text: `${m.name} 負傷休養 1 天`, color: '#ef9a9a' });
+    this.iconList(lines, CARD_Y + 52, 10);
     const ch = res.chapter;
     const next = ch ? () => this.showChapterDone(ch) : () => this.leave();
     this.card.add(uiButton(this, CARD_X + 14, CARD_Y + CARD_H - 40, CARD_W - 28, 28, ch ? '繼續 ▶' : '回據點', next, { fill: 0x3a4a2a, size: 9 }));

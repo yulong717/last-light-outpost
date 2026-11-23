@@ -1,12 +1,12 @@
 import { heroRigColors } from '../art/HeroArt';
 import Phaser from 'phaser';
-import { GAME_HEIGHT, GAME_WIDTH, GROUND_Y, LANE_BOTTOM, LANE_TOP, clampLaneY, depthForY } from '../config';
+import { GAME_HEIGHT, GAME_WIDTH, GROUND_Y, LANE_BOTTOM, LANE_TOP, SINGLE_LANE_Y, clampLaneY, depthForY, setSingleLane } from '../config';
 import { attachAudio } from '../audio/AudioBridge';
 import { AudioManager } from '../audio/AudioManager';
 import { ensureCrewTexture } from '../art/CrewArt';
 import { COMPANION_ROLES, type CrewMember } from '../data/companions';
 import { crewStats } from '../data/crewLoadout';
-import { NOISE, type FieldSpec } from '../data/explore';
+import { NOISE, WALK, type FieldSpec } from '../data/explore';
 import type { FirearmDef } from '../data/weapons';
 import { Player } from '../entities/Player';
 import { WeaponRig } from '../entities/WeaponRig';
@@ -51,8 +51,7 @@ export interface ExploreFieldData {
   onDone: (r: FieldResult) => void;
 }
 
-const WORLD_W = 960;
-const EXIT_X = WORLD_W - 34;
+const FIELD_W = 960;
 /** 潛入：霧屍基本視野 */
 const VISION = 120;
 const VISION_DY = 30;
@@ -94,6 +93,12 @@ interface Follower {
 export class ExploreFieldScene extends Phaser.Scene {
   private spec!: FieldSpec;
   private eventId?: string;
+  /** 關卡寬度與出口位置（沿街前進比較長） */
+  private worldW = FIELD_W;
+  private exitX = FIELD_W - 34;
+  /** 單軸：所有人都在同一條線上 */
+  private single = false;
+  private walkDot?: Phaser.GameObjects.Rectangle;
   private scenery!: SceneryResult;
   private props!: PropSystem;
   private interaction: Interaction | null = null;
@@ -157,15 +162,22 @@ export class ExploreFieldScene extends Phaser.Scene {
     this.elapsed = 0;
     this.survivor = undefined;
     this.unregister = [];
+    this.walkDot = undefined;
+    this.worldW = this.spec.walk ? WALK.worldW : FIELD_W;
+    this.exitX = this.worldW - 34;
+    this.single = this.spec.axis === 'single' || !!this.spec.walk;
+    setSingleLane(this.single);
+    // 單軸只在這個場景有效：結束就還原，夜晚防守照舊是 2.5D
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => setSingleLane(false));
     AudioManager.setMood('night');
 
-    this.cameras.main.setBounds(0, 0, WORLD_W, GAME_HEIGHT);
+    this.cameras.main.setBounds(0, 0, this.worldW, GAME_HEIGHT);
     this.drawBackdrop();
     this.fx = Fx.attach(this);
     this.camFeel = CameraFeel.attach(this);
     createAtmosphere(this, { groundY: LANE_TOP + 14 });
 
-    this.player = new Player(this, 60, (LANE_TOP + LANE_BOTTOM) / 2, GameState.hero.maxHp);
+    this.player = new Player(this, 60, this.single ? SINGLE_LANE_Y : (LANE_TOP + LANE_BOTTOM) / 2, GameState.hero.maxHp);
     this.player.hp = Math.max(1, exp.hp);
     this.fx.attachShadow(this.player.sprite, 22);
     this.rig = new WeaponRig(this, heroRigColors(GameState.data.hero ?? 'soldier'));
@@ -227,16 +239,49 @@ export class ExploreFieldScene extends Phaser.Scene {
   /** 場景：依區域與事件擺出對應的環境（停車場有車、倉庫有貨架、公車頂有倖存者…） */
   private drawBackdrop(): void {
     const keep: [number, number][] = [[0, 110]];
-    if (this.spec.goal === 'reach') keep.push([EXIT_X - 50, WORLD_W]);
-    this.scenery = fieldScenery(this, this.exp.zone.id, this.eventId, WORLD_W, keep);
+    if (this.spec.goal === 'reach') keep.push([this.exitX - 50, this.worldW]);
+    this.scenery = fieldScenery(this, this.exp.zone.id, this.eventId, this.worldW, keep, this.spec.walk ? WALK.extras : 4);
+    if (this.single) this.clearLane();
+    if (this.spec.walk) this.drawWalkSign();
     // 出口（潛入目標）：一扇亮著綠光的門
-    if (this.spec.goal === 'reach') {
+    else if (this.spec.goal === 'reach') {
       const y = GROUND_Y + 1;
-      this.add.image(EXIT_X, y, propKey('door'), 1).setOrigin(0.5, 1).setDepth(5);
-      const glow = this.add.rectangle(EXIT_X, y - 24, 30, 52, 0x9ad17a, 0.14).setDepth(6);
+      this.add.image(this.exitX, y, propKey('door'), 1).setOrigin(0.5, 1).setDepth(5);
+      const glow = this.add.rectangle(this.exitX, y - 24, 30, 52, 0x9ad17a, 0.14).setDepth(6);
       this.tweens.add({ targets: glow, alpha: 0.03, duration: 700, yoyo: true, repeat: -1 });
-      pixelText(this, EXIT_X, y - 58, '出口', 8, '#9ad17a').setOrigin(0.5).setDepth(70).setStroke('#000000', 3);
+      pixelText(this, this.exitX, y - 58, '出口', 8, '#9ad17a').setOrigin(0.5).setDepth(70).setStroke('#000000', 3);
     }
+  }
+
+  /**
+   * 單軸：走道那條線上不能有擋路的東西（不然只能左右走會被卡死）。
+   * 擋在線上的道具挪到後排；線本身畫一條淡淡的磨損路面，讓人一眼看出只走這條。
+   */
+  private clearLane(): void {
+    for (const pr of this.scenery.props) {
+      if (pr.wall) continue;
+      if (Math.abs(pr.y - SINGLE_LANE_Y) < 26) pr.y = LANE_TOP + 4 + Math.round(this.rng.next() * 8);
+    }
+    const g = this.add.graphics().setDepth(2);
+    g.fillStyle(0x000000, 0.16).fillRect(0, SINGLE_LANE_Y - 6, this.worldW, 12);
+    g.fillStyle(0xffffff, 0.04).fillRect(0, SINGLE_LANE_Y - 6, this.worldW, 1);
+  }
+
+  /** 沿街前進的終點：下一站的路牌，閃著「！」 */
+  private drawWalkSign(): void {
+    const x = this.exitX;
+    const y = SINGLE_LANE_Y;
+    const g = this.add.graphics().setDepth(depthForY(y) - 1);
+    g.fillStyle(0x120f0d).fillRect(x - 2, y - 74, 5, 74);
+    g.fillStyle(0x5a5e66).fillRect(x - 1, y - 73, 3, 73);
+    g.fillStyle(0x120f0d).fillRect(x - 28, y - 92, 56, 22);
+    g.fillStyle(0x2e6b3a).fillRect(x - 27, y - 91, 54, 20);
+    g.fillStyle(0x4c9a5a).fillRect(x - 27, y - 91, 54, 1);
+    pixelText(this, x, y - 81, this.spec.exitLabel ?? '下一站', 8, '#ffffff').setOrigin(0.5).setDepth(70);
+    const bang = pixelText(this, x, y - 106, '！', 12, '#ffd24a').setOrigin(0.5).setDepth(70).setStroke('#000000', 3);
+    this.tweens.add({ targets: bang, y: y - 110, duration: 450, yoyo: true, repeat: -1 });
+    const glow = this.add.rectangle(x, y - 40, 40, 80, 0xffd24a, 0.08).setDepth(6);
+    this.tweens.add({ targets: glow, alpha: 0.02, duration: 700, yoyo: true, repeat: -1 });
   }
 
   /** 場景佈置裡標記成「保護目標」的擺件（公車、避難所的門） */
@@ -299,7 +344,7 @@ export class ExploreFieldScene extends Phaser.Scene {
       this.shadows.push(r);
       this.add.rectangle(r.x, r.y, r.width, r.height, 0x000000, 0.42).setOrigin(0).setDepth(9);
     }
-    const span = (EXIT_X - 80 - 220) / Math.max(1, count);
+    const span = (this.exitX - 80 - 220) / Math.max(1, count);
     for (let i = 0; i < count; i++) {
       const x = 220 + span * (i + 0.5) + this.rng.int(-20, 20);
       const y = this.rng.int(LANE_TOP + 6, LANE_BOTTOM - 6);
@@ -440,12 +485,29 @@ export class ExploreFieldScene extends Phaser.Scene {
 
   // ── 戰鬥 ──
 
+  /**
+   * 沿街前進：霧屍零星站在前方的街上，走近了才撲過來（WALK.wakeRange）。
+   * 噪音大的時候，背後還會再跟上來幾隻。
+   */
+  private setupWalk(count: number): void {
+    const from = 360;
+    const to = this.exitX - 120;
+    for (let i = 0; i < count; i++) {
+      const x = from + ((to - from) * (i + 0.5)) / count + this.rng.int(-40, 40);
+      this.makeZombie(x, SINGLE_LANE_Y);
+    }
+    this.toSpawn = Math.floor(this.exp.noise / 40);
+    this.spawnEvery = 9;
+    this.spawnTimer = 6;
+  }
+
   private setupFight(count: number): void {
     const spec = this.spec;
+    if (spec.walk) return this.setupWalk(count);
     const first = Math.ceil(count / 2);
     for (let i = 0; i < first; i++) {
       const right = i % 3 !== 2;
-      const x = right ? this.rng.int(420, WORLD_W - 30) : this.rng.int(-30, 10);
+      const x = right ? this.rng.int(420, this.worldW - 30) : this.rng.int(-30, 10);
       this.makeZombie(x, this.rng.int(LANE_TOP, LANE_BOTTOM));
     }
     this.toSpawn = count - first;
@@ -499,7 +561,7 @@ export class ExploreFieldScene extends Phaser.Scene {
     }
     const cam = this.cameras.main;
     const left = this.rng.chance(0.35);
-    const x = left ? Math.max(-30, cam.scrollX - 24) : Math.min(WORLD_W + 30, cam.scrollX + GAME_WIDTH + 24);
+    const x = left ? Math.max(-30, cam.scrollX - 24) : Math.min(this.worldW + 30, cam.scrollX + GAME_WIDTH + 24);
     this.makeZombie(x, this.rng.int(LANE_TOP, LANE_BOTTOM));
   }
 
@@ -519,11 +581,24 @@ export class ExploreFieldScene extends Phaser.Scene {
     const title = this.spec.mode === 'stealth' ? `潛入：${this.spec.title}` : this.spec.meleeOnly ? `${this.spec.title}（禁止開槍）` : this.spec.title;
     this.goalText = fix(pixelText(this, GAME_WIDTH / 2, 30, title, 9, '#ffd24a').setOrigin(0.5, 0).setStroke('#000000', 3));
     this.infoText = fix(pixelText(this, GAME_WIDTH - 6, 6, '', 8).setOrigin(1, 0));
+    if (this.spec.walk) {
+      // 路程條：起點 → 下一站
+      const x0 = GAME_WIDTH / 2 - 90;
+      fix(this.add.rectangle(x0, 48, 180, 3, 0x000000, 0.6).setOrigin(0, 0.5));
+      fix(this.add.rectangle(x0, 48, 180, 1, 0x5a606b).setOrigin(0, 0.5));
+      fix(this.add.rectangle(x0 + 180, 48, 7, 7, 0xffd24a).setStrokeStyle(1, 0x000000));
+      this.walkDot = fix(this.add.rectangle(x0, 48, 5, 5, 0x9ad17a).setStrokeStyle(1, 0x000000));
+    }
     const touch = this.sys.game.device.input.touch;
     const wx = touch ? 210 : 6;
     this.ammoText = fix(pixelText(this, wx, GAME_HEIGHT - 28, '', 9));
-    const help =
-      this.spec.mode === 'stealth'
+    const help = this.single
+      ? touch
+        ? '只能左右移動・路邊的箱子可以打開'
+        : this.spec.walk
+          ? 'A／D 左右移動・往右走到下一站・F 互動（翻箱、開門）・G 手榴彈・H 醫療包'
+          : 'A／D 左右移動・前後都會有霧屍・G 手榴彈・H 醫療包'
+      : this.spec.mode === 'stealth'
         ? touch
           ? '躲進陰影・從背後按近戰暗殺'
           : 'WASD 移動・躲進陰影或掩體後・從背後按 E 暗殺・F 互動・G 手榴彈・H 醫療包'
@@ -567,6 +642,7 @@ export class ExploreFieldScene extends Phaser.Scene {
 
   private refreshHud(): void {
     const p = this.player;
+    if (this.walkDot) this.walkDot.x = GAME_WIDTH / 2 - 90 + 180 * Phaser.Math.Clamp((p.footX - 60) / (this.exitX - 70), 0, 1);
     this.setHp(p.hp / p.maxHp);
     this.setNoise(this.exp.noise / NOISE.max);
     const w = this.weapons.active;
@@ -616,6 +692,8 @@ export class ExploreFieldScene extends Phaser.Scene {
     this.elapsed += dt;
     const inp = this.input2.update();
     const p = this.player;
+    // 單軸：大家都在同一條線上，瞄準高度鎖在身體的高度（手機點哪裡都打得到前方）
+    if (this.single) inp.aimY = Phaser.Math.Clamp(inp.aimY, p.footY - 60, p.footY - 16);
 
     // 潛入中：近戰鍵先拿來暗殺
     if (!this.alerted) this.updateSleepers(dt);
@@ -633,7 +711,7 @@ export class ExploreFieldScene extends Phaser.Scene {
     // 潛行時腳步放輕；奔跑變快、被抓住變超慢
     const heroMul = this.heroSys.update(dt, inp.moveX !== 0 || inp.moveY !== 0);
     p.speedMul = (this.alerted ? this.weapons.active.def.moveMul : 0.75) * heroMul;
-    p.update(dt, inp.moveX, inp.moveY, inp.aimX, { minX: 20, maxX: WORLD_W - 16 });
+    p.update(dt, inp.moveX, inp.moveY, inp.aimX, { minX: 20, maxX: this.worldW - 16 });
 
     // 手上的武器先擺好姿勢，子彈從真正的槍口射出
     this.rig.setWeapon(this.weapons.active.def.id);
@@ -673,8 +751,10 @@ export class ExploreFieldScene extends Phaser.Scene {
 
     this.updateFollowers(dt);
     this.props.update(dt);
-    this.props.collide(p);
-    for (const z of this.zombies) if (!z.dead && z.spec.body !== 'crow') this.props.collide(z);
+    if (!this.single) {
+      this.props.collide(p);
+      for (const z of this.zombies) if (!z.dead && z.spec.body !== 'crow') this.props.collide(z);
+    }
     this.interaction = p.alive ? this.props.nearestInteraction() : null;
     const it = this.interaction;
     this.interactHint.setVisible(!!it);
@@ -685,7 +765,11 @@ export class ExploreFieldScene extends Phaser.Scene {
 
     if (this.alerted) {
       const ctx = this.context();
-      for (const z of this.zombies) z.update(dt, ctx);
+      for (const z of this.zombies) {
+        // 沿街前進：前方遠處的霧屍先站著晃，走近了才醒
+        if (this.spec.walk && z.footX - p.footX > WALK.wakeRange) z.idle(dt);
+        else z.update(dt, ctx);
+      }
       if (this.toSpawn > 0) {
         this.spawnTimer -= dt;
         if (this.spawnTimer <= 0) {
@@ -842,7 +926,8 @@ export class ExploreFieldScene extends Phaser.Scene {
     if (!p.alive) return this.finish('down');
     const s = this.spec;
     if (this.survivor && this.survivor.hp <= 0) return this.finish('failed');
-    if (s.goal === 'reach' && p.footX >= EXIT_X - 10) return this.finish(this.alerted ? 'win' : 'clean');
+    if (s.goal === 'reach' && p.footX >= this.exitX - 10) return this.finish(this.alerted ? 'win' : 'clean');
+    if (s.walk) return;
     if (this.alerted && (s.goal === 'clear' || s.goal === 'reach') && this.zombies.length === 0 && this.toSpawn === 0) {
       return this.finish(s.mode === 'stealth' ? 'win' : 'win');
     }
@@ -855,7 +940,7 @@ export class ExploreFieldScene extends Phaser.Scene {
     this.exp.hp = Math.max(0, this.player.hp);
     this.exp.kills += this.kills;
     this.weapons.unloadAll();
-    const msg = { clean: '神不知鬼不覺', win: '任務完成', failed: '倖存者沒能撐住……', down: '你倒下了' }[result];
+    const msg = this.spec.walk && result !== 'down' ? `抵達${this.spec.exitLabel ?? '下一站'}` : { clean: '神不知鬼不覺', win: '任務完成', failed: '倖存者沒能撐住……', down: '你倒下了' }[result];
     const ok = result === 'clean' || result === 'win';
     const t = pixelText(this, GAME_WIDTH / 2, 140, msg, 16, ok ? '#9ad17a' : '#ff6b6b').setOrigin(0.5).setScrollFactor(0).setDepth(250).setStroke('#000000', 4);
     t.setScale(0.6);

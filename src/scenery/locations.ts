@@ -21,7 +21,7 @@ export function setFor(zoneId: string, eventId?: string): SetDressing {
 }
 
 /** 探索裡的潛入／戰鬥小關卡 */
-export function fieldScenery(scene: Phaser.Scene, zoneId: string, eventId: string | undefined, worldW: number, keepClear: [number, number][]): SceneryResult {
+export function fieldScenery(scene: Phaser.Scene, zoneId: string, eventId: string | undefined, worldW: number, keepClear: [number, number][], extras = 4): SceneryResult {
   const theme = THEMES[zoneId] ?? THEMES.gas;
   const set = setFor(zoneId, eventId);
   return buildScenery(scene, {
@@ -33,7 +33,7 @@ export function fieldScenery(scene: Phaser.Scene, zoneId: string, eventId: strin
     worldW,
     seed: `${zoneId}-${eventId ?? 'none'}-${Math.random()}`,
     pieces: set.pieces,
-    extras: set.noExtras ? 0 : 4,
+    extras: set.noExtras ? 0 : extras,
     decor: 1,
     keepClear,
   });
