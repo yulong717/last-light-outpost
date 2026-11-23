@@ -701,6 +701,8 @@ export class Zombie extends Phaser.GameObjects.Sprite {
     if (f >= 0) {
       if (this.anims.isPlaying) this.anims.pause();
       this.setFrame(f);
+      // 動作影格本身就是姿勢，不再疊程式搖晃
+      this.angle = 0;
     } else if (this.reactFrame >= 0) {
       // 動作播完：回到原本的動畫
       if (this.anims.currentAnim) this.anims.play(this.anims.currentAnim.key, true);
@@ -872,7 +874,7 @@ export class Zombie extends Phaser.GameObjects.Sprite {
     this.scene.time.delayedCall(140, () => this.active && !this.dead && this.restoreTint());
     fx?.squash(this, this.s, info.headshot ? 1.4 : 1, this.s * (this.spec.widthMul ?? 1));
     if (this.hasReact && !this.airborne && !this.downed) this.hitT = REACT.hit;
-    if (!this.airborne && !this.downed) this.hitLean = (info.headshot ? 12 : 7) * Math.sign(info.dirX ?? 1) * (1 - this.spec.knockbackResist * 0.5) * (this.hasReact ? 0.3 : 1);
+    if (!this.airborne && !this.downed) this.hitLean = (info.headshot ? 12 : 7) * Math.sign(info.dirX ?? 1) * (1 - this.spec.knockbackResist * 0.5) * (this.hasReact ? 0 : 1);
     return false;
   }
 

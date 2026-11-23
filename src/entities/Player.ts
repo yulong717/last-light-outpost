@@ -324,7 +324,8 @@ export class Player {
     s.y = this.footY - bob;
     s.setFlipX(this.facing < 0);
     s.setDepth(depthForY(this.footY));
-    s.angle = this.lean + this.swingLean * this.facing;
+    // 有 AI 動作影格時，姿勢全由影格表現，不再轉動整張貼圖（揮棒時整張圖歪掉很廉價）
+    s.angle = this.aiAnim ? 0 : this.lean + this.swingLean * this.facing;
     // 待機呼吸（走路時停掉）＋ 受擊／轉身擠壓
     const breathe = this.walkPhase > 0 ? 0 : Math.sin(this.breath * (Math.PI / 0.9)) * 0.015 + 0.015;
     s.setScale(this.build.w * (1 + 0.16 * this.squashAmt), this.build.h * (1 + breathe - 0.12 * this.squashAmt));
