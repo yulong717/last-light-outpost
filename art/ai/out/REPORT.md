@@ -56,6 +56,29 @@ VRAM 峰值為 `nvidia-smi` 整卡用量（含桌面）。全程沒有 OOM。
 - 疊圖：`templates_contact.png`、`overlay_check.png`。
 - 失敗：`walk_pass_a`（過渡姿勢）兩個 seed 都畫成大步，沒有收腿；之後改提示詞重做。灰色人台的近腳／遠腳不易區分，contact_a / contact_b 看起來差不多。
 
+## 第八輪（MELEE_WEAPONS）：開山刀（machete）
+
+輸出：`art/ai/out/akai_machete/`（朝右、`akai_v4/palette.png`，配色以 `akai_ai_melee.png` 為參考；`build_weapon.py` 產生，`picks.json` 可重跑）
+
+| 檔案 | 畫格 | 格數 | 來源（seed／影片格號） |
+| --- | --- | --- | --- |
+| `akai_ai_idle_machete.png` | 64×72 | 4 | idle seed 2，自動挑循環，上半身固定 |
+| `akai_ai_walk_machete.png` | 64×72 | 8 | walk seed 3，自動挑循環（週期 26 幀），上半身固定 |
+| `akai_ai_melee_machete_1.png` 斜劈 | 64×72 | 6 | seed 2：7、9、22、27、31、35 |
+| `akai_ai_melee_machete_2.png` 反手砍 | 64×72 | 6 | seed 1：4、5、11、13、28、33 |
+| `akai_ai_melee_machete_3.png` 跳劈 | **64×80，腳底第 77 列** | 6 | 512×640 重跑的 seed 3：7、11、22、27、32、36 |
+| `akai_ai_melee_machete_dash.png` 迴旋砍 | 64×72 | 6 | seed 1：6、8、9、10、18、32（第 2、3 格背對鏡頭） |
+
+另有 json、contact、`compare_machete.png`、`machete_all.gif`（36 格，3 倍、12 fps、播一次停 0.5 秒）、`meta.json`、`picks.json`。生成腳本：`tools/art/ai/machete_videos.sh`。
+
+做法同軍用刀：備戰關鍵格（H3 Image，Picture 2＝`weapon_machete_x8.png`，單手持刀舉在肩旁、左手護在前，seed 234；刀身約 16 px）→ 走路關鍵格（seed 242）→ 每個動作 4 seed 的 H3 影片 → `build_weapon.py`。
+
+注意事項：
+- **跳劈改成 64×80**：64×72 時，4 個 seed 跳起來舉刀的畫面全部超出上緣。文件只說斧和鎚的高舉格用 64×80，但跳劈也需要，所以這招改用 64×80（腳底第 77 列）重跑（備戰格上方補 8 列，影片 512×640）。即使如此，4 個 seed 裡只有 seed 3 沒被切到（H3 會把跳的高度撐滿畫面）。第 1 格是跳在空中（腳離地 4 px，保留）。這招不貼 7 號：蹲低和跳起的姿勢會讓頭落進球衣帶，第一次試時 7 號貼到了眼白上。
+- **刀光**：提示詞明寫「no slash trails, no sparks, no flashes」，H3 還是在大部分揮刀格畫出白色弧光（開山刀本身就是一大片白色刀身，弧光又連在刀上，後處理分不開）。所以三招的命中格都是「刀已經揮到位」的那一格，沒有揮到一半的中間格。
+- **迴旋砍**：背對鏡頭的兩格（影片第 9、10 格）腿部附近有少量紅色殘影；轉身時第 4 格刀下還有一小段弧光。轉到一半的其他格（第 11–15、19–27 格）不是被切到就是被大片弧光蓋住。
+- 斜劈第 3 格刀尖落到第 71 列（低於腳底線 2 px，刀砍到地面）。
+
 ## 第七輪（MELEE_WEAPONS）：軍用刀（knife）
 
 輸出：`art/ai/out/akai_knife/`（全部 64×72、朝右、腳底第 69 列、`akai_v4/palette.png`，配色以 `akai_ai_melee.png` 為參考）

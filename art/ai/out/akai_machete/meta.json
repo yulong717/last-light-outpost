@@ -1,0 +1,167 @@
+{
+ "weapon": "machete",
+ "canvas": "64x72, feet row 69, facing right",
+ "palette": "art\\ai\\out\\akai_v4\\palette.png",
+ "workflow": "art/ai/workflows/h3_video_i2v.json (512x576, 8-step turbo)",
+ "spec": "docs/ai-art/MELEE_WEAPONS.md (round 8, machete)",
+ "ready_key": "art/ai/raw/machete/machete_ready.png: H3 Image 1024x1152, Picture 1 = akai bat ready pose (feet row 69), Picture 2 = art/ai/refs/weapon_machete_x8.png; seed 234",
+ "walk_key": "art/ai/raw/machete/machete_walkkey.png: H3 Image from the ready key, long stride; seed 242",
+ "videos": "tools/art/ai/machete_videos.sh (512x576) + jump chop re-run at 512x640 from the ready key padded 8 rows on top (art/ai/raw/machete/machete_ready_80.png)",
+ "effects_note": "even with 'no slash trails, no sparks, no flashes' in the prompt, H3 drew white slash trails in most swing frames for this broad white blade; frames with trails were skipped",
+ "actions": {
+  "akai_ai_idle_machete": {
+   "seed": 2,
+   "video": "art/ai/raw/machete/idle_s2",
+   "picked": [
+    29,
+    33,
+    38,
+    43
+   ],
+   "canvas": "64x72, feet row 69",
+   "fps": 10,
+   "lock_rows": 51,
+   "first_last": "art/ai/raw/machete/machete_ready.png",
+   "foot_rows": [
+    69,
+    69,
+    69,
+    69
+   ],
+   "colours": 57
+  },
+  "akai_ai_walk_machete": {
+   "seed": 3,
+   "video": "art/ai/raw/machete/walk_s3",
+   "picked": [
+    29,
+    32,
+    35,
+    39,
+    42,
+    45,
+    49,
+    52
+   ],
+   "canvas": "64x72, feet row 69",
+   "fps": 10,
+   "lock_rows": 51,
+   "per_frame_foot": true,
+   "first_last": "art/ai/raw/machete/machete_walkkey.png",
+   "foot_rows": [
+    69,
+    69,
+    69,
+    69,
+    69,
+    69,
+    69,
+    69
+   ],
+   "colours": 59
+  },
+  "akai_ai_melee_machete_1": {
+   "seed": 2,
+   "video": "art/ai/raw/machete/m1_s2",
+   "picked": [
+    7,
+    9,
+    22,
+    27,
+    31,
+    35
+   ],
+   "canvas": "64x72, feet row 69",
+   "fps": 12,
+   "name": "斜劈",
+   "note": "swing frames 12-21 carry a white slash trail; hit frame = blade already down at the front right",
+   "foot_rows": [
+    69,
+    69,
+    69,
+    71,
+    69,
+    69
+   ],
+   "colours": 59
+  },
+  "akai_ai_melee_machete_2": {
+   "seed": 1,
+   "video": "art/ai/raw/machete/m2_s1",
+   "picked": [
+    4,
+    5,
+    11,
+    13,
+    28,
+    33
+   ],
+   "canvas": "64x72, feet row 69",
+   "fps": 12,
+   "name": "反手砍",
+   "note": "frames 6-10 white trail; frames 20-26 a second swing, unused",
+   "foot_rows": [
+    69,
+    69,
+    69,
+    69,
+    69,
+    69
+   ],
+   "colours": 62
+  },
+  "akai_ai_melee_machete_3": {
+   "seed": 3,
+   "video": "art/ai/raw/machete/m3t_s3",
+   "picked": [
+    7,
+    11,
+    22,
+    27,
+    32,
+    36
+   ],
+   "canvas": "64x80, feet row 77",
+   "fps": 12,
+   "height": 80,
+   "name": "跳劈",
+   "note": "64x80, feet row 77: at 64x72 the raised blade in the jump is cut off in every seed (and still in 3 of 4 seeds at 64x80). Frame 11 is airborne (feet 4 px above the ground, kept). Frames 17-21 slash trail and yellow sparks; stray spark pixels in frame 22 removed by keep-largest. The 7 is not pasted in this move (crouch/jump poses put the head inside the jersey band).",
+   "no_seven": true,
+   "foot_rows": [
+    77,
+    74,
+    77,
+    77,
+    77,
+    77
+   ],
+   "colours": 63
+  },
+  "akai_ai_melee_machete_dash": {
+   "seed": 1,
+   "video": "art/ai/raw/machete/dash_s1",
+   "picked": [
+    6,
+    8,
+    9,
+    10,
+    18,
+    32
+   ],
+   "canvas": "64x72, feet row 69",
+   "fps": 12,
+   "per_frame_foot": true,
+   "name": "迴旋砍",
+   "note": "frames 2-3 (video 9, 10) face away from the camera; video frames 11-15 and 19-27 are clipped at the top and/or carry large slash trails attached to the blade, unused",
+   "foot_rows": [
+    69,
+    69,
+    69,
+    69,
+    69,
+    69
+   ],
+   "colours": 65
+  }
+ }
+}

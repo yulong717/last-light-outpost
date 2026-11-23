@@ -73,7 +73,10 @@ def main():
             "workflow": "art/ai/workflows/h3_video_i2v.json (512x576, 8-step turbo)", **cfg.get("meta", {}), "actions": {}}
     strips = []
     for action, a in cfg["actions"].items():
-        vid = raw / f"{action}_s{a['seed']}"
+        vid = raw / f"{a.get('video', action)}_s{a['seed']}"
+        H = a.get("height", 72)            # 72, or 80 for raised-overhead moves (feet row 77)
+        foot = H - 3
+        ground = (foot + 1) * 8            # source bottom edge of the 512 x (H*8) video
         frames = sorted(vid.glob("*.png"))
         pick = work / action / "pick"
         if "loop" in a:
@@ -88,21 +91,22 @@ def main():
                 shutil.copy(frames[i], pick / f"{k:02d}.png")
         d = work / action
         sh(TOOLS / "pixelize.py", "downscale", *sorted(pick.glob("[0-9][0-9].png")), "--out", d / "ds", "--scale", 1.0,
-           "--height", 72, "--foot-row", 69, "--fixed-center", 256,
-           *([] if a.get("per_frame_foot") else ["--fixed-foot", 560]))
+           "--height", H, "--foot-row", foot, "--fixed-center", 256,
+           *([] if a.get("per_frame_foot") else ["--fixed-foot", ground]))
         sh(TOOLS / "pixelize.py", "apply", d / "ds", "--palette", PALETTE, "--out", d / "q", "--keep-outline",
            *(["--lock-rows", a["lock_rows"]] if a.get("lock_rows") else []))
-        sh(TOOLS / "pixelize.py", "harmonize", d / "q", "--ref", melee_ref, "--feet", 69, "--ref-feet", 69,
-           "--stripe-pattern", "10100", "--out", d / "h")
+        sh(TOOLS / "pixelize.py", "harmonize", d / "q", "--ref", melee_ref, "--feet", foot, "--ref-feet", 69,
+           "--stripe-pattern", "10100", *(["--no-seven"] if a.get("no_seven") else []), "--out", d / "h")
         sh(TOOLS / "pixelize.py", "region", d / "h", "--ref", OLDLOOK, "--keep-largest", "--out", d / "final")
         name = out_name(wid, action)
         loop = "loop" in a
         mpath = d / "meta_in.json"
         entry = {"seed": a["seed"], "video": str(vid.relative_to(ROOT)).replace("\\", "/"), "picked": picked,
-                 **{k: v for k, v in a.items() if k not in ("seed", "frames", "loop")}}
+                 "canvas": f"64x{H}, feet row {foot}",
+                 **{k: v for k, v in a.items() if k not in ("seed", "frames", "loop", "video")}}
         mpath.write_text(json.dumps(entry, ensure_ascii=False), encoding="utf-8")
         res = json.loads(sh(TOOLS / "build_sheet.py", d / "final", "--name", name, "--fps", a.get("fps", 12),
-                            *(["--loop"] if loop else []), "--foot-row", 69, "--out", out, "--meta", mpath))
+                            *(["--loop"] if loop else []), "--foot-row", foot, "--out", out, "--meta", mpath))
         (out / f"{name}.gif").unlink(missing_ok=True)  # one combined GIF instead (below)
         meta["actions"][name] = {**entry, "foot_rows": res["foot_rows"], "colours": res["colours"]}
         strips.append((name, Image.open(out / f"{name}.png").convert("RGBA")))
@@ -113,28 +117,30 @@ def main():
 
     # combined GIF: every action once, 3x, 12 fps, hold the last frame 0.5 s
     z, bgc = 3, (58, 62, 74, 255)
+    HM = max(s.height for _, s in strips)
     gif = []
     for _, s in strips:
         for i in range(s.width // 64):
-            bg = Image.new("RGBA", (64, 72), bgc)
-            bg.alpha_composite(s.crop((i * 64, 0, i * 64 + 64, 72)))
-            gif.append(bg.convert("RGB").resize((64 * z, 72 * z), Image.NEAREST))
+            bg = Image.new("RGBA", (64, HM), bgc)
+            bg.alpha_composite(s.crop((i * 64, 0, i * 64 + 64, s.height)), (0, HM - s.height))
+            gif.append(bg.convert("RGB").resize((64 * z, HM * z), Image.NEAREST))
     dur = [round(1000 / 12)] * (len(gif) - 1) + [round(1000 / 12) + 500]
     gif[0].save(out / f"{wid}_all.gif", save_all=True, append_images=gif[1:], duration=dur, disposal=1)
 
     # side-by-side overview
     z = 3
     W = 90 + 64 * z * max(s.width // 64 for _, s in strips)
-    sheet = Image.new("RGB", (W, (72 * z + 4) * len(strips)), (20, 20, 20))
+    sheet = Image.new("RGB", (W, (HM * z + 4) * len(strips)), (20, 20, 20))
     dr = ImageDraw.Draw(sheet)
     for r, (name, s) in enumerate(strips):
-        dr.text((4, r * (72 * z + 4) + 4), name.replace("akai_ai_", ""), fill="white")
+        dr.text((4, r * (HM * z + 4) + 4), name.replace("akai_ai_", ""), fill="white")
+        dr.text((4, r * (HM * z + 4) + 18), f"64x{s.height}", fill=(160, 160, 160))
         for i in range(s.width // 64):
-            bg = Image.new("RGBA", (64, 72), bgc)
-            bg.alpha_composite(s.crop((i * 64, 0, i * 64 + 64, 72)))
-            tile = bg.convert("RGB").resize((64 * z, 72 * z), Image.NEAREST)
-            ImageDraw.Draw(tile).line([(0, 70 * z - 1), (64 * z, 70 * z - 1)], fill=(0, 255, 0))
-            sheet.paste(tile, (90 + i * 64 * z, r * (72 * z + 4)))
+            bg = Image.new("RGBA", (64, s.height), bgc)
+            bg.alpha_composite(s.crop((i * 64, 0, i * 64 + 64, s.height)))
+            tile = bg.convert("RGB").resize((64 * z, s.height * z), Image.NEAREST)
+            ImageDraw.Draw(tile).line([(0, (s.height - 2) * z - 1), (64 * z, (s.height - 2) * z - 1)], fill=(0, 255, 0))
+            sheet.paste(tile, (90 + i * 64 * z, r * (HM * z + 4) + (HM - s.height) * z))
     sheet.save(out / f"compare_{wid}.png")
     print(f"{len(gif)} frames in {wid}_all.gif")
 
