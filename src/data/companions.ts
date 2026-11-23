@@ -106,11 +106,18 @@ export interface CrewMember {
   weaponId?: string;
   /** 探索中倒下：還要休養幾天（> 0 時不能出戰、不能探索） */
   injuredDays?: number;
+  /** 玩家在名冊裡設成「待命」：夜晚防守不上場 */
+  standby?: boolean;
 }
 
 /** 這位隊員現在能不能出戰／探索 */
 export function crewReady(m: CrewMember): boolean {
   return !(m.injuredDays && m.injuredDays > 0);
+}
+
+/** 今晚會上場防守的隊員：沒負傷、沒設成待命，最多 MAX_DEPLOYED 位 */
+export function deployedCrew(crew: CrewMember[]): CrewMember[] {
+  return crew.filter((m) => crewReady(m) && !m.standby).slice(0, MAX_DEPLOYED);
 }
 
 /** 依職業與種子產生一位完整的隊員 */

@@ -190,8 +190,12 @@ export class ArmoryScene extends Phaser.Scene {
       return;
     }
     const inLoadout = st.armory.loadout.includes(d.id);
-    const canAdd = st.armory.loadout.length < MAX_GUNS;
-    const label = inLoadout ? (st.armory.loadout.length > 1 ? '卸下' : '至少要帶一把槍') : canAdd ? '帶上場' : `最多帶 ${MAX_GUNS} 把，先卸下一把`;
+    const crewHolder = GameState.crewHolder(d.id);
+    const canAdd = st.armory.loadout.length < MAX_GUNS && !crewHolder;
+    const label = inLoadout
+      ? st.armory.loadout.length > 1 ? '卸下' : '至少要帶一把槍'
+      : crewHolder ? `${crewHolder.name} 拿著，先到名冊收回`
+      : canAdd ? '帶上場' : `最多帶 ${MAX_GUNS} 把，先卸下一把`;
     this.button(x, y, w, 24, label, inLoadout ? st.armory.loadout.length > 1 : canAdd, () => {
       GameState.toggleLoadout(d.id);
       this.changed();
@@ -256,7 +260,8 @@ export class ArmoryScene extends Phaser.Scene {
       return;
     }
     const eq = st.armory.melee === m.id;
-    this.button(x, y, w, 24, eq ? '裝備中' : '裝備', !eq, () => {
+    const holder = GameState.crewHolder(m.id);
+    this.button(x, y, w, 24, eq ? '裝備中' : holder ? `${holder.name} 拿著，先到名冊收回` : '裝備', !eq && !holder, () => {
       GameState.equipMelee(m.id);
       this.changed();
     });

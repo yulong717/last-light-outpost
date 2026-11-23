@@ -171,10 +171,9 @@ export class UIScene extends Phaser.Scene {
     g.fillStyle(0xffffff, a * 0.8).fillCircle(kx, ky, 10);
   }
 
-  /** 第一次收到 HUD 資料時才建夥伴名單（人數依存檔而定）；沒有夥伴就不顯示 */
-  private buildCrew(count: number): void {
-    const defense = this.scene.get('Defense');
-    for (let i = 0; i < count; i++) {
+  /** 補上夥伴名單的列（夜裡救到倖存者時名單會變長） */
+  private addCrewRows(count: number): void {
+    for (let i = this.crewRows.length; i < count; i++) {
       const y = 74 + i * 14;
       const mark = this.add.rectangle(8, y + 4, 5, 5, 0xffffff).setOrigin(0).setStrokeStyle(1, 0x000000);
       const label = pixelText(this, 16, y, '', 8);
@@ -184,6 +183,12 @@ export class UIScene extends Phaser.Scene {
       const status = pixelText(this, 124, y, '', 8, '#b0bec5');
       this.crewRows.push({ mark, label, bar, status });
     }
+  }
+
+  /** 第一次收到 HUD 資料時才建夥伴名單（人數依存檔而定）；沒有夥伴就不顯示 */
+  private buildCrew(count: number): void {
+    const defense = this.scene.get('Defense');
+    this.addCrewRows(count);
     // 指令按鈕：切換固守／跟隨（鍵盤 F）
     const x = GAME_WIDTH - 114;
     const y = GAME_HEIGHT - 38;
@@ -207,6 +212,7 @@ export class UIScene extends Phaser.Scene {
   private updateCrew(h: HudData): void {
     if (h.companions.length === 0) return;
     if (this.crewRows.length === 0) this.buildCrew(h.companions.length);
+    else if (h.companions.length > this.crewRows.length) this.addCrewRows(h.companions.length);
     h.companions.forEach((c, i) => {
       const row = this.crewRows[i];
       if (!row) return;

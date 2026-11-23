@@ -1,4 +1,4 @@
-import { makeCrewMember, upgradeCrewMember, type CompanionRole, type CrewMember } from '../data/companions';
+import { MAX_DEPLOYED, crewReady, deployedCrew, makeCrewMember, upgradeCrewMember, type CompanionRole, type CrewMember } from '../data/companions';
 import { randomSeed } from '../utils/rng';
 import { BACKGROUND_BY_ID, canWield } from '../data/crewBody';
 import { BARRICADE_LEVELS, ECONOMY, type BuildingKind } from '../data/buildings';
@@ -222,6 +222,8 @@ class GameStateStore {
     const id = `crew-${Date.now().toString(36)}-${Math.floor(Math.random() * 1e4)}`;
     // 長相、屬性、特質都由種子隨機產生
     const member = makeCrewMember(id, role, seed, crew.map((c) => c.name), name);
+    // 出戰名額滿了：新人先待命，到名冊裡再換上場
+    if (deployedCrew(crew).length >= MAX_DEPLOYED) member.standby = true;
     crew.push(member);
     // 有些倖存者帶著自己的武器加入（出身決定是什麼）；已經有同型號就不重複
     const kit = BACKGROUND_BY_ID[member.background]?.kit;
@@ -241,6 +243,35 @@ class GameStateStore {
     d.exploredToday = [];
     d.intel = rollIntel(d.day, d.story.zones);
     for (const c of d.crew) if (c.injuredDays) c.injuredDays = Math.max(0, c.injuredDays - 1);
+    this.normalizeDeploy();
+  }
+
+  // ── 出戰名單 ──────────────────────────────────────
+
+  /** 沒設待命的人超過名額時（養好傷、舊存檔），多出來的改成待命，名冊顯示和實際上場一致 */
+  normalizeDeploy(): void {
+    let n = 0;
+    for (const c of this.data.crew) {
+      if (!crewReady(c) || c.standby) continue;
+      if (++n > MAX_DEPLOYED) c.standby = true;
+    }
+  }
+
+  /** 名冊切換出戰／待命 */
+  setDeployed(crewId: string, on: boolean): { ok: boolean; reason?: string } {
+    const m = this.data.crew.find((c) => c.id === crewId);
+    if (!m) return { ok: false, reason: '找不到隊員' };
+    if (!on) {
+      m.standby = true;
+      return { ok: true };
+    }
+    if (!crewReady(m)) return { ok: false, reason: `${m.name} 還在養傷` };
+    if (deployedCrew(this.data.crew).length >= MAX_DEPLOYED) return { ok: false, reason: `出戰最多 ${MAX_DEPLOYED} 人，先讓一位待命` };
+    m.standby = false;
+    // 排到已出戰的人後面，確保在名額內
+    this.data.crew = [...this.data.crew.filter((c) => c !== m), m];
+    this.normalizeDeploy();
+    return { ok: true };
   }
 
   /** 把一份戰利品收進據點：彈藥、用品有上限，武器重複就換成廢料，倖存者加入隊伍 */
@@ -313,23 +344,24 @@ class GameStateStore {
     return n;
   }
 
-  /** 槍帶上／卸下（至少留一把）。隊員手上的槍帶上時，會從隊員那裡收回 */
+  /** 槍帶上／卸下（至少留一把）。已經配給隊員的槍不能直接拿走，要先到名冊收回 */
   toggleLoadout(id: string): void {
     const a = this.data.armory;
     if (!getFirearm(id) || !this.owns(id)) return;
     if (a.loadout.includes(id)) {
       if (a.loadout.length > 1) a.loadout = a.loadout.filter((g) => g !== id);
-    } else if (a.loadout.length < MAX_GUNS) {
-      this.reclaimFromCrew(id);
+    } else if (a.loadout.length < MAX_GUNS && !this.crewHolder(id)) {
       a.loadout.push(id);
     }
   }
 
   equipMelee(id: string): void {
-    if (getMelee(id) && this.owns(id)) {
-      this.reclaimFromCrew(id);
-      this.data.armory.melee = id;
-    }
+    if (getMelee(id) && this.owns(id) && !this.crewHolder(id)) this.data.armory.melee = id;
+  }
+
+  /** 拿著這把武器的隊員（主角或沒人拿就是 undefined） */
+  crewHolder(id: string): CrewMember | undefined {
+    return this.data.crew.find((c) => c.weaponId === id);
   }
 
   // ── 隊員配槍：一把武器同時只在一個人手上 ──────────────
@@ -341,9 +373,6 @@ class GameStateStore {
     return this.data.crew.find((c) => c.weaponId === id) ?? null;
   }
 
-  private reclaimFromCrew(id: string): void {
-    for (const c of this.data.crew) if (c.weaponId === id) delete c.weaponId;
-  }
 
   /**
    * 把武器配給隊員（null = 收回，改用隨身手槍）。
@@ -359,26 +388,22 @@ class GameStateStore {
     if (!this.owns(id)) return { ok: false, reason: '還沒有這把武器' };
     const can = canWield(m, id);
     if (!can.ok) return can;
-    const a = this.data.armory;
-    if (a.loadout.includes(id)) {
-      if (a.loadout.length <= 1) return { ok: false, reason: '主角至少要留一把槍' };
-      a.loadout = a.loadout.filter((g) => g !== id);
-    }
-    if (a.melee === id) {
-      const other = a.owned.find((w) => w !== id && getMelee(w) && this.weaponHolder(w) === null);
-      if (!other) return { ok: false, reason: '主角至少要留一把近戰' };
-      a.melee = other;
-    }
-    this.reclaimFromCrew(id);
+    // 一把武器同時只在一個人手上：別人拿著的不能直接搶過來
+    const holder = this.weaponHolder(id);
+    if (holder === 'player') return { ok: false, reason: '主角正帶著這把，先到軍械庫卸下' };
+    if (holder && holder !== m) return { ok: false, reason: `已經配給 ${holder.name}，先收回` };
     m.weaponId = id;
     return { ok: true };
   }
 
-  /** 這位隊員能拿的武器（擁有、會用）；含主角或別人手上的（配發時會換手） */
+  /** 這位隊員能拿的武器：擁有、會用、而且沒在別人（主角或其他隊員）手上 */
   wieldableFor(crewId: string): string[] {
     const m = this.data.crew.find((c) => c.id === crewId);
     if (!m) return [];
-    return this.data.armory.owned.filter((id) => canWield(m, id).ok);
+    return this.data.armory.owned.filter((id) => {
+      const holder = this.weaponHolder(id);
+      return canWield(m, id).ok && (holder === null || holder === m);
+    });
   }
 
   /** 夥伴永久陣亡：從隊伍移除（手上的武器由大家撿回軍械庫） */
@@ -421,6 +446,7 @@ class GameStateStore {
       parsed.dayTime ??= EXPLORE_TIME.slotsPerDay;
       parsed.exploredToday ??= [];
       this.data = parsed;
+      this.normalizeDeploy();
       return true;
     } catch {
       return false;

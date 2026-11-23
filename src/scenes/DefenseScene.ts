@@ -37,7 +37,7 @@ import { CompanionSystem, type CompanionHud, type CompanionOrder } from '../syst
 import type { BuildUIData } from './BuildUIScene';
 import type { GameOverData } from './GameOverScene';
 import { EXPLORE_TIME, getZone } from '../data/explore';
-import { crewReady } from '../data/companions';
+import { deployedCrew } from '../data/companions';
 import { HeroSystem, type HeroHud } from '../systems/HeroSystem';
 import { LUCK } from '../data/heroes';
 import { PROLOGUES } from '../data/story';
@@ -49,6 +49,8 @@ import { getFirearm } from '../data/weapons';
 import { PropSystem } from '../scenery/PropSystem';
 import { outpostScenery } from '../scenery/locations';
 import type { SceneryResult } from '../scenery/SceneryBuilder';
+import { ZombieDrops } from '../systems/ZombieDrops';
+import { RescueEvent } from '../systems/RescueEvent';
 
 /** 從結算畫面進來時帶的資料：newDay 代表撐過一夜、進入新的一天 */
 export interface DefenseSceneData {
@@ -125,6 +127,10 @@ export class DefenseScene extends Phaser.Scene {
   private scenery!: SceneryResult;
   /** 戰場上的油桶、車、木箱、路燈 */
   private props!: PropSystem;
+  /** 職業霧屍的掉落物（src/systems/ZombieDrops.ts） */
+  private drops!: ZombieDrops;
+  /** 夜裡隨機的拯救倖存者事件（入夜才建立） */
+  private rescue?: RescueEvent;
 
   constructor() {
     super('Defense');
@@ -132,6 +138,7 @@ export class DefenseScene extends Phaser.Scene {
 
   create(data: DefenseSceneData = {}): void {
     this.zombies = [];
+    this.rescue = undefined;
     this.kills = 0;
     this.headshots = 0;
     this.ended = false;
@@ -164,6 +171,11 @@ export class DefenseScene extends Phaser.Scene {
       rollLoot: () => this.crateLoot(),
     }, this.scenery);
 
+    this.drops = new ZombieDrops(this, {
+      heal: (a) => this.player.heal(a),
+      repair: (a) => (this.barricade.alive ? this.barricade.repair(a) : 0),
+    });
+
     // 戰場比畫面寬：鏡頭跟著主角水平捲動，中間留一段不跟的死區
     const cam = this.cameras.main;
     cam.startFollow(this.player.sprite, true, 0.12, 0);
@@ -186,7 +198,7 @@ export class DefenseScene extends Phaser.Scene {
       barricadeX: BARRICADE_X,
     });
     // 夜晚強度依可出戰的隊員人數縮放（單人開局比較溫和）
-    const night = buildNight(GameState.data.day, Math.random, GameState.data.crew.filter(crewReady).length);
+    const night = buildNight(GameState.data.day, Math.random, deployedCrew(GameState.data.crew).length);
     prewarmLooks(this, night.flatMap((w) => w.groups.map((g) => g.enemy)));
     this.spawner = new WaveSpawner(this, night, (id) => this.spawnZombie(id));
 
@@ -293,6 +305,20 @@ export class DefenseScene extends Phaser.Scene {
     this.crosshair = new Crosshair(this);
     this.spawner.start();
     this.companions.active = true;
+    // 拯救倖存者：今晚會不會發生、什麼時候發生，建立時就擲好
+    this.rescue = new RescueEvent(this, {
+      blockX: () => (this.barricade.alive ? this.barricade.frontX : BASE_X),
+      safeX: () => (this.barricade.alive ? BARRICADE_X - 22 : BASE_X + 20),
+      zombies: () => this.zombies,
+      addZombie: (z) => this.zombies.push(z),
+      canStart: () => !this.spawner.done && !this.ended,
+      onJoin: (m, x, y) => {
+        if (this.companions.join(m, x, y)) m.standby = false;
+        else this.fx.popText(x, y - 54, '出戰人數已滿，先待命', '#b0bec5');
+      },
+    });
+    // 開發測試：網址加 ?rescue 會在入夜 3 秒後觸發
+    if (new URLSearchParams(location.search).has('rescue')) this.rescue.forceSoon(3);
     this.scene.launch('UI');
     // 輔助用品：G 手榴彈、H 醫療包（觸控在 UIScene 的按鈕）
     this.input.keyboard?.on('keydown-G', this.nightGrenade, this);
@@ -415,7 +441,7 @@ export class DefenseScene extends Phaser.Scene {
       player: { x: this.player.footX, y: this.player.footY, alive: this.player.alive },
       // 受擊回饋（震動、紅邊、卡肉）在 wireFeedback() 裡訂閱 player:hurt
       hitPlayer: (d, fromX, fromY, src) => (this.heroSys ? this.heroSys.hitPlayer(d, fromX, fromY, src) : this.player.takeDamage(d, fromX, fromY)),
-      others: [...this.companions.targets(), ...this.props.lureTargets()],
+      others: [...this.companions.targets(), ...this.props.lureTargets(), ...(this.rescue?.targets() ?? [])],
       zombies: this.zombies,
     };
   }
@@ -504,7 +530,9 @@ export class DefenseScene extends Phaser.Scene {
     for (const z of this.zombies) if (!z.dead && z.spec.body !== 'crow') this.props.collide(z);
     // 陷阱與砲塔
     this.kills += this.outpost.update(dt, this.zombies);
+    this.rescue?.update(dt);
     this.collectScrap();
+    this.drops.update(dt, p.footX, p.footY, p.alive);
     this.zombies = this.zombies.filter((z) => z.active && !z.dead);
     for (let i = 0; i < this.zombies.length; i++) {
       for (let j = i + 1; j < this.zombies.length; j++) Zombie.separate(this.zombies[i], this.zombies[j]);
@@ -516,7 +544,7 @@ export class DefenseScene extends Phaser.Scene {
     // 勝負
     if (GameState.data.baseHp <= 0) this.finish(false, 'base');
     else if (!this.player.alive) this.finish(false, 'player');
-    else if (this.spawner.done && this.zombies.length === 0) this.finish(true);
+    else if (this.spawner.done && this.zombies.length === 0 && !this.rescue?.busy) this.finish(true);
   }
 
   /** 這一幀倒下的霧屍掉落廢料（不論是誰打死的），在屍體上方跳字 */
@@ -529,6 +557,8 @@ export class DefenseScene extends Phaser.Scene {
       this.scrapEarned += n;
       this.fx.popText(z.footX, z.footY - 56 * (z.def.scale ?? 1), `+${n}`, '#f5d76e');
     }
+    // 職業霧屍有機率掉出生前的裝備（警察掉手槍彈、士兵掉步槍彈或手榴彈…）
+    for (const z of this.zombies) if (z.dead) this.drops.onZombieDown(z);
   }
 
   /** 主角的武器姿勢：從肩膀指向瞄準點，角度限制在面向的前方 ±70° */
@@ -652,6 +682,8 @@ export class DefenseScene extends Phaser.Scene {
     this.weapons?.unloadAll();
     GameEvents.of(this).emit('game:over', { survived });
     if (survived) {
+      // 地上還沒撿的掉落物：天亮後收回據點
+      this.drops.collectAll(this.player.footX, this.player.footY);
       GameState.data.scrap += ECONOMY.nightBonus;
       this.scrapEarned += ECONOMY.nightBonus;
       // 拾荒好手：多帶回一點廢料
