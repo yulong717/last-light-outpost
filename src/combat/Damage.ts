@@ -38,6 +38,10 @@ export interface DamageInfo {
   dirX: number;
   source: DamageSource;
   weaponId?: string;
+  /** 打中的高度（世界 y）：決定斷手還是斷腳；不填就隨機 */
+  hitY?: number;
+  /** 重擊（近戰收尾、衝刺打、處決）：斷肢機率提高、擊殺時可能炸頭 */
+  heavy?: boolean;
 }
 
 /** 霧屍個體的護甲（0..1 = 減傷比例） */

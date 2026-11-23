@@ -393,6 +393,7 @@ export class WeaponSystem {
         dirX,
         source: 'player',
         weaponId: def.id,
+        hitY: h.y,
       };
       if (head) result.headshots++;
       result.hits++;

@@ -35,6 +35,8 @@ export class BootScene extends Phaser.Scene {
     this.load.spritesheet('akai_ai_idle', 'assets/sprites/akai_ai_idle.png', { frameWidth: 64, frameHeight: 64 });
     this.load.spritesheet('akai_ai_walk', 'assets/sprites/akai_ai_walk.png', { frameWidth: 64, frameHeight: 64 });
     this.load.spritesheet('akai_ai_melee', 'assets/sprites/akai_ai_melee.png', { frameWidth: 64, frameHeight: 72 });
+    this.load.spritesheet('akai_ai_melee2', 'assets/sprites/akai_ai_melee2.png', { frameWidth: 64, frameHeight: 72 });
+    this.load.spritesheet('akai_ai_melee3', 'assets/sprites/akai_ai_melee3.png', { frameWidth: 64, frameHeight: 72 });
     this.load.spritesheet('akai_ai_idle_bat', 'assets/sprites/akai_ai_idle_bat.png', { frameWidth: 64, frameHeight: 72 });
     this.load.spritesheet('akai_ai_walk_bat', 'assets/sprites/akai_ai_walk_bat.png', { frameWidth: 64, frameHeight: 72 });
     this.load.spritesheet('player_reload', 'assets/sprites/player_reload.png', { frameWidth: 64, frameHeight: 64 });

@@ -769,8 +769,7 @@ export class DefenseScene extends Phaser.Scene {
   /** 開槍回饋：鏡頭後頓、震動、槍口閃光照亮、拋殼、槍口煙、後座力 */
   private playShotFeedback(x: number, y: number, angle: number): void {
     const def: FirearmDef = this.weapons.active.def;
-    this.camFeel.kick(angle, def.cameraKick);
-    this.camFeel.addTrauma(def.trauma);
+    // 開槍不晃鏡頭（全畫面晃動刺眼又暈）；後座力表現在槍和人身上
     this.crosshair.fired();
     this.fx.muzzleLight(x, y, def.pellets > 1 ? 1.3 : 1);
     if (def.selfKnockback > 0) this.player.push(-Math.cos(angle) * def.selfKnockback);

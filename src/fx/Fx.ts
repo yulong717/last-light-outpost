@@ -36,6 +36,13 @@ export interface FallOptions {
   deathAnim?: string;
   /** 一律播倒地動畫、不用「轉 90 度」（動物的身體是橫的，轉了會很怪） */
   forceAnim?: boolean;
+  /** 爆頭：頭整個炸開（碎片取自這張碎塊貼圖的 h0..h5），不是整顆飛出去 */
+  explode?: { parts: string | null };
+  /** 已經趴在地上（斷腳爬行）：不再倒下，原地癱平 */
+  flat?: { neckX: number };
+  /** 頭的世界座標（爆頭碎片從這裡噴出） */
+  headX?: number;
+  headY?: number;
 }
 
 const GRAVITY = 520;
@@ -136,7 +143,37 @@ export class Fx {
     if (sprite.isTinted) corpse.setTint(sprite.tintTopLeft);
     const s = sprite.scaleY;
 
-    if (opt.headshot && opt.headFrame && opt.neckRow) {
+    if (opt.flat) {
+      if (opt.explode) {
+        // 裁切以「畫面上」的左右為準（Phaser 會把翻轉算進去）：朝左時頭在左邊，留右邊
+        const fw = corpse.frame.width;
+        corpse.setCrop(sprite.flipX ? fw - opt.flat.neckX : 0, 0, opt.flat.neckX, corpse.frame.height);
+        this.headBurst(opt.headX ?? sprite.x, opt.headY ?? sprite.y - 14 * s, opt.dir, sprite.y, opt.explode.parts, s, sprite.isTinted ? sprite.tintTopLeft : undefined);
+      }
+      sc.tweens.add({
+        targets: corpse,
+        x: corpse.x + opt.dir * Phaser.Math.Between(2, 5),
+        duration: 260,
+        ease: 'Quad.easeOut',
+        onComplete: () => {
+          this.dust(corpse.x, sprite.y, 4);
+          this.stain(corpse.x, sprite.y, 2);
+          corpse.setTint(0x777777);
+          sc.tweens.add({ targets: corpse, alpha: 0, delay: CORPSE_STAY, duration: 1200, onComplete: () => this.dropCorpse(corpse) });
+        },
+      });
+      this.corpses.push(corpse);
+      if (this.corpses.length > MAX_CORPSES) this.dropCorpse(this.corpses[0]);
+      return;
+    }
+
+    if (opt.headshot && opt.explode && opt.neckRow) {
+      // 頭整個炸開：屍體只留脖子以下，頭化成碎片和血霧
+      corpse.setCrop(0, opt.neckRow, corpse.frame.width, corpse.frame.height - opt.neckRow);
+      const headY = sprite.y - (sprite.frame.height * sprite.originY - opt.neckRow / 2) * s;
+      const hp = opt.headX ?? sprite.x;
+      this.headBurst(hp, headY, opt.dir, sprite.y, opt.explode.parts, s, sprite.isTinted ? sprite.tintTopLeft : undefined);
+    } else if (opt.headshot && opt.headFrame && opt.neckRow) {
       corpse.setCrop(0, opt.neckRow, corpse.frame.width, corpse.frame.height - opt.neckRow);
       const headY = sprite.y - (sprite.frame.height * sprite.originY - opt.neckRow / 2) * s;
       const head = this.spawn(sprite.texture.key, sprite.x, headY, {
@@ -190,6 +227,87 @@ export class Fx {
     });
     this.corpses.push(corpse);
     if (this.corpses.length > MAX_CORPSES) this.dropCorpse(this.corpses[0]);
+  }
+
+  /**
+   * 頭整個炸開：一團血霧、頭的碎片（碎塊貼圖的 h0..h5）往四周噴、一圈碎肉和大量血。
+   * parts 沒有（不能切碎塊的貼圖）時只有血霧和碎肉。
+   */
+  headBurst(x: number, y: number, dir: number, floorY: number, parts: string | null, scale = 1, tint?: number): void {
+    const sc = this.scene;
+    // 血霧：一團暗紅一下子膨脹、淡掉（外圈暗、內圈亮一點）
+    for (let i = 0; i < 3; i++) {
+      const p = sc.add
+        .circle(x + dir * i * 3, y + Phaser.Math.Between(-2, 2), 4 - i, [0x5e0b0b, 0x8a1010, 0xb02020][i], 0.75)
+        .setDepth(DEPTH_BURST + i * 0.01);
+      sc.tweens.add({
+        targets: p,
+        scale: 3.2 - i * 0.6,
+        alpha: 0,
+        x: p.x + dir * Phaser.Math.Between(3, 9),
+        duration: 260 + i * 60,
+        ease: 'Quad.easeOut',
+        onComplete: () => p.destroy(),
+      });
+    }
+    // 頭的碎片：大多往子彈方向飛，一些往回噴
+    if (parts && sc.textures.exists(parts)) {
+      for (let i = 0; i < 6; i++) {
+        const name = `h${i}`;
+        if (!sc.textures.get(parts).has(name)) continue;
+        const back = Math.random() < 0.25 ? -1 : 1;
+        const d = this.spawn(parts, x + Phaser.Math.Between(-3, 3), y + Phaser.Math.Between(-3, 3), {
+          frame: name,
+          vx: dir * back * Phaser.Math.Between(50, 170),
+          vy: -Phaser.Math.Between(70, 220),
+          spin: Phaser.Math.Between(-900, 900),
+          floorY: floorY + Phaser.Math.Between(-3, 3),
+          bounce: 0.25,
+          life: 4,
+          onLand: 'rest',
+          scale,
+          tint,
+        });
+        d?.img.setDepth(56);
+      }
+    }
+    // 碎肉
+    for (let i = 0; i < 10; i++) {
+      this.spawn(FX.px2, x, y, {
+        vx: dir * Phaser.Math.Between(-60, 180),
+        vy: -Phaser.Math.Between(40, 200),
+        floorY: floorY + Phaser.Math.Between(-3, 3),
+        spin: 0,
+        bounce: 0.2,
+        life: 3,
+        onLand: 'rest',
+        tint: Phaser.Utils.Array.GetRandom([0x5e0b0b, 0x7a1212, 0xb05a5a, 0x3a0606]),
+      });
+    }
+    this.blood(x, y, dir, floorY, 26, 1.5);
+    this.blood(x, y, -dir, floorY, 8, 0.7);
+    this.stain(x + dir * 10, floorY, 1.6);
+  }
+
+  /** 斷肢：一截手或腳旋轉著飛出去、落地躺著，斷口噴血 */
+  limb(parts: string, frame: string, x: number, y: number, dir: number, floorY: number, o: { scale?: number; tint?: number; flipX?: boolean } = {}): void {
+    if (!this.scene.textures.exists(parts) || !this.scene.textures.get(parts).has(frame)) return;
+    const d = this.spawn(parts, x, y, {
+      frame,
+      vx: dir * Phaser.Math.Between(50, 120),
+      vy: -Phaser.Math.Between(90, 170),
+      spin: dir * Phaser.Math.Between(400, 900),
+      floorY: floorY + Phaser.Math.Between(-2, 4),
+      bounce: 0.3,
+      life: 6,
+      onLand: 'rest',
+      scale: o.scale,
+      tint: o.tint,
+      flipX: o.flipX,
+    });
+    d?.img.setDepth(56);
+    this.blood(x, y, dir, floorY, 16, 1.1);
+    this.blood(x, y, -dir, floorY, 5, 0.6);
   }
 
   private dropCorpse(c: Phaser.GameObjects.Sprite): void {
