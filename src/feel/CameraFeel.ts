@@ -19,6 +19,11 @@ export class CameraFeel {
   private t = Math.random() * 100;
   private offX = 0;
   private offY = 0;
+  private zoomK = 1;
+  private zoomUntil = 0;
+  private zoomMs = 1;
+  private zoomPeak = 1;
+  private scene: Phaser.Scene;
 
   static attach(scene: Phaser.Scene): CameraFeel {
     const feel = new CameraFeel(scene);
@@ -31,10 +36,20 @@ export class CameraFeel {
   }
 
   private constructor(scene: Phaser.Scene) {
+    this.scene = scene;
     const cam = scene.cameras.main;
     const original = cam.preRender.bind(cam);
     cam.preRender = () => {
       original();
+      const m = (cam as unknown as { matrix: Phaser.GameObjects.Components.TransformMatrix }).matrix;
+      if (this.zoomK !== 1) {
+        // 以畫面中心放大（重擊時鏡頭往前衝一下）
+        const ox = cam.width * cam.originX;
+        const oy = cam.height * cam.originY;
+        m.translate(ox, oy);
+        m.scale(this.zoomK, this.zoomK);
+        m.translate(-ox, -oy);
+      }
       // matrix 沒有寫在型別定義裡，但內建 shake 也是這樣疊位移
       if (this.offX !== 0 || this.offY !== 0) (cam as unknown as { matrix: Phaser.GameObjects.Components.TransformMatrix }).matrix.translate(this.offX, this.offY);
     };
@@ -57,7 +72,16 @@ export class CameraFeel {
     this.kickY -= Math.sin(angle) * px * 0.5;
   }
 
+  /** 重擊推鏡：瞬間放大到 peak，ms 毫秒內彈回（真實時間，卡肉時也在動） */
+  punch(peak: number, ms: number): void {
+    this.zoomPeak = Math.max(peak, this.zoomK);
+    this.zoomMs = ms;
+    this.zoomUntil = this.scene.game.loop.time + ms;
+  }
+
   private update(_t: number, deltaMs: number): void {
+    const left = this.zoomUntil - this.scene.game.loop.time;
+    this.zoomK = left > 0 ? 1 + (this.zoomPeak - 1) * (left / this.zoomMs) : 1;
     const dt = Math.min(deltaMs / 1000, 0.05);
     const c = FEEL.camera;
     this.t += dt;

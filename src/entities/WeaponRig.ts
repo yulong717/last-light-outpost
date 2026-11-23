@@ -200,6 +200,9 @@ export class WeaponRig {
     this.melee = p;
   }
 
+  /** 角色影格自己畫了手與武器（AI 揮擊影格）時，WeaponRig 整個不畫 */
+  bodyDrawsArms = false;
+
   // ── 每幀 ─────────────────────────────────────────────
 
   update(dt: number, pose: RigPose): void {
@@ -224,6 +227,11 @@ export class WeaponRig {
     const s2x = pose.footX - 1 * flip * s;
     const s2y = pose.footY - 34 * s - pose.bob;
 
+    if (this.bodyDrawsArms) {
+      this.meleeImg?.setVisible(false);
+      this.parts.forEach((p) => p.setVisible(false));
+      return;
+    }
     if (this.melee) {
       this.drawMelee(pose, sx, sy, s2x, s2y, s, flip);
       return;
