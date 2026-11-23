@@ -27,6 +27,19 @@
 所有特效貼圖都在 `src/fx/FxTextures.ts` 用程式畫，沒有額外美術檔。
 碎片和血跡都以「被打中那隻的腳底 y」當地面，所以改成上下移動的多路線後不用改。
 
+## 視覺優化（主角、插圖、地圖、槍械、夜色）
+
+| 項目 | 做法 | 程式位置 |
+| --- | --- | --- |
+| 三位主角各自的形象 | 用隊員底圖當身體、固定外觀，再加主角專屬細節（阿凱：白色條紋棒球衣＋背號 7＋深藍球帽；馬克：迷彩、戰術背心、夜視鏡座、天線、臂章；好運姐：酒紅長髮、豹紋外套、金耳環項鍊、紅唇）。`paintCrewSheet` 多了 `decorate`／`extraHair` 選項 | `src/art/HeroArt.ts` |
+| 章節插圖 | 10 張 400×120 程式像素畫（學校、鬧區、夜市、透天厝、超市、醫院、警局、檢查站、加油站、據點），劇情卡上方顯示，序章會站著選的主角 | `src/art/IllustrationArt.ts`、`StoryScene` |
+| 主選單 | 320×180 據點夜景放大 2 倍當背景，三位主角站在牆前 | `ensureMenuBackdrop()`、`MenuScene` |
+| 城市地圖 | 俯視的像素街區（屋頂、冷氣、公園、停車場、河與橋、火光、右上濃霧），路線有外框與虛線，每區有 12×12 小圖示 | `src/art/MapArt.ts`、`ExploreMapScene` |
+| 槍械與軍械庫 | 每個部件自動上緣亮、下緣暗，金屬上緣點反光。軍械庫依用途分組（保命副手、近身清場、中距主力、遠距貫穿、壓制屍潮；近戰：快速單殺、控場擊飛、破甲處決），右側只放大圖、一句用途、星等與特性標籤 | `WeaponArt.ts` 的 `paint()`、`ArmoryScene.showcase()` |
+| 夜晚調色 | 入夜後乘法混合壓暗偏藍（在角色之上、槍口火光之下），據點燈與主角身邊留光 | `nightGrade()`（`src/fx/Atmosphere.ts`） |
+
+前後對比在 `docs/screenshots/visuals/`。
+
 ## 隊員底圖（18 個不同的人）
 
 - 來源：`art/source/crew_bases/<id>.png`，PixelLab「Image to image」以主角射擊第 0 格為參考（AI freedom 100～400、Init Image Strength 200、透明背景）。

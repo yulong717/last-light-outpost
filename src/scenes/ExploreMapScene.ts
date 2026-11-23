@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { GAME_HEIGHT, GAME_WIDTH } from '../config';
 import { AudioManager } from '../audio/AudioManager';
 import { ensureCrewTexture } from '../art/CrewArt';
+import { ensureCityMap, ensureZoneIcons, ZONE_ICON_KEY, zoneIconFrame } from '../art/MapArt';
 import { COMPANION_ROLES, crewReady, type CrewMember } from '../data/companions';
 import { EXPLORE_TIME, INTEL, SUPPLIES, ZONES, type SupplyId, type ZoneDef } from '../data/explore';
 import { Expedition } from '../explore/Expedition';
@@ -71,35 +72,46 @@ export class ExploreMapScene extends Phaser.Scene {
 
   /** 手繪風的城市：街區、道路、霧，據點在左下 */
   private drawMap(): void {
+    // 俯視的像素城市（街區屋頂、公園、河、霧），見 src/art/MapArt.ts
+    this.add.image(MAP_X, MAP_Y, ensureCityMap(this, MAP_W, MAP_H)).setOrigin(0);
+    ensureZoneIcons(this);
     const g = this.add.graphics();
-    g.fillStyle(0x1a1e24).fillRect(MAP_X, MAP_Y, MAP_W, MAP_H);
-    const rng = new Phaser.Math.RandomDataGenerator(['city-map']);
-    // 街區
-    for (let bx = MAP_X + 6; bx < MAP_X + MAP_W - 10; bx += 34) {
-      for (let by = MAP_Y + 6; by < MAP_Y + MAP_H - 10; by += 30) {
-        if (rng.frac() < 0.25) continue;
-        g.fillStyle(rng.pick([0x232831, 0x262b33, 0x20252c])).fillRect(bx, by, 26 + rng.between(-4, 2), 22 + rng.between(-4, 2));
+    // 主要路線：從據點連到每一區（深色外框＋路面＋虛線，開放的區域路線較亮）
+    const base = { x: MAP_X + 26, y: MAP_Y + MAP_H - 26 };
+    const routes = ZONES.map((z) => {
+      const p = this.toMap(z);
+      return { open: GameState.zoneOpen(z.id), pts: [base, { x: p.x, y: base.y - (base.y - p.y) * 0.3 }, p] };
+    });
+    for (const [width, color, alpha] of [
+      [7, 0x0a0b0e, 0.9],
+      [4, 0x55504a, 1],
+    ] as const) {
+      for (const r of routes) {
+        g.lineStyle(width, r.open || width === 7 ? color : 0x2e3036, alpha);
+        g.beginPath();
+        g.moveTo(r.pts[0].x, r.pts[0].y);
+        for (const q of r.pts.slice(1)) g.lineTo(q.x, q.y);
+        g.strokePath();
       }
     }
-    // 主要道路：從據點連到每一區
-    const base = { x: MAP_X + 26, y: MAP_Y + MAP_H - 26 };
-    g.lineStyle(3, 0x3a3f48, 1);
-    for (const z of ZONES) {
-      const p = this.toMap(z);
-      g.beginPath();
-      g.moveTo(base.x, base.y);
-      g.lineTo(p.x, base.y - (base.y - p.y) * 0.3);
-      g.lineTo(p.x, p.y);
-      g.strokePath();
-    }
-    // 霧（越遠越濃）
-    for (let i = 0; i < 4; i++) {
-      this.add.rectangle(MAP_X + MAP_W * (0.55 + i * 0.12), MAP_Y, MAP_W * 0.5, MAP_H, 0x9aa3ad, 0.035).setOrigin(0);
+    for (const r of routes.filter((x) => x.open)) {
+      for (let i = 0; i < r.pts.length - 1; i++) {
+        const a = r.pts[i];
+        const b = r.pts[i + 1];
+        const len = Math.hypot(b.x - a.x, b.y - a.y);
+        for (let d = 4; d < len - 2; d += 8) {
+          const t = d / len;
+          g.fillStyle(0xf5d76e, 0.55).fillRect(Math.round(a.x + (b.x - a.x) * t), Math.round(a.y + (b.y - a.y) * t), 2, 2);
+        }
+      }
     }
     g.lineStyle(1, 0xf5d76e, 0.4).strokeRect(MAP_X, MAP_Y, MAP_W, MAP_H);
-    // 據點
-    this.add.rectangle(base.x, base.y, 14, 14, 0x4caf50).setStrokeStyle(1, 0xffffff, 0.8);
-    pixelText(this, base.x + 10, base.y - 4, '據點', 8, '#9ad17a');
+    // 據點：圍牆＋燈光
+    this.add.circle(base.x, base.y, 22, 0xf5d76e, 0.08);
+    this.add.circle(base.x, base.y, 13, 0xf5d76e, 0.1);
+    this.add.rectangle(base.x, base.y, 16, 16, 0x2e4a2a).setStrokeStyle(2, 0x9ad17a, 0.95);
+    this.add.rectangle(base.x, base.y, 6, 6, 0xf5d76e);
+    pixelText(this, base.x + 12, base.y - 4, '據點', 8, '#9ad17a');
 
     const st = GameState.data;
     for (const z of ZONES) {
@@ -108,11 +120,14 @@ export class ExploreMapScene extends Phaser.Scene {
       const done = st.exploredToday.includes(z.id);
       const c = this.add.container(p.x, p.y);
       const r = z.time === 2 ? 11 : 9;
-      const dot = this.add.circle(0, 0, r, locked ? 0x3a3d44 : z.color, done ? 0.35 : 0.95).setStrokeStyle(2, 0x000000, 0.8);
+      const dot = this.add.circle(0, 0, r, locked ? 0x3a3d44 : z.color, done ? 0.35 : 0.95).setStrokeStyle(2, locked ? 0x000000 : 0xffffff, locked ? 0.8 : 0.7);
       const ring = this.add.circle(0, 0, r + 4).setStrokeStyle(2, 0xffffff, 0.9).setVisible(false);
       const name = pixelText(this, 0, r + 4, z.name, 8, locked ? '#6b7280' : done ? '#8a8f99' : '#ffffff').setOrigin(0.5, 0);
       const sub = pixelText(this, 0, r + 17, locked ? '主線推進後開放' : done ? '今天已去過' : stars(z.risk), 7, locked ? '#6b7280' : '#ff8a6a').setOrigin(0.5, 0);
-      c.add([ring, dot, name, sub]);
+      const nameBg = this.add.rectangle(0, r + 4, Math.max(40, z.name.length * 9 + 8), 26, 0x000000, 0.55).setOrigin(0.5, 0);
+      c.add([nameBg, ring, dot, name, sub]);
+      const icon = zoneIconFrame(z.id);
+      if (icon >= 0) c.add(this.add.image(0, 0, ZONE_ICON_KEY, icon).setAlpha(locked ? 0.45 : done ? 0.6 : 1));
       if (st.intel?.zone === z.id && !locked) {
         const bang = pixelText(this, r + 2, -r - 10, '!', 12, '#ffd24a');
         c.add(bang);

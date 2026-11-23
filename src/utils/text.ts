@@ -39,3 +39,28 @@ export function pixelText(
 ): Phaser.GameObjects.Text {
   return scene.add.text(x, y, text, textStyle(size, color)).setDepth(100);
 }
+
+/**
+ * 中文換行：Phaser 的自動換行只在空白處斷，中英混排的長句會斷在奇怪的地方或超出欄寬。
+ * 這裡逐字量寬度，超過就斷行（英數字串不拆開）。
+ */
+export function wrapCJK(t: Phaser.GameObjects.Text, width: number): Phaser.GameObjects.Text {
+  const src = t.text;
+  const tokens = src.match(/[A-Za-z0-9.+\-×%/]+|\s+|./gu) ?? [];
+  const lines: string[] = [];
+  let line = '';
+  for (const tok of tokens) {
+    if (tok === '\n') {
+      lines.push(line);
+      line = '';
+      continue;
+    }
+    t.setText(line + tok);
+    if (t.width > width && line.trim()) {
+      lines.push(line.trimEnd());
+      line = tok.trimStart();
+    } else line += tok;
+  }
+  lines.push(line);
+  return t.setText(lines.join('\n'));
+}

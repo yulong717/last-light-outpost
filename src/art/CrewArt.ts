@@ -1,7 +1,8 @@
 import Phaser from 'phaser';
 import type { CrewMember } from '../data/companions';
 import { CREW_BASE_INDEX } from '../data/crewBases';
-import { cropFrame, paintCrewSheet, type PaintedCrew, type Pixels } from './crewPaint';
+import { cropFrame, paintCrewSheet, type PaintOptions, type PaintedCrew, type Pixels } from './crewPaint';
+import type { CrewLook } from '../data/crewLooks';
 
 /**
  * 把隊員的外觀畫成專屬精靈圖（Phaser 貼圖 crew_<id>）。
@@ -64,24 +65,36 @@ export function ensureCrewTexture(scene: Phaser.Scene, m: CrewMember): string | 
   const key = crewTextureKey(m);
   if (scene.textures.exists(key)) return key;
   if (!m.look) return null;
+  const ok = paintLookTexture(scene, key, m.look);
+  if (ok && !scene.anims.exists(crewShootAnim(m)) && scene.textures.get(key).frameTotal > 3) {
+    scene.anims.create({ key: crewShootAnim(m), frames: scene.anims.generateFrameNumbers(key, { frames: [1, 2, 0] }), frameRate: 20 });
+  }
+  return ok ? key : null;
+}
+
+/** 依外觀畫一張橫排 64×64 精靈圖（隊員、主角共用）；成功回傳 true */
+export function paintLookTexture(scene: Phaser.Scene, key: string, look: CrewLook, opt: Omit<PaintOptions, 'frameSize'> = {}): boolean {
+  if (scene.textures.exists(key)) return true;
   const s = sources(scene);
-  const bi = m.look.base !== undefined ? CREW_BASE_INDEX[m.look.base] : undefined;
+  const bi = look.base !== undefined ? CREW_BASE_INDEX[look.base] : undefined;
   let out: PaintedCrew;
   if (bi !== undefined && s.bases && (bi + 1) * FRAME <= s.bases.src.width) {
-    out = paintCrewSheet(cropFrame(s.bases.src, bi), cropFrame(s.bases.mask, bi), m.look, { frameSize: FRAME });
+    out = paintCrewSheet(cropFrame(s.bases.src, bi), cropFrame(s.bases.mask, bi), look, { ...opt, frameSize: FRAME });
   } else if (s.player) {
-    out = paintCrewSheet(s.player.src, s.player.mask, { ...m.look, base: undefined }, { frameSize: FRAME });
-  } else return null;
+    out = paintCrewSheet(s.player.src, s.player.mask, { ...look, base: undefined }, { ...opt, frameSize: FRAME });
+  } else return false;
   armColors.set(key, out.colors);
   const tex = scene.textures.createCanvas(key, out.width, out.height);
-  if (!tex) return null;
+  if (!tex) return false;
   const ctx = tex.getContext();
   ctx.putImageData(new ImageData(new Uint8ClampedArray(out.data), out.width, out.height), 0, 0);
   const frames = Math.floor(out.width / FRAME);
   for (let i = 0; i < frames; i++) tex.add(i, 0, i * FRAME, 0, FRAME, FRAME);
   tex.refresh();
-  if (frames > 2 && !scene.anims.exists(crewShootAnim(m))) {
-    scene.anims.create({ key: crewShootAnim(m), frames: scene.anims.generateFrameNumbers(key, { frames: [1, 2, 0] }), frameRate: 20 });
-  }
-  return key;
+  return true;
+}
+
+/** paintLookTexture 畫好的圖的袖子與膚色（WeaponRig 用） */
+export function paintedArmColors(key: string): PaintedCrew['colors'] | undefined {
+  return armColors.get(key);
 }

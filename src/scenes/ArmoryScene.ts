@@ -14,7 +14,7 @@ import {
 import { registerUIRect } from '../input/InputManager';
 import { weaponUnlockHint } from '../data/story';
 import { GameState } from '../state/GameState';
-import { pixelText } from '../utils/text';
+import { pixelText, wrapCJK } from '../utils/text';
 
 export interface ArmoryData {
   /** 買東西後通知白天介面更新廢料 */
@@ -27,11 +27,53 @@ const PX = 20;
 const PY = 30;
 const PW = GAME_WIDTH - 40;
 const PH = GAME_HEIGHT - 40;
-const LIST_W = 236;
-const ROW_H = 22;
+/** 左邊用途欄寬、武器卡寬、右邊說明欄寬 */
+const ROLE_W = 108;
+const CARD_W = 76;
+const DETAIL_W = 196;
 
-const ACTION_NAME = { semi: '半自動', auto: '全自動', pump: '泵動', bolt: '栓動' } as const;
-const RELOAD_NAME = { magazine: '換彈匣', single: '逐發裝填', whole: '一次裝滿' } as const;
+/**
+ * 依「用途」分組：玩家先想「我缺什麼」，再挑那一組裡的槍。
+ * 只是顯示用的分組，數值還是在 src/data/weapons.ts。
+ */
+interface RoleGroup {
+  name: string;
+  /** 一句話：什麼時候帶它 */
+  when: string;
+  color: number;
+  ids: string[];
+}
+
+const GUN_ROLES: RoleGroup[] = [
+  { name: '保命副手', when: '換槍快，主槍打空時的退路', color: 0x9ad17a, ids: ['m1911', 'python'] },
+  { name: '近身清場', when: '屍群貼到路障前，一槍清一排', color: 0xff8a5a, ids: ['r870', 'coach', 'm1014'] },
+  { name: '中距主力', when: '大部分的夜晚都靠它', color: 0x6ab0ff, ids: ['mp5', 'ak47', 'm4a1'] },
+  { name: '遠距貫穿', when: '排成一列的霧屍、菁英怪', color: 0xc89aff, ids: ['mosin'] },
+  { name: '壓制屍潮', when: '大波次、屍潮夜', color: 0xf5d76e, ids: ['m249'] },
+];
+
+const MELEE_ROLES: RoleGroup[] = [
+  { name: '快速單殺', when: '省體力，一隻一隻收', color: 0x9ad17a, ids: ['knife', 'machete'] },
+  { name: '控場擊飛', when: '被圍住時把整排打開', color: 0x6ab0ff, ids: ['bat', 'sledge'] },
+  { name: '破甲處決', when: '戴頭盔的、打暈的一擊收掉', color: 0xff8a5a, ids: ['axe'] },
+];
+
+const TAG = { pierce: 0x6a3aa0, crowd: 0xa04a2a, control: 0x2a5a9a, power: 0x8a2a2a, speed: 0x2a7a4a, warn: 0x5a4a1a, neutral: 0x3a3f4a } as const;
+
+/** 槍的特性標籤（從數值推出來，不用另外寫） */
+function gunTags(d: FirearmDef): [string, number][] {
+  const t: [string, number][] = [];
+  if (d.pellets > 1) t.push(['散射', TAG.crowd]);
+  if (d.pierce >= 2) t.push([`貫穿 ${d.pierce} 隻`, TAG.pierce]);
+  if (d.stopping >= 0.5) t.push(['擊退・解圍', TAG.control]);
+  if (d.action === 'auto') t.push(['連射', TAG.speed]);
+  if (d.infiniteReserve) t.push(['子彈無限', TAG.speed]);
+  if (d.penetration >= 0.5) t.push(['穿甲', TAG.pierce]);
+  if (d.reload === 'single') t.push(['逐發裝填', TAG.warn]);
+  if (d.moveMul < 0.85) t.push(['笨重', TAG.warn]);
+  if (d.swapTime <= 0.3) t.push(['換槍快', TAG.speed]);
+  return t.slice(0, 5);
+}
 
 /** 能力條的上限（用全名單的最大值正規化） */
 const MAX = {
@@ -130,60 +172,143 @@ export class ArmoryScene extends Phaser.Scene {
     this.drawLoadout();
   }
 
-  // ── 槍械 ──────────────────────────────────────────────
+  // ── 槍械／近戰：依用途分組的卡片 ─────────────────────
 
   private drawGuns(): void {
-    const st = GameState.data;
-    FIREARMS.forEach((d, i) => {
-      const y = PY + 32 + i * ROW_H;
-      const owned = GameState.owns(d.id);
-      const slot = st.armory.loadout.indexOf(d.id);
-      const locked = !GameState.inShop(d.id);
-      const tag = slot >= 0 ? `上場 ${slot + 1}` : owned ? '擁有' : locked ? '未進貨' : `${d.price}`;
-      const color = slot >= 0 ? '#9ad17a' : owned ? '#c8c8c8' : locked ? '#6b7280' : st.scrap >= d.price ? '#f5d76e' : '#ff6b6b';
-      this.listRow(y, d.id, d.name, tag, color, d.id === this.selected, () => {
-        this.selected = d.id;
-        this.redraw();
-      });
+    this.roleGrid(GUN_ROLES, (id) => {
+      const d = FIREARMS.find((f) => f.id === id);
+      return d ? { name: d.name, price: d.price, inUse: GameState.data.armory.loadout.indexOf(d.id) } : null;
     });
     const d = FIREARMS.find((f) => f.id === this.selected) ?? FIREARMS[0];
     this.gunDetail(d);
   }
 
+  private drawMelee(): void {
+    this.roleGrid(MELEE_ROLES, (id) => {
+      const m = MELEE.find((x) => x.id === id);
+      return m ? { name: m.name, price: m.price, inUse: GameState.data.armory.melee === m.id ? 0 : -1 } : null;
+    });
+    const m = MELEE.find((d) => d.id === this.selected) ?? MELEE[0];
+    this.meleeDetail(m);
+  }
+
+  /** 左側：每一列是一種用途（色條＋用途名＋一句話），後面排這個用途的武器卡 */
+  private roleGrid(roles: RoleGroup[], info: (id: string) => { name: string; price: number; inUse: number } | null): void {
+    const st = GameState.data;
+    const top = PY + 30;
+    const rowH = Math.min(52, Math.floor((PH - 30 - 30) / roles.length));
+    roles.forEach((r, i) => {
+      const y = top + i * rowH;
+      // 用途標籤
+      this.root.add(this.add.rectangle(PX + 8, y, 3, rowH - 6, r.color).setOrigin(0));
+      this.text(PX + 15, y + 2, r.name, 9, '#' + r.color.toString(16).padStart(6, '0'));
+      wrapCJK(this.text(PX + 15, y + 16, r.when, 7, '#90a4ae'), ROLE_W - 14);
+      r.ids.forEach((id, k) => {
+        const w = info(id);
+        if (!w) return;
+        const x = PX + 8 + ROLE_W + k * (CARD_W + 4);
+        const owned = GameState.owns(id);
+        const locked = !GameState.inShop(id);
+        const tag = w.inUse >= 0 ? (this.tab === 'guns' ? `上場 ${w.inUse + 1}` : '裝備中') : owned ? (GameState.crewHolder(id) ? `${GameState.crewHolder(id)!.name} 拿著` : '擁有') : locked ? '未進貨' : `${w.price} 廢料`;
+        const color = w.inUse >= 0 ? '#9ad17a' : owned ? '#c8c8c8' : locked ? '#6b7280' : st.scrap >= w.price ? '#f5d76e' : '#ff6b6b';
+        this.card(x, y, rowH - 6, id, w.name, tag, color, id === this.selected, locked && !owned, () => {
+          this.selected = id;
+          this.redraw();
+        });
+      });
+    });
+  }
+
+  private card(x: number, y: number, h: number, id: string, name: string, tag: string, tagColor: string, active: boolean, dim: boolean, onPress: () => void): void {
+    const bg = this.add
+      .rectangle(x, y, CARD_W, h, active ? 0x3a3320 : 0x1a1d24, 0.95)
+      .setOrigin(0)
+      .setStrokeStyle(1, active ? 0xf5d76e : 0xffffff, active ? 0.8 : 0.08)
+      .setInteractive({ useHandCursor: true });
+    bg.on('pointerover', () => !active && bg.setFillStyle(0x262a34, 0.95));
+    bg.on('pointerout', () => !active && bg.setFillStyle(0x1a1d24, 0.95));
+    bg.on('pointerdown', (_p: unknown, _x: number, _y: number, e: Phaser.Types.Input.EventData) => {
+      e.stopPropagation();
+      AudioManager.ui('tap');
+      this.time.delayedCall(0, onPress);
+    });
+    this.root.add(bg);
+    const icon = this.icon(x + CARD_W / 2, y + 10, id, 1);
+    if (dim) icon.setTint(0x555a66);
+    this.text(x + CARD_W / 2, y + h - 25, name, 8, dim ? '#8a8f99' : '#ffffff').setOrigin(0.5, 0);
+    this.text(x + CARD_W / 2, y + h - 12, tag, 7, tagColor).setOrigin(0.5, 0);
+  }
+
+  /** 右側：大圖、用途一句話、星等、特性標籤、按鈕 */
+  private detailHeader(id: string, name: string, sub: string, desc: string, role?: RoleGroup): { x: number; y: number; w: number } {
+    const x = PX + PW - DETAIL_W - 8;
+    const w = DETAIL_W;
+    this.root.add(this.add.rectangle(x - 6, PY + 28, w + 10, PH - 56, 0x13161d, 0.95).setOrigin(0).setStrokeStyle(1, 0xffffff, 0.08));
+    let y = PY + 32;
+    this.showcase(x + w, y, id, w);
+    y += 50;
+    const nm = this.text(x, y, name, 11, '#ffffff');
+    this.text(x + nm.width + 6, y + 4, sub, 7, '#90a4ae');
+    y += 17;
+    const t = wrapCJK(this.text(x, y, desc, 8, '#c8c8c8').setLineSpacing(2), w);
+    y += t.height + 6;
+    if (role) {
+      const c = '#' + role.color.toString(16).padStart(6, '0');
+      const r = wrapCJK(this.text(x, y, `用途｜${role.name}：${role.when}`, 7, c), w);
+      y += r.height + 6;
+    }
+    return { x, y, w };
+  }
+
+  /** 星等：●●●○○，一眼看出強弱 */
+  private pips(x: number, y: number, label: string, ratio: number): void {
+    this.text(x, y, label, 7, '#b0bec5');
+    const n = Math.max(1, Math.min(5, Math.round(Phaser.Math.Clamp(ratio, 0, 1) * 5)));
+    const g = this.add.graphics();
+    this.root.add(g);
+    for (let i = 0; i < 5; i++) {
+      g.fillStyle(i < n ? 0xf5d76e : 0x2e323c, 1).fillRect(x + 30 + i * 9, y + 2, 7, 6);
+    }
+  }
+
+  /** 特性標籤：彩色小方塊，最多一行半 */
+  private chips(x: number, y: number, w: number, list: [string, number][]): number {
+    let cx = x;
+    let cy = y;
+    for (const [label, color] of list) {
+      const t = pixelText(this, 0, 0, label, 7, '#ffffff');
+      const cw = t.width + 8;
+      if (cx + cw > x + w) {
+        cx = x;
+        cy += 14;
+      }
+      this.root.add(this.add.rectangle(cx, cy, cw, 12, color, 0.85).setOrigin(0));
+      t.setPosition(cx + 4, cy + 1);
+      this.root.add(t);
+      cx += cw + 4;
+    }
+    return cy + 14;
+  }
+
   private gunDetail(d: FirearmDef): void {
     const st = GameState.data;
-    const x = PX + LIST_W + 18;
-    const w = PW - LIST_W - 28;
-    let y = PY + 32;
-    const nm = this.text(x, y, d.name, 11, '#ffffff');
-    this.text(x + nm.width + 6, y + 4, d.model, 7, '#90a4ae');
-    this.icon(x + w, y - 2, d.id, 2).setOrigin(1, 0);
-    y += 18;
-    this.text(x, y, d.desc, 8, '#c8c8c8').setWordWrapWidth(w, true);
-    y += 30;
-    const per = d.pellets > 1 ? `${d.damage}×${d.pellets}` : `${d.damage}`;
-    this.bar(x, y, w, '單發傷害', (d.damage * d.pellets) / MAX.dmg, per);
-    this.bar(x, y + 14, w, '持續火力', dps(d) / MAX.dps, `${Math.round(dps(d))}/秒`);
-    this.bar(x, y + 28, w, '穿甲', d.penetration, `穿 ${d.pierce} 隻`);
-    // 制動性：和穿透相反，越高擊退越遠、越能把抓住你的霧屍打開
-    this.bar(x, y + 42, w, '制動', d.stopping, d.stopping >= 0.5 ? '可打開糾纏' : d.stopping >= 0.35 ? '中' : '低');
-    this.bar(x, y + 56, w, '有效射程', Math.min(d.range, d.falloffEnd) / MAX.range, '');
-    this.bar(x, y + 70, w, '操控', control(d), '');
-    this.bar(x, y + 84, w, '機動', (d.moveMul - 0.7) / 0.3, `換槍 ${d.swapTime}s`);
-    y += 102;
+    const role = GUN_ROLES.find((r) => r.ids.includes(d.id));
+    let { x, y, w } = this.detailHeader(d.id, d.name, d.model, d.desc, role);
+    // 星等兩欄
+    this.pips(x, y, '威力', (d.damage * d.pellets) / MAX.dmg);
+    this.pips(x + w / 2, y, '火力', dps(d) / MAX.dps);
+    this.pips(x, y + 12, '射程', Math.min(d.range, d.falloffEnd) / MAX.range);
+    this.pips(x + w / 2, y + 12, '好控', control(d));
+    y += 28;
     const reserve = d.infiniteReserve && !st.armory.finitePistol ? '無限' : `${st.armory.ammo[d.ammo]}`;
-    const rpm = d.action === 'auto' ? `${Math.round(d.fireRate * 60)} 發/分` : `${d.fireRate} 發/秒`;
-    this.text(x, y, `${ACTION_NAME[d.action]}　${rpm}　彈匣 ${d.magazine}${d.chamber && d.reload === 'magazine' ? '+1' : ''}`, 8, '#e8e8e8');
-    const rl = d.reload === 'single' ? `每發 ${d.perRound}s${d.clip ? `／橋夾 ${d.clip} 發` : ''}` : `${fullReloadTime(d, 1)}s${d.reloadEmptyTime !== d.reloadTime ? `（打空 ${d.reloadEmptyTime}s）` : ''}`;
-    this.text(x, y + 13, `${RELOAD_NAME[d.reload]} ${rl}`, 8, '#e8e8e8');
-    this.text(x, y + 26, `彈藥：${AMMO[d.ammo].name}　備彈 ${reserve}`, 8, '#b0bec5');
-    y += 46;
-
+    y = this.chips(x, y, w, gunTags(d));
+    this.text(x, y + 2, `彈匣 ${d.magazine}　${AMMO[d.ammo].name}　備彈 ${reserve}`, 7, '#90a4ae');
+    const by = PY + PH - 58;
     const owned = GameState.owns(d.id);
     if (!owned) {
       const locked = !GameState.inShop(d.id);
       const ok = !locked && st.scrap >= d.price;
-      this.button(x, y, w, 24, locked ? weaponUnlockHint(d.id) : `購買　${d.price} 廢料`, ok, () => {
+      this.button(x, by, w, 24, locked ? weaponUnlockHint(d.id) : `購買　${d.price} 廢料`, ok, () => {
         if (GameState.buyWeapon(d.id)) AudioManager.ui('confirm');
         this.changed();
       });
@@ -196,61 +321,38 @@ export class ArmoryScene extends Phaser.Scene {
       ? st.armory.loadout.length > 1 ? '卸下' : '至少要帶一把槍'
       : crewHolder ? `${crewHolder.name} 拿著，先到名冊收回`
       : canAdd ? '帶上場' : `最多帶 ${MAX_GUNS} 把，先卸下一把`;
-    this.button(x, y, w, 24, label, inLoadout ? st.armory.loadout.length > 1 : canAdd, () => {
+    this.button(x, by, w, 24, label, inLoadout ? st.armory.loadout.length > 1 : canAdd, () => {
       GameState.toggleLoadout(d.id);
       this.changed();
     });
   }
 
-  // ── 近戰 ──────────────────────────────────────────────
-
-  private drawMelee(): void {
-    const st = GameState.data;
-    MELEE.forEach((m, i) => {
-      const y = PY + 32 + i * ROW_H;
-      const owned = GameState.owns(m.id);
-      const locked = !GameState.inShop(m.id);
-      const tag = st.armory.melee === m.id ? '裝備中' : owned ? '擁有' : locked ? '未進貨' : `${m.price}`;
-      const color = st.armory.melee === m.id ? '#9ad17a' : owned ? '#c8c8c8' : locked ? '#6b7280' : st.scrap >= m.price ? '#f5d76e' : '#ff6b6b';
-      this.listRow(y, m.id, m.name, tag, color, m.id === this.selected, () => {
-        this.selected = m.id;
-        this.redraw();
-      });
-    });
-    this.text(PX + 12, PY + 32 + MELEE.length * ROW_H + 8, '右鍵／V／E 隨時揮擊\n每揮一次耗體力，\n體力見底會變慢變弱', 8, '#90a4ae');
-    const m = MELEE.find((d) => d.id === this.selected) ?? MELEE[0];
-    this.meleeDetail(m);
-  }
-
   private meleeDetail(m: MeleeDef): void {
     const st = GameState.data;
-    const x = PX + LIST_W + 18;
-    const w = PW - LIST_W - 28;
-    let y = PY + 32;
-    const nm = this.text(x, y, m.name, 11, '#ffffff');
-    this.text(x + nm.width + 6, y + 4, m.damageType === 'blunt' ? '鈍器' : '刀刃', 7, '#90a4ae');
-    this.icon(x + w, y - 2, m.id, 2).setOrigin(1, 0);
-    y += 18;
-    this.text(x, y, m.desc, 8, '#c8c8c8').setWordWrapWidth(w, true);
-    y += 30;
     const swing = m.windup + m.active + m.recovery;
-    this.bar(x, y, w, '傷害', m.damage / MAX.melee, `${m.damage}`);
-    this.bar(x, y + 14, w, '出手速度', Phaser.Math.Clamp(1 - (swing - 0.25) / 0.9, 0.05, 1), `${swing.toFixed(2)}s`);
-    this.bar(x, y + 28, w, '橫掃範圍', m.arc / 160, `最多 ${m.maxTargets} 隻`);
-    this.bar(x, y + 42, w, '擊退', m.knockback / 42, '');
-    this.bar(x, y + 56, w, '打暈', m.stagger / 1.2, `${m.stagger}s`);
-    this.bar(x, y + 70, w, '省體力', 1 - m.stamina / 45, `${m.stamina}/揮`);
-    y += 90;
-    const extras = [m.comboEvery ? `第 ${m.comboEvery} 下連段 ×${m.comboMul}` : '', m.staggerBonus > 1 ? `處決暈眩目標 ×${m.staggerBonus}` : '']
-      .filter(Boolean)
-      .join('　');
-    this.text(x, y, extras, 8, '#e8e8e8');
-    this.text(x, y + 13, `穿甲 ${Math.round(m.penetration * 100)}%　觸及 ${m.reach}`, 8, '#b0bec5');
-    y += 46;
+    let { x, y, w } = this.detailHeader(m.id, m.name, m.damageType === 'blunt' ? '鈍器' : '刀刃', m.desc, MELEE_ROLES.find((r) => r.ids.includes(m.id)));
+    this.pips(x, y, '傷害', m.damage / MAX.melee);
+    this.pips(x + w / 2, y, '出手', Phaser.Math.Clamp(1 - (swing - 0.25) / 0.9, 0.05, 1));
+    this.pips(x, y + 12, '範圍', m.arc / 160);
+    this.pips(x + w / 2, y + 12, '省力', 1 - m.stamina / 45);
+    y += 28;
+    const tags: [string, number][] = [];
+    if (m.maxTargets >= 3) tags.push([`一次掃 ${m.maxTargets} 隻`, TAG.crowd]);
+    else tags.push(['單體', TAG.neutral]);
+    if (m.knockback >= 24) tags.push(['擊飛', TAG.control]);
+    if (m.stagger >= 0.6) tags.push(['打暈', TAG.control]);
+    if (m.penetration >= 0.5) tags.push(['破頭盔', TAG.pierce]);
+    if (m.staggerBonus > 1) tags.push(['處決暈眩', TAG.power]);
+    if (m.comboEvery) tags.push([`第 ${m.comboEvery} 下加重`, TAG.power]);
+    if (swing <= 0.4) tags.push(['出手快', TAG.speed]);
+    if (swing >= 0.9) tags.push(['起手慢', TAG.warn]);
+    y = this.chips(x, y, w, tags);
+    this.text(x, y + 2, '右鍵／V／E 隨時揮擊，每揮一次耗體力', 7, '#90a4ae');
+    const by = PY + PH - 58;
     if (!GameState.owns(m.id)) {
       const locked = !GameState.inShop(m.id);
       const ok = !locked && st.scrap >= m.price;
-      this.button(x, y, w, 24, locked ? weaponUnlockHint(m.id) : `購買　${m.price} 廢料`, ok, () => {
+      this.button(x, by, w, 24, locked ? weaponUnlockHint(m.id) : `購買　${m.price} 廢料`, ok, () => {
         if (GameState.buyWeapon(m.id)) {
           GameState.equipMelee(m.id);
           AudioManager.ui('confirm');
@@ -261,7 +363,7 @@ export class ArmoryScene extends Phaser.Scene {
     }
     const eq = st.armory.melee === m.id;
     const holder = GameState.crewHolder(m.id);
-    this.button(x, y, w, 24, eq ? '裝備中' : holder ? `${holder.name} 拿著，先到名冊收回` : '裝備', !eq && !holder, () => {
+    this.button(x, by, w, 24, eq ? '裝備中' : holder ? `${holder.name} 拿著，先到名冊收回` : '裝備', !eq && !holder, () => {
       GameState.equipMelee(m.id);
       this.changed();
     });
@@ -307,6 +409,35 @@ export class ArmoryScene extends Phaser.Scene {
 
   // ── 小元件 ────────────────────────────────────────────
 
+  /**
+   * 詳細頁右上的展示架：深色泡棉襯底＋洞洞板，武器放大 3 倍、底下有影子（右上角對齊 x, y）。
+   * 回傳展示架寬度，讓說明文字讓開。
+   */
+  private showcase(x: number, y: number, id: string, boxW?: number): number {
+    const key = `wpn_${id}_icon`;
+    if (!this.textures.exists(key)) return 0;
+    const tex = this.textures.get(key).getSourceImage() as HTMLCanvasElement;
+    const s = boxW ? Math.max(2, Math.min(4, Math.floor((boxW - 16) / tex.width), Math.floor(30 / tex.height))) : tex.width > 34 ? 2 : 3;
+    const w = boxW ?? tex.width * s + 16;
+    const h = Math.max(44, tex.height * s + 14);
+    const left = x - w;
+    const g = this.add.graphics();
+    this.root.add(g);
+    g.fillStyle(0x3a3e46, 1).fillRect(left, y, w, h);
+    g.fillStyle(0x2a2e36, 1).fillRect(left + 3, y + 3, w - 6, h - 6);
+    g.fillStyle(0x1c1e24, 1);
+    for (let yy = y + 6; yy < y + h - 4; yy += 6) for (let xx = left + 6; xx < x - 4; xx += 6) g.fillRect(xx, yy, 1, 1);
+    g.lineStyle(1, 0xf5d76e, 0.35).strokeRect(left + 0.5, y + 0.5, w - 1, h - 1);
+    // 頂燈打下來的光
+    g.fillStyle(0xf5d76e, 0.05).fillRect(left + 3, y + 3, w - 6, Math.round(h / 3));
+    const cx = left + w / 2;
+    const cy = y + h / 2;
+    const shadow = this.add.image(cx + 2, cy + 3, key).setScale(s).setTintFill(0x000000).setAlpha(0.45);
+    this.root.add(shadow);
+    this.root.add(this.add.image(cx, cy, key).setScale(s));
+    return w;
+  }
+
   /** 武器圖示（WeaponArt 產生的 wpn_<id>_icon），沒有圖就給個空的佔位 */
   private icon(x: number, y: number, id: string, scale = 1): Phaser.GameObjects.Image {
     const key = `wpn_${id}_icon`;
@@ -314,34 +445,6 @@ export class ArmoryScene extends Phaser.Scene {
     if (!this.textures.exists(key)) img.setVisible(false);
     this.root.add(img);
     return img;
-  }
-
-  private listRow(y: number, id: string, name: string, tag: string, tagColor: string, active: boolean, onPress: () => void): void {
-    const x = PX + 8;
-    const bg = this.add
-      .rectangle(x, y, LIST_W, ROW_H - 2, active ? 0x3a3320 : 0x1a1d24, 0.95)
-      .setOrigin(0)
-      .setStrokeStyle(1, 0xf5d76e, active ? 0.7 : 0)
-      .setInteractive({ useHandCursor: true });
-    bg.on('pointerdown', (_p: unknown, _x: number, _y: number, e: Phaser.Types.Input.EventData) => {
-      e.stopPropagation();
-      AudioManager.ui('tap');
-      this.time.delayedCall(0, onPress);
-    });
-    this.root.add(bg);
-    // 圖示置中在左邊 44px 的格子裡
-    this.icon(x + 26, y + (ROW_H - 2) / 2, id);
-    this.text(x + 50, y + 4, name, 8, '#ffffff');
-    this.text(x + LIST_W - 8, y + 4, tag, 8, tagColor).setOrigin(1, 0);
-  }
-
-  private bar(x: number, y: number, w: number, label: string, ratio: number, value: string): void {
-    const bx = x + 58;
-    const bw = w - 58 - 70;
-    this.text(x, y, label, 7, '#b0bec5');
-    this.root.add(this.add.rectangle(bx, y + 3, bw, 5, 0x000000).setOrigin(0));
-    this.root.add(this.add.rectangle(bx + 1, y + 4, Math.max(1, (bw - 2) * Phaser.Math.Clamp(ratio, 0, 1)), 3, 0xf5d76e).setOrigin(0));
-    if (value) this.text(x + w, y, value, 7, '#e8e8e8').setOrigin(1, 0);
   }
 
   private text(x: number, y: number, s: string, size: number, color: string): Phaser.GameObjects.Text {

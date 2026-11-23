@@ -3,6 +3,8 @@ import { clampLaneY, depthForY } from '../config';
 import { FEEL } from '../feel/FeelConfig';
 import { Fx } from '../fx/Fx';
 import { GameEvents } from '../systems/GameEvents';
+import { GameState } from '../state/GameState';
+import { heroBodyTexture, heroBuild } from '../art/HeroArt';
 
 export interface PlayerBounds {
   minX: number;
@@ -46,6 +48,8 @@ export class Player {
   speedMul = 1;
   /** 近戰揮擊的身體角度（度），由 MeleeSystem 設定 */
   swingLean = 0;
+  /** 主角體型縮放（阿凱瘦小、馬克壯） */
+  private readonly build: { w: number; h: number };
 
   constructor(private scene: Phaser.Scene, x: number, y: number, maxHp: number) {
     this.footX = x;
@@ -53,8 +57,12 @@ export class Player {
     this.maxHp = maxHp;
     this.hp = maxHp;
     // 有擦掉手臂的身體圖就用它，手與武器由 WeaponRig 畫
-    const body = scene.textures.exists('player_body');
-    this.sprite = scene.add.sprite(x, this.footY, body ? 'player_body' : 'player', 0);
+    // 每位主角有自己的像素形象（src/art/HeroArt.ts）；畫不出來時退回舊的共用圖
+    const hero = GameState.data.hero ?? 'soldier';
+    const heroBody = heroBodyTexture(scene, hero);
+    this.build = heroBody ? heroBuild(hero) : { w: 1, h: 1 };
+    const body = heroBody !== null || scene.textures.exists('player_body');
+    this.sprite = scene.add.sprite(x, this.footY, heroBody ?? (body ? 'player_body' : 'player'), 0);
     // 影格腳底在 64 格中的第 63 列
     this.sprite.setOrigin(0.5, body || scene.anims.exists('player_shoot') ? 63 / 64 : 1);
     this.sync();
@@ -224,7 +232,7 @@ export class Player {
     s.angle = this.lean + this.swingLean * this.facing;
     // 待機呼吸（走路時停掉）＋ 受擊／轉身擠壓
     const breathe = this.walkPhase > 0 ? 0 : Math.sin(this.breath * (Math.PI / 0.9)) * 0.015 + 0.015;
-    s.setScale(1 + 0.16 * this.squashAmt, 1 + breathe - 0.12 * this.squashAmt);
+    s.setScale(this.build.w * (1 + 0.16 * this.squashAmt), this.build.h * (1 + breathe - 0.12 * this.squashAmt));
     // 無敵時間內閃爍（每 60ms 換一次）
     s.setAlpha(this.hurtCooldown > 0 && Math.floor(this.hurtCooldown * 1000 / 60) % 2 === 0 ? 0.35 : 1);
   }

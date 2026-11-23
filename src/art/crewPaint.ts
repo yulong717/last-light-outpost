@@ -172,6 +172,23 @@ export function cropFrame(p: Pixels, i: number, size = 64): Pixels {
 
 export interface PaintOptions {
   frameSize?: number;
+  /** 底圖模式也畫長髮／馬尾（主角用） */
+  extraHair?: boolean;
+  /** 換色、配件畫完之後、體格變形之前，再加專屬細節（主角的背號、首飾、夜視鏡座…） */
+  decorate?: (d: Decorator) => void;
+}
+
+/** decorate 用的小工具：座標都是單格內（0..63）的位置，已經算進頭部位移 */
+export interface Decorator {
+  frame: number;
+  /** 畫字串像素圖：o 外框、1–4 色帶、w 白、k 黑…（同 crewPaint 的配件） */
+  draw(bm: { x: number; y: number; rows: string[] }, ramp: Ramp, mode?: 'over' | 'behind' | 'overHairOnly'): void;
+  /** 單點上色 */
+  dot(x: number, y: number, color: number): void;
+  /** 對某個部位的每一個像素做事（例如在上衣上印花紋） */
+  eachPart(part: Part, fn: (x: number, y: number, lum: number) => number | null): void;
+  /** 這格這個位置是什麼部位 */
+  partAt(x: number, y: number): Part;
 }
 
 /** 換裝結果：圖＋給 WeaponRig 畫手臂用的袖子與膚色（從畫好的圖裡取樣） */
@@ -243,12 +260,30 @@ export function paintCrewSheet(src: Pixels, mask: Pixels, look: CrewLook, opt: P
     });
 
     // 4) 加長的頭髮（畫在身後）
-    if (!based) addHair(ctx);
+    if (!based || opt.extraHair) addHair(ctx);
     // 5) 身上配件、臉部配件、帽子
     for (const id of look.body) BODY[id](ctx);
     for (const id of look.face) FACE[id](ctx);
     if (look.head) drawBitmap(ctx, HATS[look.head].art, headRamp, 'over', dy);
     if (look.head === 'helmet') line(ctx, 22, 15 + dy, 23, 24 + dy, FIXED.b);
+    if (opt.decorate) {
+      opt.decorate({
+        frame: f,
+        draw: (bm, ramp, mode = 'over') => drawBitmap(ctx, bm, ramp, mode, dy),
+        dot: (x, y, color) => {
+          if (c.inside(ox + x, y + dy, ox)) c.set(ox + x, y + dy, hex(color), Part.Gear);
+        },
+        eachPart: (part, fn) => {
+          for (let y = 0; y < c.h; y++)
+            for (let x = ox; x < ox + F; x++) {
+              if (c.get(x, y) !== part) continue;
+              const out = fn(x - ox, y, c.lum(x, y));
+              if (out !== null) c.set(x, y, hex(out), part);
+            }
+        },
+        partAt: (x, y) => (c.inside(ox + x, y + dy, ox) ? c.get(ox + x, y + dy) : Part.None),
+      });
+    }
 
     // 6) 體格：脖子以下整段加寬或變窄（像素欄位複製／移除，不會糊）
     if (look.widen) widenBody(c, ox, F, look.widen);

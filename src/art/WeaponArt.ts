@@ -45,10 +45,23 @@ function paint(ctx: CanvasRenderingContext2D, m: string[], ox: number, oy: numbe
     for (let dy = -1; dy <= 1; dy++)
       for (let dx = -1; dx <= 1; dx++) if (!has.has(`${x + dx},${y + dy}`)) ctx.fillRect(x + dx, y + dy, 1, 1);
   }
+  // 立體感：上緣亮一階、下緣暗一階（只有一列厚的細桿保持原色），金屬上緣再點一顆反光
+  const metal = new Set([PALETTE.k, PALETTE.g, PALETTE.l, PALETTE.s, PALETTE.m, PALETTE.o, PALETTE.t]);
   for (const [x, y, c] of pts) {
-    ctx.fillStyle = hex(c);
+    const up = has.has(`${x},${y - 1}`);
+    const down = has.has(`${x},${y + 1}`);
+    let col = c;
+    if (!up && down) col = shade(c, (x + y) % 5 === 0 && metal.has(c) ? 0.42 : 0.2);
+    else if (up && !down) col = shade(c, -0.28);
+    ctx.fillStyle = hex(col);
     ctx.fillRect(x, y, 1, 1);
   }
+}
+
+/** 調亮（amt > 0）或調暗（amt < 0） */
+function shade(c: number, amt: number): number {
+  const f = (v: number) => Math.round(Math.max(0, Math.min(255, amt >= 0 ? v + (255 - v) * amt : v * (1 + amt))));
+  return (f((c >> 16) & 255) << 16) | (f((c >> 8) & 255) << 8) | f(c & 255);
 }
 
 function size(map: WeaponMap): { w: number; h: number } {

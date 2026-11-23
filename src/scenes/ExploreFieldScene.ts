@@ -1,3 +1,4 @@
+import { heroRigColors } from '../art/HeroArt';
 import Phaser from 'phaser';
 import { GAME_HEIGHT, GAME_WIDTH, GROUND_Y, LANE_BOTTOM, LANE_TOP, clampLaneY, depthForY } from '../config';
 import { attachAudio } from '../audio/AudioBridge';
@@ -167,7 +168,7 @@ export class ExploreFieldScene extends Phaser.Scene {
     this.player = new Player(this, 60, (LANE_TOP + LANE_BOTTOM) / 2, GameState.hero.maxHp);
     this.player.hp = Math.max(1, exp.hp);
     this.fx.attachShadow(this.player.sprite, 22);
-    this.rig = new WeaponRig(this);
+    this.rig = new WeaponRig(this, heroRigColors(GameState.data.hero ?? 'soldier'));
     this.rig.setWeapon(GameState.data.armory.loadout[0] ?? 'm1911');
     const cam = this.cameras.main;
     cam.startFollow(this.player.sprite, true, 0.12, 0);
