@@ -1,0 +1,97 @@
+{
+ "id": "knife",
+ "raw": "art/ai/raw/knife",
+ "out": "art/ai/out/akai_knife",
+ "actions": {
+  "idle": {
+   "seed": 2,
+   "loop": 4,
+   "fps": 10,
+   "lock_rows": 51,
+   "first_last": "art/ai/raw/knife/knife_ready.png"
+  },
+  "walk": {
+   "seed": 4,
+   "loop": 8,
+   "fps": 10,
+   "lock_rows": 51,
+   "first_last": "art/ai/raw/knife/knife_walkkey.png",
+   "per_frame_foot": true
+  },
+  "m1": {
+   "seed": 1,
+   "frames": [
+    6,
+    9,
+    18,
+    22,
+    27,
+    33
+   ],
+   "fps": 12,
+   "name": "刺",
+   "note": "frames 10-17 have a light-blue slash trail; hit frame taken right after it"
+  },
+  "m2": {
+   "seed": 4,
+   "frames": [
+    12,
+    15,
+    17,
+    20,
+    29,
+    33
+   ],
+   "fps": 12,
+   "name": "連刺"
+  },
+  "m3": {
+   "seed": 2,
+   "frames": [
+    7,
+    10,
+    19,
+    22,
+    27,
+    32
+   ],
+   "fps": 12,
+   "name": "橫劃",
+   "note": "the swing itself (frames 14-18) is a big white slash trail; hit frame = knife already swept to the front right"
+  },
+  "m4": {
+   "seed": 1,
+   "frames": [
+    5,
+    9,
+    12,
+    20,
+    29,
+    33
+   ],
+   "fps": 12,
+   "name": "重戳"
+  },
+  "dash": {
+   "seed": 2,
+   "frames": [
+    8,
+    10,
+    13,
+    22,
+    29,
+    33
+   ],
+   "fps": 12,
+   "name": "滑步突刺",
+   "per_frame_foot": true
+  }
+ },
+ "meta": {
+  "spec": "docs/ai-art/MELEE_WEAPONS.md (round 7, knife)",
+  "ready_key": "art/ai/raw/knife/knife_ready.png: H3 Image 1024x1152, Picture 1 = akai bat ready pose (feet row 69), Picture 2 = art/ai/refs/weapon_knife_x8.png; seed 212",
+  "walk_key": "art/ai/raw/knife/knife_walkkey.png: H3 Image from the ready key, long stride; seed 222",
+  "videos": "first = last = ready key (walk: walk key); 39 frames for attacks, 56 for idle/walk; 4 seeds each; prompts in art/ai/raw/knife/run_videos.sh",
+  "seed_3_note": "seed 3 videos flash orange/yellow backgrounds in every action; never used"
+ }
+}

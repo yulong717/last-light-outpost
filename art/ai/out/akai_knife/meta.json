@@ -1,0 +1,180 @@
+{
+ "weapon": "knife",
+ "canvas": "64x72, feet row 69, facing right",
+ "palette": "art\\ai\\out\\akai_v4\\palette.png",
+ "workflow": "art/ai/workflows/h3_video_i2v.json (512x576, 8-step turbo)",
+ "spec": "docs/ai-art/MELEE_WEAPONS.md (round 7, knife)",
+ "ready_key": "art/ai/raw/knife/knife_ready.png: H3 Image 1024x1152, Picture 1 = akai bat ready pose (feet row 69), Picture 2 = art/ai/refs/weapon_knife_x8.png; seed 212",
+ "walk_key": "art/ai/raw/knife/knife_walkkey.png: H3 Image from the ready key, long stride; seed 222",
+ "videos": "first = last = ready key (walk: walk key); 39 frames for attacks, 56 for idle/walk; 4 seeds each; prompts in art/ai/raw/knife/run_videos.sh",
+ "seed_3_note": "seed 3 videos flash orange/yellow backgrounds in every action; never used",
+ "actions": {
+  "akai_ai_idle_knife": {
+   "seed": 2,
+   "video": "art/ai/raw/knife/idle_s2",
+   "picked": [
+    29,
+    33,
+    38,
+    43
+   ],
+   "fps": 10,
+   "lock_rows": 51,
+   "first_last": "art/ai/raw/knife/knife_ready.png",
+   "foot_rows": [
+    69,
+    69,
+    69,
+    69
+   ],
+   "colours": 55
+  },
+  "akai_ai_walk_knife": {
+   "seed": 4,
+   "video": "art/ai/raw/knife/walk_s4",
+   "picked": [
+    29,
+    32,
+    35,
+    39,
+    42,
+    45,
+    49,
+    52
+   ],
+   "fps": 10,
+   "lock_rows": 51,
+   "first_last": "art/ai/raw/knife/knife_walkkey.png",
+   "per_frame_foot": true,
+   "foot_rows": [
+    69,
+    69,
+    69,
+    69,
+    69,
+    69,
+    69,
+    69
+   ],
+   "colours": 56
+  },
+  "akai_ai_melee_knife_1": {
+   "seed": 1,
+   "video": "art/ai/raw/knife/m1_s1",
+   "picked": [
+    6,
+    9,
+    18,
+    22,
+    27,
+    33
+   ],
+   "fps": 12,
+   "name": "刺",
+   "note": "frames 10-17 have a light-blue slash trail; hit frame taken right after it",
+   "foot_rows": [
+    69,
+    69,
+    69,
+    69,
+    69,
+    69
+   ],
+   "colours": 59
+  },
+  "akai_ai_melee_knife_2": {
+   "seed": 4,
+   "video": "art/ai/raw/knife/m2_s4",
+   "picked": [
+    12,
+    15,
+    17,
+    20,
+    29,
+    33
+   ],
+   "fps": 12,
+   "name": "連刺",
+   "foot_rows": [
+    69,
+    69,
+    69,
+    69,
+    69,
+    69
+   ],
+   "colours": 59
+  },
+  "akai_ai_melee_knife_3": {
+   "seed": 2,
+   "video": "art/ai/raw/knife/m3_s2",
+   "picked": [
+    7,
+    10,
+    19,
+    22,
+    27,
+    32
+   ],
+   "fps": 12,
+   "name": "橫劃",
+   "note": "the swing itself (frames 14-18) is a big white slash trail; hit frame = knife already swept to the front right",
+   "foot_rows": [
+    69,
+    69,
+    69,
+    69,
+    69,
+    69
+   ],
+   "colours": 64
+  },
+  "akai_ai_melee_knife_4": {
+   "seed": 1,
+   "video": "art/ai/raw/knife/m4_s1",
+   "picked": [
+    5,
+    9,
+    12,
+    20,
+    29,
+    33
+   ],
+   "fps": 12,
+   "name": "重戳",
+   "foot_rows": [
+    69,
+    69,
+    69,
+    69,
+    69,
+    69
+   ],
+   "colours": 58
+  },
+  "akai_ai_melee_knife_dash": {
+   "seed": 2,
+   "video": "art/ai/raw/knife/dash_s2",
+   "picked": [
+    8,
+    10,
+    13,
+    22,
+    29,
+    33
+   ],
+   "fps": 12,
+   "name": "滑步突刺",
+   "per_frame_foot": true,
+   "foot_rows": [
+    69,
+    69,
+    69,
+    69,
+    69,
+    69
+   ],
+   "colours": 63
+  }
+ }
+}

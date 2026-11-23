@@ -56,6 +56,35 @@ VRAM 峰值為 `nvidia-smi` 整卡用量（含桌面）。全程沒有 OOM。
 - 疊圖：`templates_contact.png`、`overlay_check.png`。
 - 失敗：`walk_pass_a`（過渡姿勢）兩個 seed 都畫成大步，沒有收腿；之後改提示詞重做。灰色人台的近腳／遠腳不易區分，contact_a / contact_b 看起來差不多。
 
+## 第七輪（MELEE_WEAPONS）：軍用刀（knife）
+
+輸出：`art/ai/out/akai_knife/`（全部 64×72、朝右、腳底第 69 列、`akai_v4/palette.png`，配色以 `akai_ai_melee.png` 為參考）
+
+| 檔案 | 格數 | 來源（seed／影片格號） |
+| --- | --- | --- |
+| `akai_ai_idle_knife.png` | 4 | idle seed 2，自動挑循環（週期 18 幀），上半身固定 |
+| `akai_ai_walk_knife.png` | 8 | walk seed 4，自動挑循環（週期 26 幀），上半身固定 |
+| `akai_ai_melee_knife_1.png` 刺 | 6 | seed 1：6、9、18、22、27、33 |
+| `akai_ai_melee_knife_2.png` 連刺 | 6 | seed 4：12、15、17、20、29、33 |
+| `akai_ai_melee_knife_3.png` 橫劃 | 6 | seed 2：7、10、19、22、27、32 |
+| `akai_ai_melee_knife_4.png` 重戳 | 6 | seed 1：5、9、12、20、29、33 |
+| `akai_ai_melee_knife_dash.png` 滑步突刺 | 6 | seed 2：8、10、13、22、29、33 |
+
+另有：各自的 json（`frameHeight: 72`）、`contact_*.png`、`compare_knife.png`（七組並排）、`knife_all.gif`（42 格，3 倍、12 fps、播一次停 0.5 秒）、`meta.json`、`picks.json`（挑格設定，`build_weapon.py` 可直接重跑）。
+
+做法：
+1. **拿刀備戰關鍵格**：H3 Image 1024×1152，Picture 1＝持棒備戰姿勢（腳底已在第 69 列），Picture 2＝`weapon_knife_x8.png` 放大置中。提示詞要反手握刀、低身格鬥架式、左手護在前。4 張都可用，挑刀最清楚的 seed 212。刀身約 10 px。
+2. **走路關鍵格**：從備戰格改成大步（4/4 可用，seed 222）。
+3. **影片**：每招首尾幀＝備戰格（走路＝走路關鍵格），攻擊 39 幀、待機與走路 56 幀，各 4 seed，共 28 支（提示詞在 `tools/art/ai/knife_videos.sh`）。
+4. **後處理**（新的 `tools/art/ai/build_weapon.py`，之後三把武器共用）：挑格 → 64×72 固定地面與中線（走路、衝刺改逐格對腳底，因為影片裡腳會往下飄 1 px）→ 對調色盤 → 保留外框 → 球衣與 7 號對齊第 1 招、補條紋 → 只留最大連通塊 → strip／json／contact，最後合成一支 GIF。
+
+注意事項：
+- **seed 3 的影片背景會閃橘／黃色**（七個動作都是），全部不用。
+- **刀光特效**：H3 常在出手時加白色或淺藍的刀光、白色衝擊光、紅色火花。挑格時避開了：刺的第 10–17 格、橫劃的第 14–18 格（大片白色弧光）。所以「橫劃」的命中格是刀已經掃到右前方那格，沒有揮到一半的中間格。
+- **刺與連刺的伸展幅度不大**：刀從胸前往前推約 8–10 px，縮到 1 倍時看得出是刺，但兩招的差別主要在身體轉向，不太明顯。
+- **滑步突刺**第 1 格（往下蹲）臉部比較糊。
+- 第一次載入後每支影片 25–33 秒；28 支約 15 分鐘。
+
 ## 第六輪（AKAI_COMBO）：鋁棒連擊第 2 招（右揮）、第 3 招（下揮）
 
 輸出：`art/ai/out/akai_combo/`
