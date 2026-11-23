@@ -35,7 +35,7 @@
 | 章節插圖 | 10 張 400×120 程式像素畫（學校、鬧區、夜市、透天厝、超市、醫院、警局、檢查站、加油站、據點），劇情卡上方顯示，序章會站著選的主角 | `src/art/IllustrationArt.ts`、`StoryScene` |
 | 主選單 | 320×180 據點夜景放大 2 倍當背景，三位主角站在牆前 | `ensureMenuBackdrop()`、`MenuScene` |
 | 城市地圖 | 俯視的像素街區（屋頂、冷氣、公園、停車場、河與橋、火光、右上濃霧），路線有外框與虛線，每區有 12×12 小圖示 | `src/art/MapArt.ts`、`ExploreMapScene` |
-| 槍械 | 每個部件自動上緣亮、下緣暗，金屬上緣點反光；軍械庫詳細頁改成放大 2～3 倍的洞洞板展示架 | `WeaponArt.ts` 的 `paint()`、`ArmoryScene.showcase()` |
+| 槍械與軍械庫 | 每個部件自動上緣亮、下緣暗，金屬上緣點反光。軍械庫依用途分組（保命副手、近身清場、中距主力、遠距貫穿、壓制屍潮；近戰：快速單殺、控場擊飛、破甲處決），右側只放大圖、一句用途、星等與特性標籤 | `WeaponArt.ts` 的 `paint()`、`ArmoryScene.showcase()` |
 | 夜晚調色 | 入夜後乘法混合壓暗偏藍（在角色之上、槍口火光之下），據點燈與主角身邊留光 | `nightGrade()`（`src/fx/Atmosphere.ts`） |
 
 前後對比在 `docs/screenshots/visuals/`。
