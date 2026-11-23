@@ -34,9 +34,9 @@ const SWING_MOVE = { light: 0.8, heavy: 0.35 };
 /** 收招長度倍率：打中變短，揮空變長；打中後收招進行到 cancel 就能直接接下一下 */
 const HIT_RECOVERY = { hit: 0.75, whiff: 1.15, cancel: 0.5 };
 /** 重擊打飛（收尾、處決）：起飛速度 px/s、水平距離 px、多停幾毫秒、鏡頭放大 */
-const LAUNCH_HIT = { power: 230, dist: 48, extraStop: 35, zoom: 1.05, zoomMs: 90 };
+const LAUNCH_HIT = { power: 230, dist: 48, extraStop: 35, zoom: 1.04, zoomMs: 100 };
 /** 卡肉期間被打的那隻左右抖幾 px */
-const VICTIM_SHAKE = { light: 1, mid: 2, heavy: 3 };
+const VICTIM_SHAKE = { light: 1, mid: 3, heavy: 4 };
 
 /**
  * 近戰：完整的一套打法，不只是應急。
@@ -289,6 +289,7 @@ export class MeleeSystem {
           this.phase = 'active';
           this.t = 0;
           player.push(this.facing * (this.step ? this.step.lunge : d.lunge * (this.finisher ? 2.2 : 1)));
+          GameEvents.of(this.scene).emit('player:melee-active', { x: player.footX, y: player.footY, heavy: heavy || this.finisher });
           this.drawTrail(player);
         }
         break;
@@ -411,7 +412,7 @@ export class MeleeSystem {
     if (hitsNow > 0) {
       // 打中才卡肉、震鏡頭：重武器頓得更久，打越多隻越重；收尾重擊多頓一拍
       const extra = (hitsNow - 1) * 10 + (killsNow > 0 ? 15 : 0) + (fin && !st ? 45 : 0) + (execNow ? 25 : 0) + (launchNow ? LAUNCH_HIT.extraStop : 0);
-      const stop = (st ? st.hitStop : d.hitStop) + extra;
+      const stop = Math.min(170, (st ? st.hitStop : d.hitStop) + extra);
       fx?.freeze(stop);
       // 卡肉時只有被打的那隻在抖，攻擊者定格
       for (const v of victims) v.z.hitShake(stop + 20, VICTIM_SHAKE[v.tier]);
@@ -419,7 +420,11 @@ export class MeleeSystem {
       if (launchNow || fin) cam?.punch(LAUNCH_HIT.zoom, LAUNCH_HIT.zoomMs);
       cam?.addTrauma((st ? st.trauma : d.trauma * (fin ? 1.8 : 1)) * (1 + 0.2 * (hitsNow - 1)));
       // 鏡頭往打擊方向推一下：鈍器推得多
-      cam?.kick(this.facing > 0 ? Math.PI : 0, heavy ? 4 + hitsNow : fin ? 3 : 1);
+      cam?.kick(this.facing > 0 ? Math.PI : 0, heavy ? 6 + hitsNow * 1.5 : fin ? 4 : 1.5);
+      // 攻擊者也吃到反作用力：身體壓扁一下（卡肉時定格在壓扁的樣子）
+      player.impact(heavy || fin ? 1 : 0.6);
+      // 被打的腳下揚塵，看得出力道傳到地上
+      for (const v of victims) if (v.tier !== 'light') fx?.dust(v.z.footX, v.z.footY, v.tier === 'heavy' ? 6 : 3);
       rumble(heavy ? 45 : fin ? 35 : 14, heavy ? 0.85 : fin ? 0.6 : 0.3);
       // 鈍器打在肉上會反震：人往後頓一點
       if (blunt) player.push(-this.facing * 30);

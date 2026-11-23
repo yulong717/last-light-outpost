@@ -238,6 +238,11 @@ export class Player {
     });
   }
 
+  /** 近戰打中的反作用力：身體壓扁一下 */
+  impact(amount: number): void {
+    this.squashAmt = Math.max(this.squashAmt, amount);
+  }
+
   /** 沒有開火影格時的後座力：往後頓 2px */
   kick(): void {
     this.recoil = 2;

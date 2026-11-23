@@ -120,7 +120,8 @@ export class PropSystem {
     }
     const bus = GameEvents.of(scene);
     bus.on('player:shoot', (e) => this.onShot(e.x, e.y, e.angle, e.weaponId));
-    bus.on('player:melee-swing', (e) => scene.time.delayedCall(110, () => this.onMelee(e.x, e.y, e.heavy)));
+    // 球棒真的揮到前方那一刻才算打中道具（和打霧屍同步）
+    bus.on('player:melee-active', (e) => this.onMelee(e.x, e.y, e.heavy));
   }
 
   private add(d: PlacedProp, light: number, interactive: boolean): void {
@@ -208,7 +209,19 @@ export class PropSystem {
       const dx = o.x - p.footX;
       if (dx * p.facing < -o.w / 2 || Math.abs(dx) > o.w / 2 + 26 || Math.abs(o.y - p.footY) > 16) continue;
       const hx = o.x - (o.w / 2) * p.facing;
-      this.damage(o, heavy ? 30 : 18, hx, o.y - o.h / 2, p.facing, 'melee');
+      const hy = o.y - o.h / 2;
+      this.damage(o, heavy ? 30 : 18, hx, hy, p.facing, 'melee');
+      // 打在硬物上也要有手感：卡肉、鏡頭頓一下、手震回來、道具晃
+      const fx = Fx.of(this.scene);
+      fx?.freeze(heavy ? 70 : 50);
+      fx?.meleeImpact(hx, hy, p.facing, 'blunt', o.y);
+      const cam = CameraFeel.of(this.scene);
+      cam?.addTrauma(heavy ? 0.16 : 0.1);
+      cam?.kick(p.facing > 0 ? Math.PI : 0, heavy ? 4 : 2);
+      rumble(heavy ? 40 : 20, heavy ? 0.7 : 0.4);
+      p.impact(heavy ? 1 : 0.6);
+      p.push(-p.facing * 40);
+      if (o.kind !== 'crate') this.shake(o);
       return;
     }
     void x;

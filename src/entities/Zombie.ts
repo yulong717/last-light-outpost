@@ -664,7 +664,7 @@ export class Zombie extends Phaser.GameObjects.Sprite {
       return;
     }
     const now = this.scene.game.loop.time;
-    if (now < this.shakeUntil) this.x += (Math.floor(now / 30) % 2 ? 1 : -1) * this.shakeAmp;
+    if (now < this.shakeUntil) this.x += (Math.floor(now / 25) % 2 ? 1 : -1) * this.shakeAmp;
     if (this.airborne || this.lift > 0) {
       this.y = this.footY - this.lift;
       this.angle = this.hitLean;
