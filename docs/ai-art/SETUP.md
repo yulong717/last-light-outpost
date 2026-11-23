@@ -35,41 +35,46 @@
 | ComfyUI-KJNodes | 影像處理、Resize、各種工具 |
 | ComfyUI-VideoHelperSuite | 影片載入、拆幀、輸出 GIF |
 | ComfyUI-RMBG（1038lab） | BiRefNet 去背（備案；主力是洋紅色鍵） |
-| ComfyUI-PixelArt-Detector（dimtoneff） | 像素格點偵測、調色盤（備案；主力是自寫腳本） |
+| ComfyUI-PixelArt-Detector（dimtoneff） | 像素格點偵測、調色盤（備案） |
+| **blubs-pixel-nodepack（PixelForge-H3）** | H3 輸出轉像素 sprite：去背、格點還原、量化、防閃、對齊、打包（主力，見第 3 節） |
 | comfyui_controlnet_aux | 必要時抽 OpenPose / 輪廓 |
 | ComfyUI-WanVideoWrapper（kijai） | 備案；先用原生 Wan 節點 |
 
 裝完重啟，確認啟動 log 沒有 import 失敗。
 
-## 3. 模型下載清單
+## 3. 模型下載清單（2026-11-23 更新為最新模型）
 
-資料夾都在 `ComfyUI\models\` 底下。可用 `huggingface-cli download` 或 comfy-mcp 的 `download_model`。
+> 舊版清單（Qwen-Image-Edit-2511、FLUX.2 klein、Z-Image、Wan 2.2 為主）已淘汰：使用者要求改用最新模型。Wan 官方開放權重仍停在 2.2（2.5 以後只有 API），所以 Wan 2.2 只當備案。
+> 授權先擱置，只比效果；但每個模型的授權仍記在表裡，之後要用。
 
-### 路線 A：開放授權模型
+比對分兩個階段，每階段同時跑多個模型：
 
-| 模型 | 檔案（建議版本） | 放到 | 約大小 |
-| --- | --- | --- | --- |
-| Qwen-Image-Edit-2511 | `Comfy-Org` 的 fp8 版，或 `unsloth/Qwen-Image-Edit-2511-GGUF` Q6_K | `diffusion_models/`（GGUF 放 `unet/`） | 20 / 17 GB |
-| Qwen2.5-VL-7B 文字編碼器 | `qwen_2.5_vl_7b_fp8_scaled.safetensors` | `text_encoders/` | 9 GB |
-| Qwen Image VAE | `qwen_image_vae.safetensors` | `vae/` | 0.3 GB |
-| Qwen Edit Lightning | `lightx2v/Qwen-Image-Edit-2511-Lightning`（4 步） | `loras/` | 1 GB |
-| Wan 2.2 I2V A14B high noise | fp8_scaled 或 GGUF Q5_K_M / Q6_K | `diffusion_models/` 或 `unet/` | 10–15 GB |
-| Wan 2.2 I2V A14B low noise | 同上 | 同上 | 10–15 GB |
-| UMT5-XXL 文字編碼器 | `umt5_xxl_fp8_e4m3fn_scaled.safetensors` | `text_encoders/` | 7 GB |
-| Wan 2.1 VAE | `wan_2.1_vae.safetensors` | `vae/` | 0.3 GB |
-| lightx2v Wan2.2 I2V 4 步 LoRA | high / low 各一 | `loras/` | 1.2 GB |
-| Wan2.2 像素動畫 LoRA | `styly-agents/Wan2-2-pixel-animate` → `wan2.2_animate_adapter_model.safetensors` | `loras/` | 2.3 GB |
-| FLUX.2 klein 4B | 官方/Comfy-Org 版 | `diffusion_models/`＋對應文字編碼器、VAE | 約 10 GB |
-| 像素 sprite LoRA（FLUX.2 klein） | `limbicnation/pixel-art-lora` → `pytorch_lora_weights.safetensors`（改名 `pixel_sprite_klein.safetensors`） | `loras/` | <1 GB |
+### 階段 1：角色設定稿／姿勢關鍵格（圖片模型三選一比較）
 
-### 路線 B：MiniMax H3
+| 模型 | 發布 | 為什麼選 | 檔案（16GB 用） | 放到 | 授權 |
+| --- | --- | --- | --- | --- | --- |
+| **MiniMax H3 Image**（已裝） | 2026-11-10 | 33B，最多 16 張參考圖，試跑時換裝最準 | DiT int8 21GB 或 w4a8 12.5GB＋Qwen3-VL-32B NVFP4 15.7GB＋VAE | 已就緒 | MiniMax 社群授權（限地區） |
+| **Qwen-Image 2.1** | 2026-09-20 | 7B，生圖＋編輯同一模型，最多 10 張參考圖，**原生透明背景（RGBA）**，對 sprite 很有用；16GB 跑起來最輕鬆 | `Comfy-Org` 的 `qwen_image_2.1_int8_convrot`（7.3GB）＋`qwen3vl_8b_int8_convrot`（9.4GB）或 w4a8（6.3GB）＋ 64ch RGBA VAE；加速用 LightX2V **Lightning v2** 4 步 | `diffusion_models/`、`text_encoders/`、`vae/`、`loras/` | Qwen Research License（非商用） |
+| **MOSS-Image**（OpenMOSS） | 2026-10-16 | 5B，**JSON 版面控制（bbox）**可以直接指定角色位置與大小（對齊腳底線）；社群有 pose / lineart 控制 LoRA、4 步 LoRA；**Base 版適合之後訓練我們自己的像素風 LoRA** | `Comfy-Org/MOSS-Image`：SFT int8_convrot 5.4GB＋ Qwen3.5-9B w4a8 7.3GB ＋ flux2-vae；建議用 `MOSS-Image-heal`（修 fp16 溢位）；4 步 LoRA（lvladikov）；pose 控制 LoRA（thedeoxen，約 290MB） | 同上 | **Apache-2.0** |
 
-| 模型 | 檔案 | 放到 | 約大小 |
-| --- | --- | --- | --- |
-| H3 Image DiT | `Comfy-Org/MiniMax-H3-Image` 的 **w4a8** | `diffusion_models/` | 12.5 GB |
-| H3 Image 文字編碼器 | Qwen3-VL-32B **NVFP4**（5060 Ti 原生支援 FP4） | `text_encoders/` | 15.7 GB |
-| H3 Image VAE | fp16 | `vae/` | 1.2 GB |
-| H3 影片 | `Comfy-Org/MiniMax-H3` 的 **pruned_w6a8**＋4 步 turbo LoRA＋對應編碼器/VAE（照 ComfyUI 範本 `video_minimax_h3_i2v` 要求） | 依範本 | 16 GB＋ |
+不列入：P-H3-Image（需約 21GB VRAM）、HunyuanImage 3.x（太大或只有 API）。
+
+### 階段 2：動作（影片模型比較）
+
+| 模型 | 發布 | 為什麼選 | 檔案（16GB 用） | 授權 |
+| --- | --- | --- | --- | --- |
+| **MiniMax H3 影片**（已裝）＋ **pixelart8x-h3-lora** | H3 2026-08；LoRA v3 | LoRA 專門做「每格一色、固定 8px 格點、有限色盤、逐格動作」的真像素動畫，正好對應我們 ÷8 的縮小 | 已裝的 fl2va int8 ＋ turbo LoRA；`JOYUNGI/pixelart8x-h3-lora`（用 v3）→ `loras/` | MiniMax 社群授權 |
+| **HyperFlow H3 Flash** | 2026-11-06 | H3 剪枝到 13.7B，Q4_K_M GGUF 9.1GB，4–8 步，16GB 更從容；功能同 H3（首尾幀、參考圖） | GGUF → `unet/` | MiniMax 社群授權 |
+| **LTX-2.3**（或 2.5）＋ **ume-pixelart LoRA** | 2026-03 / 08 | 非 H3 的對照組；官方稱 12GB 起可跑（蒸餾/FP8），有現成像素風 LoRA | Lightricks 官方 FP8／蒸餾版＋ `OmerHagage/ltx2-ume-pixelart-lora`（觸發詞 `ume-pixelart`） | LTX 授權（年營收 1000 萬美元以下免費）；LoRA MIT |
+| Wan 2.2 I2V（備案） | 2025-07 | 最新可下載的 Wan，社群資源多；前兩者都失敗時才用 | 見舊版說明 | Apache-2.0 |
+
+### 現成的 H3 像素 sprite 工具（先試，能省掉大部分自寫後處理）
+
+| 工具 | 內容 |
+| --- | --- |
+| **bunnyUFO-lab/pixel-studio-comfyui-workflows** 的 `sprite-from-prompt-h3`（2026-11-17 合併） | sprite＋動作描述 → 39 幀取 13 幀的 sprite sheet；走路/待機首尾同幀做循環，一次性動作解開尾幀。作者實測 8 倍放大比 4 倍腿部乾淨。8 步 turbo、res_multistep、無 CFG。提示詞只放動作描述（加角色描述反而讓走路停住） |
+| **japaneserunic/blubs-pixel-nodepack**（PixelForge-H3，MIT） | 節點：Sprite Chroma Key、Pixel Grid Recover、Pixel Art Quantize（k-means／PICO-8 等色盤）、**Temporal Stabilize**（防閃色）、**Auto-Crop & Anchor**（對齊腳底）、Loop Trim、Frame Dedup、Sprite Sheet Pack（Aseprite JSON）、Save GIF |
+| multimodalart/sprite-forge（HF Space 原始碼） | 參考它的挑格法：輪廓變化的局部極小值＋最遠點取樣，第 0 格固定保留；YCbCr 去背 |
 
 ### 16GB VRAM 注意事項
 
@@ -84,11 +89,12 @@
 
 | 模型 | 輸入 | 記錄 |
 | --- | --- | --- |
-| Qwen Edit | `art/ai/refs/akai_body_teen_x8.png` ＋「把衣服換成白色條紋棒球衣」 | 秒數、峰值 VRAM |
-| FLUX.2 klein + LoRA | 文字：`pixel art sprite, high school baseball player, side view, game asset` | 同上 |
-| Wan 2.2 I2V | 同一張參考圖，「walking in place, side view, static camera」 | 同上 |
-| H3 Image | 同 Qwen Edit | 同上 |
-| H3 影片 | 同 Wan | 同上 |
+| H3 Image（已完成） | 人台＋阿凱參考圖換裝 | 秒數、峰值 VRAM |
+| Qwen-Image 2.1 | 同上，另試 RGBA 透明輸出 | 同上 |
+| MOSS-Image | 同上描述，用 JSON bbox 指定角色框（腳底 y≈976/1024） | 同上 |
+| H3 影片 ＋ pixelart8x LoRA | 設定稿 → 原地走路 | 同上 |
+| HyperFlow H3 Flash | 同上 | 同上 |
+| LTX-2.x ＋ ume-pixelart | 同上 | 同上 |
 
 ## 5. Claude Code 連 ComfyUI
 

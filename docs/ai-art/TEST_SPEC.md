@@ -72,15 +72,16 @@
 
 播放速度：循環 10 fps、攻擊 12 fps、死亡 10 fps。
 
-**每個動作 A、B 兩條路線都跑**（設定稿與動作）：
+**比對方式（2026-11-23 更新為最新模型，見 SETUP 第 3 節）**：
 
-| 步驟 | 路線 A | 路線 B |
-| --- | --- | --- |
-| 設定稿（人台換裝） | Qwen-Image-Edit-2511 ＋ Lightning；可先用 FLUX.2 klein + 像素 LoRA 出概念圖當參考 | H3 Image（Picture 1 = 角色參考、Picture 2 = 人台） |
-| 循環動作 | Wan 2.2 I2V ＋ lightx2v ＋ 像素動畫 LoRA | H3 影片 I2V（首尾幀） |
-| 短動作 | Qwen Edit（角色 + 姿勢模板） | H3 Image（角色 + 姿勢模板） |
+| 步驟 | 比對的模型 |
+| --- | --- |
+| 設定稿（人台換裝） | H3 Image ／ Qwen-Image 2.1（RGBA）／ MOSS-Image（JSON bbox 定位） |
+| 循環動作 | H3 影片＋pixelart8x LoRA ／ HyperFlow H3 Flash ／ LTX-2.x＋ume-pixelart；Wan 2.2 只當備案 |
+| 短動作關鍵格 | 設定稿階段勝出的圖片模型（角色＋姿勢模板）；MOSS 可加 pose 控制 LoRA |
 
-後處理兩條路線完全一樣，才能公平比較。
+先用 `bunnyUFO sprite-from-prompt-h3` 工作流與 `PixelForge-H3` 節點跑通，不足的部分再補自寫腳本。
+後處理所有模型完全一樣，才能公平比較。
 
 ## 5. 提示詞基準（英文，依模型微調）
 
