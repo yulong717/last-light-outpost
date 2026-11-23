@@ -16,7 +16,10 @@ import { createHeroTextures } from '../art/HeroArt';
  * 下面的佔位圖就會自動略過，遊戲程式不用改。
  */
 /** 已經做好 AI 影格的近戰武器與招式（交一把加一行） */
-const AKAI_WEAPON_SHEETS: [string, string[]][] = [['knife', ['1', '2', '3', '4', 'dash']]];
+const AKAI_WEAPON_SHEETS: [string, string[]][] = [
+  ['knife', ['1', '2', '3', '4', 'dash']],
+  ['machete', ['1', '2', '3:80', 'dash']],
+];
 
 export class BootScene extends Phaser.Scene {
   constructor() {
@@ -46,7 +49,11 @@ export class BootScene extends Phaser.Scene {
     for (const [id, steps] of AKAI_WEAPON_SHEETS) {
       this.load.spritesheet(`akai_ai_idle_${id}`, `assets/sprites/akai_ai_idle_${id}.png`, { frameWidth: 64, frameHeight: 72 });
       this.load.spritesheet(`akai_ai_walk_${id}`, `assets/sprites/akai_ai_walk_${id}.png`, { frameWidth: 64, frameHeight: 72 });
-      for (const st of steps) this.load.spritesheet(`akai_ai_melee_${id}_${st}`, `assets/sprites/akai_ai_melee_${id}_${st}.png`, { frameWidth: 64, frameHeight: 72 });
+      // 'n:80' 表示這一招用 64×80（高舉、跳起的招）
+      for (const spec of steps) {
+        const [st, h] = spec.split(':');
+        this.load.spritesheet(`akai_ai_melee_${id}_${st}`, `assets/sprites/akai_ai_melee_${id}_${st}.png`, { frameWidth: 64, frameHeight: Number(h ?? 72) });
+      }
     }
     this.load.spritesheet('player_reload', 'assets/sprites/player_reload.png', { frameWidth: 64, frameHeight: 64 });
     // 霧屍：PixelLab 走路圖經程式換色、加寬、做出攻擊影格的三種變體
