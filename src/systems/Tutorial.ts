@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { AudioManager } from '../audio/AudioManager';
-import { TUTORIAL_DUMMIES, TUTORIAL_STEPS, TUTORIAL_WAVE, type TutorialFocus, type TutorialStepDef } from '../data/tutorial';
+import { GUN_STEPS, TUTORIAL_STEPS, TUTORIAL_WAVE, TUTORIAL_WAVE_MELEE, type TutorialFocus, type TutorialStepDef } from '../data/tutorial';
 import type { Player } from '../entities/Player';
 import type { Zombie } from '../entities/Zombie';
 import { GameEvents } from './GameEvents';
@@ -31,6 +31,8 @@ export interface TutorialHost {
   /** 路障的 x（練習用的霧屍生在路障前方不遠處） */
   barricadeX: number;
   touch: boolean;
+  /** 身上沒有任何槍（阿凱開局）：只教移動、近戰、清一波 */
+  unarmed: boolean;
   onDone: () => void;
 }
 
@@ -51,9 +53,11 @@ export class Tutorial {
   private offs: (() => void)[] = [];
 
   constructor(private host: TutorialHost) {
-    // 只有一把槍的主角（阿凱、好運姐）沒有換槍這一步
-    const guns = host.weapons().weapons.length;
-    this.steps = TUTORIAL_STEPS.filter((s) => s.id !== 'swap' || guns >= 2);
+    // 只有一把槍的主角沒有換槍這一步；完全沒槍就只教移動、近戰、清一波，文字換成近戰版
+    const guns = host.unarmed ? 0 : host.weapons().weapons.length;
+    this.steps = TUTORIAL_STEPS.filter((s) => (guns === 0 ? !GUN_STEPS.includes(s.id) : s.id !== 'swap' || guns >= 2)).map((s) =>
+      guns === 0 && s.unarmed ? { ...s, ...s.unarmed } : s,
+    );
     const bus = GameEvents.of(host.scene);
     const on = <K extends 'enemy:death' | 'player:melee-hit' | 'player:reload-start' | 'player:weapon-switch'>(k: K, fn: () => void) => {
       bus.on(k, fn);
@@ -104,7 +108,7 @@ export class Tutorial {
       if (a.ammo >= a.def.magazine) a.ammo = Math.min(a.ammo, Math.max(1, Math.floor(a.def.magazine / 3)));
     }
     if (s.id === 'wave') {
-      this.spawner = new WaveSpawner(this.host.scene, TUTORIAL_WAVE, (id) => this.host.spawn(id));
+      this.spawner = new WaveSpawner(this.host.scene, this.host.unarmed ? TUTORIAL_WAVE_MELEE : TUTORIAL_WAVE, (id) => this.host.spawn(id));
       this.spawner.start();
     }
     this.emit();
@@ -153,7 +157,7 @@ export class Tutorial {
         const x = s.id === 'shoot' ? this.host.barricadeX + 200 : Math.max(this.host.barricadeX + 110, p.footX + 120);
         this.host.spawn('basic', x);
         // 近戰練習一次放兩隻，可以試試一刀掃兩隻
-        if (s.id === 'melee' && TUTORIAL_DUMMIES.melee - this.count >= 2) this.host.spawn('basic', x + 24);
+        if (s.id === 'melee' && s.goal - this.count >= 2) this.host.spawn('basic', x + 24);
         break;
       }
       case 'wave': {
@@ -180,7 +184,7 @@ export class Tutorial {
     let focus = s.focus;
     // 子彈打光（阿凱的手槍備彈有限）：提醒改用近戰
     const w = this.host.weapons();
-    if (s.id === 'wave' && w.weapons.every((g) => g.ammo === 0) && w.reserve() <= 0 && !w.reloading) {
+    if (s.id === 'wave' && !this.host.unarmed && w.weapons.every((g) => g.ammo === 0) && w.reserve() <= 0 && !w.reloading) {
       hint = this.host.touch ? '子彈打光了！按「近戰」也能收拾牠們' : '子彈打光了！右鍵或 V 近戰也能收拾牠們';
       focus = 'melee';
     }

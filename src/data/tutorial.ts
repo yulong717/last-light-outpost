@@ -20,7 +20,12 @@ export interface TutorialStepDef {
   focus: TutorialFocus;
   /** 完成條件要做幾次（走的距離、擊殺數、打中次數） */
   goal: number;
+  /** 身上沒有槍（阿凱開局只有球棒）時改用的文字與目標 */
+  unarmed?: Partial<Pick<TutorialStepDef, 'title' | 'desktop' | 'touch' | 'goal'>>;
 }
+
+/** 沒有槍時跳過的步驟 */
+export const GUN_STEPS: TutorialStepDef['id'][] = ['shoot', 'reload', 'swap'];
 
 export const TUTORIAL_STEPS: TutorialStepDef[] = [
   {
@@ -54,6 +59,12 @@ export const TUTORIAL_STEPS: TutorialStepDef[] = [
     touch: '走到路障外，按「近戰」：不花子彈，但耗體力',
     focus: 'melee',
     goal: 2,
+    unarmed: {
+      title: '你只有球棒：翻出路障，近身揮擊',
+      desktop: '右鍵或 V 揮棒，連按接連段；每揮一下耗體力，見底會變慢',
+      touch: '按「近戰」揮棒，連按接連段；每揮一下耗體力，見底會變慢',
+      goal: 4,
+    },
   },
   {
     id: 'swap',
@@ -70,11 +81,17 @@ export const TUTORIAL_STEPS: TutorialStepDef[] = [
     touch: '退回路障後面打，霧屍會先拆路障',
     focus: null,
     goal: 1,
+    unarmed: {
+      desktop: '趁霧屍拆路障時出去揮棒，體力快見底就退回來喘口氣',
+      touch: '趁霧屍拆路障時出去揮棒，體力快見底就退回來喘口氣',
+    },
   },
 ];
 
-/** 近戰練習一次放幾隻（射擊練習一次一隻） */
-export const TUTORIAL_DUMMIES = { melee: 2 };
+/** 沒有槍時的練習波：只有平民霧屍，少一點 */
+export const TUTORIAL_WAVE_MELEE: WaveDef[] = [
+  { delayBefore: 1, groups: [{ enemy: 'basic', count: 4, interval: 2.2 }] },
+];
 
 /** 最後的練習波：比第一夜的第一波再少一點 */
 export const TUTORIAL_WAVE: WaveDef[] = [

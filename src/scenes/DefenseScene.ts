@@ -407,6 +407,7 @@ export class DefenseScene extends Phaser.Scene {
         spawn: (id, x) => this.spawnZombie(id, x),
         barricadeX: BARRICADE_X,
         touch: this.sys.game.device.input.touch,
+        unarmed: GameState.data.armory.loadout.length === 0,
         onDone: () => this.finishTutorial(),
       });
       this.events.once('tutorial-skip', () => this.finishTutorial(true));
