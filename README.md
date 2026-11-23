@@ -43,6 +43,11 @@ npm run build    # 型別檢查 + 打包到 dist/
 - 遊戲事件匯流排 `src/systems/GameEvents.ts`：`player:shoot`、`enemy:hit`、`player:hurt`、`player:step` 等，
   音效、NPC 等系統用 `GameEvents.of(scene).on(...)` 訂閱，不必改玩法程式
 
+### 職業掉落與拯救倖存者（夜晚）
+
+- 警察、士兵、護理師、工地、消防員、囚犯、慢跑者霧屍倒下時有機率掉出生前的裝備（彈藥、醫療、路障材料、稀有武器），要走過去撿
+- 第 2 夜起隨機出現倖存者逃向據點：掩護成功就加入隊伍，被咬死會屍變成對應職業的霧屍。見 [docs/DEFENSE_EVENTS.md](docs/DEFENSE_EVENTS.md)
+
 ### 據點布置（白天）
 
 一天的流程：白天布置 → 按「開始夜晚」（或 Enter）→ 夜晚防守 → 撐過就進入下一天，建築、路障耐久、廢料都保留。

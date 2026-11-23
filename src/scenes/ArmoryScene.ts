@@ -209,7 +209,7 @@ export class ArmoryScene extends Phaser.Scene {
         const x = PX + 8 + ROLE_W + k * (CARD_W + 4);
         const owned = GameState.owns(id);
         const locked = !GameState.inShop(id);
-        const tag = w.inUse >= 0 ? (this.tab === 'guns' ? `上場 ${w.inUse + 1}` : '裝備中') : owned ? '擁有' : locked ? '未進貨' : `${w.price} 廢料`;
+        const tag = w.inUse >= 0 ? (this.tab === 'guns' ? `上場 ${w.inUse + 1}` : '裝備中') : owned ? (GameState.crewHolder(id) ? `${GameState.crewHolder(id)!.name} 拿著` : '擁有') : locked ? '未進貨' : `${w.price} 廢料`;
         const color = w.inUse >= 0 ? '#9ad17a' : owned ? '#c8c8c8' : locked ? '#6b7280' : st.scrap >= w.price ? '#f5d76e' : '#ff6b6b';
         this.card(x, y, rowH - 6, id, w.name, tag, color, id === this.selected, locked && !owned, () => {
           this.selected = id;
@@ -315,8 +315,12 @@ export class ArmoryScene extends Phaser.Scene {
       return;
     }
     const inLoadout = st.armory.loadout.includes(d.id);
-    const canAdd = st.armory.loadout.length < MAX_GUNS;
-    const label = inLoadout ? (st.armory.loadout.length > 1 ? '卸下' : '至少要帶一把槍') : canAdd ? '帶上場' : `最多帶 ${MAX_GUNS} 把，先卸下一把`;
+    const crewHolder = GameState.crewHolder(d.id);
+    const canAdd = st.armory.loadout.length < MAX_GUNS && !crewHolder;
+    const label = inLoadout
+      ? st.armory.loadout.length > 1 ? '卸下' : '至少要帶一把槍'
+      : crewHolder ? `${crewHolder.name} 拿著，先到名冊收回`
+      : canAdd ? '帶上場' : `最多帶 ${MAX_GUNS} 把，先卸下一把`;
     this.button(x, by, w, 24, label, inLoadout ? st.armory.loadout.length > 1 : canAdd, () => {
       GameState.toggleLoadout(d.id);
       this.changed();
@@ -358,7 +362,8 @@ export class ArmoryScene extends Phaser.Scene {
       return;
     }
     const eq = st.armory.melee === m.id;
-    this.button(x, by, w, 24, eq ? '裝備中' : '裝備', !eq, () => {
+    const holder = GameState.crewHolder(m.id);
+    this.button(x, by, w, 24, eq ? '裝備中' : holder ? `${holder.name} 拿著，先到名冊收回` : '裝備', !eq && !holder, () => {
       GameState.equipMelee(m.id);
       this.changed();
     });
