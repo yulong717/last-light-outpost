@@ -47,10 +47,10 @@ H3 配套（細節見 [`ai-art/SETUP.md`](ai-art/SETUP.md) 第 3 節）：
 
 | 等級 | 站姿高度 | 頭高 | 用在 |
 | --- | --- | --- | --- |
-| S 小 | 48 px | 17 px | 小孩、矮老人（tinyold） |
-| M 標準 | **56 px** | 19 px（3 頭身） | 大部分主角、隊員、一般霧屍 |
-| L 高大 | 60 px | 19 px | tall、soldier、bruiser |
-| XL 巨漢 | 62 px，寬 1.4 倍 | 20 px | brute 霧屍、fatman |
+| S 小 | 48 px | 14 px | 小孩、矮老人（tinyold） |
+| M 標準 | **56 px** | 16 px（3.5 頭身） | 大部分主角、隊員、一般霧屍 |
+| L 高大 | 60 px | 17 px | tall、soldier、bruiser |
+| XL 巨漢 | 62 px，寬 1.4 倍 | 18 px | brute 霧屍、fatman |
 
 做法：先做 **4 個無臉人台**（S/M/L/XL，各一張側面站姿＋各動作的姿勢模板），所有角色都「穿」在對應的人台上。AI 只決定衣服、髮型、臉，不決定頭身比。這就是 comfy-sprite-lab 用來鎖比例的方法。
 
