@@ -25,9 +25,9 @@ export interface GameEventMap {
   /** 泵動／栓動：開完一槍後上膛（音效接拉槓聲） */
   'player:cycle': { weaponId: string; kind: 'pump' | 'bolt'; x: number; y: number; delay: number };
   /** 近戰揮擊（起手時發） */
-  'player:melee-swing': { weaponId: string; x: number; y: number; heavy: boolean; tired: boolean };
+  'player:melee-swing': { weaponId: string; x: number; y: number; heavy: boolean; tired: boolean; combo?: number; finisher?: boolean };
   /** 近戰打中（每隻各一次）；type 是傷害類型（slash / blunt） */
-  'player:melee-hit': { weaponId: string; x: number; y: number; type: string; killed: boolean; execute: boolean };
+  'player:melee-hit': { weaponId: string; x: number; y: number; type: string; killed: boolean; execute: boolean; combo?: number; finisher?: boolean };
   /** 體力不夠還硬揮 */
   'player:exhausted': { stamina: number };
   'player:weapon-switch': { weaponId: string };

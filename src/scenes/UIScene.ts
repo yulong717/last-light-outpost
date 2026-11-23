@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { GAME_HEIGHT, GAME_WIDTH } from '../config';
 import { heroTouch } from '../systems/HeroSystem';
-import { JOYSTICK_RADIUS, JOYSTICK_ZONE, joystick, queueAction, registerUIRect } from '../input/InputManager';
+import { JOYSTICK_RADIUS, JOYSTICK_ZONE, holdAction, joystick, queueAction, registerUIRect } from '../input/InputManager';
 import { GameState } from '../state/GameState';
 import { pixelText } from '../utils/text';
 import { AudioManager } from '../audio/AudioManager';
@@ -35,6 +35,9 @@ export class UIScene extends Phaser.Scene {
   }[] = [];
   private orderLabel?: Phaser.GameObjects.Text;
   private grenadeLabel!: Phaser.GameObjects.Text;
+  /** 觸控「持刀／持槍」切換鍵的字 */
+  private stanceLabel!: Phaser.GameObjects.Text;
+  private stanceBg!: Phaser.GameObjects.Rectangle;
   private medkitLabel!: Phaser.GameObjects.Text;
 
   constructor() {
@@ -82,7 +85,22 @@ export class UIScene extends Phaser.Scene {
 
     this.button(GAME_WIDTH - 38, GAME_HEIGHT - 38, '換彈', () => queueAction('reload'));
     this.button(GAME_WIDTH - 76, GAME_HEIGHT - 38, '換槍', () => queueAction('next'));
-    this.button(GAME_WIDTH - 38, GAME_HEIGHT - 76, '近戰', () => queueAction('melee'));
+    // 近戰鍵：點一下揮一刀，按住連續揮
+    this.button(
+      GAME_WIDTH - 38,
+      GAME_HEIGHT - 76,
+      '近戰',
+      () => {
+        queueAction('melee');
+        holdAction('melee', true);
+      },
+      () => holdAction('melee', false),
+    );
+    // 一鍵切換近戰模式：槍收起來，點畫面就是揮（電腦 4／X）
+    const st = this.button(GAME_WIDTH - 76, GAME_HEIGHT - 114, '持刀', () => queueAction('stance'));
+    this.stanceLabel = st.label;
+    this.stanceBg = st.bg;
+    if (!this.touchUI) pixelText(this, GAME_WIDTH - 60, GAME_HEIGHT - 116, '4/X', 7, '#90a4ae').setOrigin(0.5, 1);
     // 主角技能鍵：阿凱奔跑（切換）、馬克擊倒（放在夥伴指令鍵左邊，不要疊在一起）
     const heroId = GameState.data.hero;
     if (heroId === 'student') this.button(GAME_WIDTH - 152, GAME_HEIGHT - 38, '奔跑', () => (heroTouch.sprint = !heroTouch.sprint));
@@ -140,21 +158,32 @@ export class UIScene extends Phaser.Scene {
     return label;
   }
 
-  private button(x: number, y: number, label: string, onPress: () => void): void {
+  private button(
+    x: number,
+    y: number,
+    label: string,
+    onPress: () => void,
+    onRelease?: () => void,
+  ): { bg: Phaser.GameObjects.Rectangle; label: Phaser.GameObjects.Text } {
     const size = 32;
     const bg = this.add
       .rectangle(x, y, size, size, 0x000000, 0.45)
       .setOrigin(0)
       .setStrokeStyle(1, 0xffffff, 0.5)
       .setInteractive();
-    pixelText(this, x + size / 2, y + size / 2, label, 8).setOrigin(0.5);
+    const text = pixelText(this, x + size / 2, y + size / 2, label, 8).setOrigin(0.5);
+    const up = () => {
+      bg.setFillStyle(0x000000, 0.45);
+      onRelease?.();
+    };
     bg.on('pointerdown', () => {
       bg.setFillStyle(0xffffff, 0.3);
       onPress();
     });
-    bg.on('pointerup', () => bg.setFillStyle(0x000000, 0.45));
-    bg.on('pointerout', () => bg.setFillStyle(0x000000, 0.45));
+    bg.on('pointerup', up);
+    bg.on('pointerout', up);
     this.unregister.push(registerUIRect({ x, y, w: size, h: size }));
+    return { bg, label: text };
   }
 
   update(): void {
@@ -232,18 +261,30 @@ export class UIScene extends Phaser.Scene {
     this.baseBar.width = 78 * (h.baseHp / h.baseMaxHp);
     this.barricadeBar.width = 78 * (h.barricadeHp / h.barricadeMaxHp);
     const reserve = h.reserve === Infinity ? '∞' : `${h.reserve}`;
-    this.ammoText.setText(h.reloading ? `${h.weaponName}  換彈中…  ${h.ammo}` : `${h.weaponName}  ${h.ammo}`);
-    this.ammoText.setColor(h.ammo === 0 && !h.reloading ? '#ff6b6b' : '#e8e8e8');
-    this.reserveText.setText(`${h.weaponModel}　備彈 ${reserve}`).setColor(h.reserve === 0 ? '#ff6b6b' : '#b0bec5');
-    this.reloadBar.width = 80 * Math.min(1, h.reloading ? h.reloadProgress : h.ammo / h.magazine);
-    const iconKey = `wpn_${h.weaponId}_icon`;
+    if (h.meleeStance) {
+      // 近戰模式：顯示近戰武器、派別與連段進度
+      const c = h.meleeChain;
+      const pips = c.len > 1 ? '　' + Array.from({ length: c.len }, (_, i) => (i < c.idx ? '■' : '□')).join('') : '';
+      this.ammoText.setText(`${h.meleeName}${pips}`).setColor('#ffe082');
+      this.reserveText.setText(c.len > 1 ? `刀・快速連砍 ${c.len} 下收尾` : '重擊・打飛一排，每下要重新掄').setColor('#b0bec5');
+      this.reloadBar.width = 80 * h.stamina;
+    } else {
+      this.ammoText.setText(h.reloading ? `${h.weaponName}  換彈中…  ${h.ammo}` : `${h.weaponName}  ${h.ammo}`);
+      this.ammoText.setColor(h.ammo === 0 && !h.reloading ? '#ff6b6b' : '#e8e8e8');
+      this.reserveText.setText(`${h.weaponModel}　備彈 ${reserve}`).setColor(h.reserve === 0 ? '#ff6b6b' : '#b0bec5');
+      this.reloadBar.width = 80 * Math.min(1, h.reloading ? h.reloadProgress : h.ammo / h.magazine);
+    }
+    this.stanceLabel.setText(h.meleeStance ? '持槍' : '持刀');
+    this.stanceBg.setStrokeStyle(1, h.meleeStance ? 0xffe082 : 0xffffff, h.meleeStance ? 0.9 : 0.5);
+    const iconKey = h.meleeStance ? `wpn_${h.meleeId}_icon` : `wpn_${h.weaponId}_icon`;
     if (this.textures.exists(iconKey)) {
       if (this.weaponIcon.texture.key !== iconKey) this.weaponIcon.setTexture(iconKey);
-      this.weaponIcon.setVisible(true).setAlpha(h.reloading ? 0.5 : 1);
+      this.weaponIcon.setVisible(true).setAlpha(h.reloading && !h.meleeStance ? 0.5 : 1);
     } else this.weaponIcon.setVisible(false);
     const keys = this.touchUI ? '' : '1/2/3 ';
-    const melee = this.touchUI ? h.meleeName : `右鍵/V ${h.meleeName}`;
-    this.slotText.setText(`${keys}${h.slots.map((n, i) => (i === h.slot ? `[${n}]` : n)).join(' ')}　${melee}`);
+    const meleeName = h.meleeStance ? `[${h.meleeName}]` : h.meleeName;
+    const melee = this.touchUI ? meleeName : `4 ${meleeName}`;
+    this.slotText.setText(`${keys}${h.slots.map((n, i) => (i === h.slot && !h.meleeStance ? `[${n}]` : n)).join(' ')}　${melee}`);
     this.staminaBar.width = 78 * h.stamina;
     // 體力見底時閃紅
     this.staminaFlash += 1;

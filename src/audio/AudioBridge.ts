@@ -85,10 +85,17 @@ export function attachAudio(scene: Phaser.Scene): void {
       if (getFirearm(e.weaponId)?.reload === 'magazine') play('reload_in');
     })
     .on('player:melee-swing', (e) => {
-      play(e.heavy ? 'swing_heavy' : 'swing_light', e.x, { semitones: e.tired ? -3 : 0 });
+      // 刀類連段：越後面揮風聲越高越急；收尾那一下壓低
+      const combo = e.combo ?? 1;
+      const semi = e.tired ? -3 : e.finisher ? -2 : Math.min(4, (combo - 1) * 1.3);
+      play(e.heavy ? 'swing_heavy' : 'swing_light', e.x, { semitones: semi });
     })
     .on('player:melee-hit', (e) => {
-      play(e.type === 'blunt' ? 'melee_blunt' : 'melee_slash', e.x, { semitones: e.execute ? -3 : 0 });
+      const combo = e.combo ?? 1;
+      const semi = e.execute ? -3 : e.finisher ? -2 : e.type === 'blunt' ? 0 : Math.min(4, (combo - 1) * 1.5);
+      play(e.type === 'blunt' ? 'melee_blunt' : 'melee_slash', e.x, { semitones: semi });
+      // 收尾重擊與處決：疊一層悶響，聽得出「這下很重」
+      if (e.finisher || e.execute) play('melee_blunt', e.x, { volume: 0.55, semitones: -4 });
     })
     .on('player:exhausted', () => play('exhausted'))
     .on('player:weapon-switch', () => play('weapon_switch'))

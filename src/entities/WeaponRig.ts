@@ -29,9 +29,12 @@ export interface RigPose {
 /** 近戰揮擊姿勢（MeleeSystem.pose） */
 export interface MeleePose {
   id: string;
-  phase: 'windup' | 'active' | 'recovery';
+  /** ready：近戰模式沒在揮，武器舉在身前備戰 */
+  phase: 'ready' | 'windup' | 'active' | 'recovery';
   k: number;
   dir: number;
+  /** 刀類連段的收尾突刺 */
+  thrust?: boolean;
 }
 
 type Pt = { lx: number; ly: number } | { wx: number; wy: number };
@@ -486,13 +489,17 @@ export class WeaponRig {
     }
     const img = this.meleeImg.setVisible(true);
     const heavy = def.swing === 'heavy';
-    const stab = def.id === 'knife';
+    const stab = def.id === 'knife' || !!m.thrust;
     // 角度（度，往上為正）：起手舉起 → 判定時劈下 → 收招回到前方
     const raise = heavy ? 115 : 80;
     const low = heavy ? -55 : -40;
     let up: number;
     let reach = 0;
-    if (stab) {
+    if (m.phase === 'ready') {
+      // 備戰：刀舉在身前、鈍器扛在肩上，隨呼吸微微晃
+      const sway = Math.sin(this.scene.time.now / 260) * 3;
+      up = (heavy ? 60 : def.id === 'knife' ? 12 : 30) + sway;
+    } else if (stab) {
       up = 0;
       reach = m.phase === 'windup' ? -5 * ease(m.k) : m.phase === 'active' ? -5 + 13 * ease(m.k) : 8 * (1 - ease(m.k));
     } else if (m.dir < 0 && !heavy) {

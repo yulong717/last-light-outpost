@@ -78,6 +78,11 @@ export interface HudData {
   slots: string[];
   slot: number;
   meleeName: string;
+  meleeId: string;
+  /** 近戰模式中（槍收起來） */
+  meleeStance: boolean;
+  /** 連段進度：第幾下／一串幾下（0 = 沒有連段）；streak 是連擊數 */
+  meleeChain: { idx: number; len: number; streak: number };
   /** 體力 0..1 */
   stamina: number;
   meleeBusy: boolean;
@@ -303,6 +308,8 @@ export class DefenseScene extends Phaser.Scene {
     const armory = GameState.data.armory;
     this.weapons = new WeaponSystem(this, armory.loadout, armory.ammo, !!armory.finitePistol, GameState.data.hero === 'lucky' ? LUCK.critChance : 0);
     this.melee = new MeleeSystem(this, armory.melee);
+    // 沒帶任何槍（純近戰主角）：整場都是近戰模式
+    if (GameState.data.armory.loadout.length === 0) this.melee.lockStance();
     // 主角技能、被抓住的狀態（見 src/systems/HeroSystem.ts）
     this.heroSys = new HeroSystem(this, this.player, this.melee, () => this.zombies);
     this.heroSys.onKill = () => this.kills++;
@@ -466,24 +473,26 @@ export class DefenseScene extends Phaser.Scene {
     }
     const inp = this.input2.update();
 
+    // 近戰模式切換（4／X／觸控「持刀」）先處理：近戰模式中按換槍是回到槍
+    const melee = this.melee.handleInput(inp);
     // 武器
     if (inp.selectWeapon >= 0) this.weapons.select(inp.selectWeapon);
     if (inp.nextWeapon) this.weapons.next();
-    if (inp.reloadPressed && !this.melee.busy) this.weapons.reload();
+    if (inp.reloadPressed && !this.melee.busy && !this.melee.stance) this.weapons.reload();
     this.weapons.update(dt);
-    // 近戰：隨時可用，會打斷換彈
-    if (inp.meleePressed && this.player.alive && !this.melee.busy) {
+    // 近戰：拿槍時隨時快揮一下，近戰模式下攻擊鍵就是揮；會打斷換彈
+    if (melee.swing && this.player.alive) {
       this.weapons.cancelReload();
-      this.melee.trySwing(this.player);
-    } else if (inp.meleePressed) this.melee.trySwing(this.player);
+      this.melee.trySwing(this.player, inp.aimX);
+    }
     const meleeRes = this.melee.update(dt, this.player, this.zombies);
     this.kills += meleeRes.kills;
-    // 負重：拿機槍走得慢；奔跑變快、被抓住變超慢
+    // 負重：拿機槍走得慢、近戰模式輕快、揮鈍器時站定；奔跑變快、被抓住變超慢
     const heroMul = this.heroSys ? this.heroSys.update(dt, inp.moveX !== 0 || inp.moveY !== 0) : 1;
-    this.player.speedMul = this.weapons.active.def.moveMul * heroMul;
+    this.player.speedMul = this.melee.moveMul(this.weapons.active.def.moveMul) * heroMul;
 
-    // 主角移動：據點外牆內側到戰場右緣
-    this.player.update(dt, inp.moveX, inp.moveY, inp.aimX, { minX: BASE_X + 14, maxX: WORLD_WIDTH - 16 });
+    // 主角移動：據點外牆內側到戰場右緣（揮擊中不轉身）
+    this.player.update(dt, inp.moveX, inp.moveY, this.melee.aimX(this.player, inp.aimX), { minX: BASE_X + 14, maxX: WORLD_WIDTH - 16 });
 
     const p = this.player;
     // 手上的武器先擺好姿勢，子彈從真正的槍口射出
@@ -493,7 +502,7 @@ export class DefenseScene extends Phaser.Scene {
     this.updateRig(dt, inp.aimX, inp.aimY);
     const muzzleX = this.rig.muzzle.x;
     const muzzleY = this.rig.muzzle.y;
-    const shot = p.alive && !this.melee.busy
+    const shot = p.alive && melee.gunAllowed
       ? this.weapons.tryFire(muzzleX, muzzleY, inp.aimX, inp.aimY, inp.fireHeld, inp.firePressed, this.zombies, p.moveFactor)
       : null;
     if (shot) {
@@ -507,7 +516,7 @@ export class DefenseScene extends Phaser.Scene {
     const aimDist = Phaser.Math.Distance.Between(muzzleX, muzzleY, inp.aimX, inp.aimY);
     // 槍口上揚：準星跟著往上飄，鬆開扳機才慢慢回來
     const climbY = Math.tan(Phaser.Math.DegToRad(this.weapons.climbDeg)) * Math.abs(inp.aimX - muzzleX);
-    this.crosshair.update(realDt, inp.aimX, inp.aimY - climbY, this.weapons.spreadNow(p.moveFactor), aimDist, p.alive);
+    this.crosshair.update(realDt, inp.aimX, inp.aimY - climbY, this.weapons.spreadNow(p.moveFactor), aimDist, p.alive && !this.melee.stance);
     this.screenFx.update(realDt, p.hp, p.maxHp);
 
     // NPC 夥伴
@@ -669,6 +678,9 @@ export class DefenseScene extends Phaser.Scene {
       slots: this.weapons.weapons.map((g) => g.def.name),
       slot: this.weapons.current,
       meleeName: this.melee.def.name,
+      meleeId: this.melee.def.id,
+      meleeStance: this.melee.stance,
+      meleeChain: this.melee.chain,
       stamina: this.melee.staminaRatio,
       meleeBusy: this.melee.busy,
       reloading: this.weapons.reloading,
