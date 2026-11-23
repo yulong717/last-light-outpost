@@ -1,0 +1,24 @@
+# 阿凱：主角，高中棒球隊員
+id: akai
+kind: hero
+body: M              # 56 px 站姿高度，腳底 y=61，中線 x=32
+palette_max: 16
+reference_images:
+  - art/ai/refs/akai_body_teen_x8.png   # 現有 teen 底圖（身形參考）
+  - art/ai/refs/player_shoot0_x8.png    # 現有主角射擊第 0 格
+description: >
+  teenage boy, slim high school baseball player, white baseball jersey with thin
+  blue-grey vertical pinstripes, red number 7 on the chest, dark navy baseball cap,
+  red wristbands, dark trousers, sneakers, determined expression
+must_keep: [white pinstripe jersey, red number 7, navy cap]
+actions:
+  idle:   {frames: 4, loop: true,  fps: 10, method: video_loop}
+  walk:   {frames: 8, loop: true,  fps: 10, method: video_loop}
+  run:    {frames: 8, loop: true,  fps: 10, method: video_loop}
+  aim:    {frames: 2, loop: true,  fps: 6,  method: pose_swap, arms: false}
+  shoot:  {frames: 3, loop: false, fps: 12, method: pose_swap, arms: false}
+  melee:  {frames: 6, loop: false, fps: 12, method: pose_swap, weapon: baseball bat}
+  hit:    {frames: 3, loop: false, fps: 12, method: pose_swap}
+  death:  {frames: 8, loop: false, fps: 10, method: pose_keys_plus_video, keys: [1, 4, 8]}
+routes: [A, B]
+seeds_per_try: 4

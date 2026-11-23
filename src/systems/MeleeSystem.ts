@@ -31,6 +31,12 @@ const STANCE_MOVE = 1.1;
 const STANCE_REGEN = { delayMul: 2, rateMul: 1.35, swingMul: 0.5 };
 /** 揮擊中的移動倍率：刀可以邊砍邊走，鈍器掄下去幾乎站定 */
 const SWING_MOVE = { light: 0.8, heavy: 0.35 };
+/** 收招長度倍率：打中變短，揮空變長；打中後收招進行到 cancel 就能直接接下一下 */
+const HIT_RECOVERY = { hit: 0.75, whiff: 1.15, cancel: 0.5 };
+/** 重擊打飛（收尾、處決）：起飛速度 px/s、水平距離 px、多停幾毫秒、鏡頭放大 */
+const LAUNCH_HIT = { power: 230, dist: 48, extraStop: 35, zoom: 1.05, zoomMs: 90 };
+/** 卡肉期間被打的那隻左右抖幾 px */
+const VICTIM_SHAKE = { light: 1, mid: 2, heavy: 3 };
 
 /**
  * 近戰：完整的一套打法，不只是應急。
@@ -102,10 +108,12 @@ export class MeleeSystem {
   }
 
   /** 揮擊姿勢給 WeaponRig 畫手上的武器；近戰模式沒在揮時是「備戰」姿勢 */
-  get pose(): { phase: 'ready' | 'windup' | 'active' | 'recovery'; k: number; dir: number; thrust: boolean } | null {
-    if (this.phase === 'idle') return this.stance ? { phase: 'ready', k: 0, dir: this.dir, thrust: false } : null;
+  get pose(): { phase: 'ready' | 'windup' | 'active' | 'recovery'; k: number; dir: number; thrust: boolean; contact: boolean } | null {
+    if (this.phase === 'idle') return this.stance ? { phase: 'ready', k: 0, dir: this.dir, thrust: false, contact: false } : null;
     const len = this.phaseLen(this.phase);
-    return { phase: this.phase, k: Math.min(1, this.t / Math.max(0.001, len)), dir: this.dir, thrust: this.finisher };
+    // 打中之後判定段停在「打到」那一格，卡肉時看得到球棒壓在對方身上
+    const contact = this.phase === 'active' && this.hitCount > 0;
+    return { phase: this.phase, k: Math.min(1, this.t / Math.max(0.001, len)), dir: this.dir, thrust: this.finisher, contact };
   }
 
   get busy(): boolean {
@@ -186,8 +194,8 @@ export class MeleeSystem {
     const d = this.def;
     if (phase === 'windup') return d.windup * this.speed * (this.chainIdx > 1 && !this.finisher ? CHAIN_WINDUP : 1);
     if (phase === 'active') return d.active * this.speed;
-    // 收尾那一下收招比較久，讓連段有節奏
-    return d.recovery * this.speed * (this.finisher ? 1.4 : 1);
+    // 收尾那一下收招比較久，讓連段有節奏；打中收招變短、揮空吃完整破綻
+    return d.recovery * this.speed * (this.finisher ? 1.4 : 1) * (this.hitCount > 0 ? HIT_RECOVERY.hit : HIT_RECOVERY.whiff);
   }
 
   private start(player: Player, aimX?: number): void {
@@ -277,6 +285,12 @@ export class MeleeSystem {
         player.swingLean = (heavy ? 22 : 12) * (1 - k);
         // 刀類：收招早早就能接下一刀（連打不吃鍵，也不用等收完）
         const canChain = this.queued && d.comboEvery > 1 && this.chainIdx < d.comboEvery && k >= d.chainCancel;
+        // 打中確認取消：鈍器打中之後收招後半段就能再揮（不用重新掄起）
+        const hitCancel = this.queued && d.comboEvery <= 1 && this.hitCount > 0 && !this.finisher && k >= HIT_RECOVERY.cancel;
+        if (hitCancel) {
+          this.start(player);
+          break;
+        }
         if (canChain) {
           this.comboTimer = COMBO_WINDOW;
           this.start(player);
@@ -323,6 +337,8 @@ export class MeleeSystem {
     let hitsNow = 0;
     let killsNow = 0;
     let execNow = false;
+    let launchNow = false;
+    const victims: { z: Zombie; tier: 'light' | 'mid' | 'heavy' }[] = [];
     for (const { z } of cands) {
       if (this.hitCount >= d.maxTargets) break;
       this.hitSet.add(z);
@@ -346,6 +362,15 @@ export class MeleeSystem {
       fx?.blood(hx, hy, this.facing, z.footY, blunt ? 4 : fin ? 10 : 6, blunt ? 0.8 : fin ? 1.4 : 1.1);
       fx?.meleeImpact(hx, hy, this.facing, blunt ? 'blunt' : heavy || fin ? 'heavy-slash' : 'slash', z.footY);
       const killed = z.takeHit(info);
+      // 受力分級：收尾或處決＝重（打飛），鈍器／重武器＝中（滑出去），其他＝輕
+      const tier = fin || execute ? 'heavy' : blunt || heavy ? 'mid' : 'light';
+      if (!killed) {
+        if (tier === 'heavy' && (blunt || heavy)) {
+          z.launch(this.facing, LAUNCH_HIT.power, LAUNCH_HIT.dist);
+          launchNow = true;
+        }
+        victims.push({ z, tier });
+      }
       res.hits++;
       hitsNow++;
       if (killed) {
@@ -360,9 +385,13 @@ export class MeleeSystem {
     }
     if (hitsNow > 0) {
       // 打中才卡肉、震鏡頭：重武器頓得更久，打越多隻越重；收尾重擊多頓一拍
-      const extra = (hitsNow - 1) * 10 + (killsNow > 0 ? 15 : 0) + (fin ? 45 : 0) + (execNow ? 25 : 0);
-      fx?.freeze(d.hitStop + extra);
+      const extra = (hitsNow - 1) * 10 + (killsNow > 0 ? 15 : 0) + (fin ? 45 : 0) + (execNow ? 25 : 0) + (launchNow ? LAUNCH_HIT.extraStop : 0);
+      const stop = d.hitStop + extra;
+      fx?.freeze(stop);
+      // 卡肉時只有被打的那隻在抖，攻擊者定格
+      for (const v of victims) v.z.hitShake(stop + 20, VICTIM_SHAKE[v.tier]);
       const cam = CameraFeel.of(this.scene);
+      if (launchNow || fin) cam?.punch(LAUNCH_HIT.zoom, LAUNCH_HIT.zoomMs);
       cam?.addTrauma(d.trauma * (1 + 0.2 * (hitsNow - 1)) * (fin ? 1.8 : 1));
       // 鏡頭往打擊方向推一下：鈍器推得多
       cam?.kick(this.facing > 0 ? Math.PI : 0, heavy ? 4 + hitsNow : fin ? 3 : 1);

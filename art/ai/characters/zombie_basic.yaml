@@ -1,0 +1,20 @@
+# 一般霧屍
+id: zombie_basic
+kind: zombie
+body: M
+palette_max: 16
+reference_images:
+  - art/ai/refs/zombie_basic_walk0_x8.png   # 現有走路第 0 格
+description: >
+  shambling zombie, ordinary citizen, grey-green skin, torn plain shirt and trousers
+  in neutral grey and beige flat color blocks, hunched forward, arms reaching forward,
+  dragging feet, blank white eyes
+notes: >
+  衣服用中性大色塊，遊戲的 ZombieComposer 會在執行期換膚色與衣色；不要畫複雜花紋。
+actions:
+  walk:   {frames: 8, loop: true,  fps: 10, method: video_loop}
+  attack: {frames: 6, loop: false, fps: 12, method: pose_swap}
+  hit:    {frames: 3, loop: false, fps: 12, method: pose_swap}
+  death:  {frames: 9, loop: false, fps: 10, method: pose_keys_plus_video, keys: [1, 5, 9]}
+routes: [A, B]
+seeds_per_try: 4
