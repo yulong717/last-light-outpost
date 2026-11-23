@@ -228,6 +228,8 @@ export interface MeleeDef {
   swing: 'light' | 'heavy';
   /** 連段招式表：有寫的話 comboEvery = steps.length，每一下是不同的招 */
   steps?: MeleeStep[];
+  /** 衝刺攻擊（衝刺中出手時改用這一招） */
+  dashStep?: MeleeStep;
 }
 
 export type WeaponDef = FirearmDef | MeleeDef;
@@ -792,6 +794,8 @@ export const MELEE: MeleeDef[] = [
       { name: '回掃', windup: 0.08, active: 0.09, recovery: 0.28, reach: 28, arc: 150, damageMul: 0.85, knockback: 24, stagger: 0.6, hitStop: 45, trauma: 0.12, lunge: 34 },
       { name: '下劈', windup: 0.22, active: 0.12, recovery: 0.48, reach: 34, arc: 90, damageMul: 1.6, knockback: 40, stagger: 1, hitStop: 90, trauma: 0.24, lunge: 46, launch: true },
     ],
+    // 衝刺攻擊：幾乎不用起手，帶著衝勁往前滑一大段，判定長、把前方一排撞飛
+    dashStep: { name: '衝刺打', windup: 0.05, active: 0.16, recovery: 0.4, reach: 38, arc: 110, damageMul: 1.3, knockback: 44, stagger: 0.9, hitStop: 80, trauma: 0.22, lunge: 90, launch: true },
     price: 25,
     unlockDay: 1,
     trailColor: 0xb8c4cf,

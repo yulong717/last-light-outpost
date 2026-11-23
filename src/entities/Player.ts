@@ -22,6 +22,9 @@ export interface PlayerBounds {
  * - 走路身體前傾、腳步揚塵；轉身時擠壓一下
  * - 被打：閃白轉紅、往後擊退、無敵時間內閃爍
  */
+/** 衝刺的慣性：煞車多慢（越小滑越遠）、停止衝刺後慣性持續幾秒 */
+const SKID = { decel: 2.6, time: 0.5 };
+
 type FramePick = (phase: string, k: number, contact: boolean) => number;
 /**
  * 揮擊影格的排法。第 1 招的 6 格：0 棒在肩後、1 舉起、2 打到正前方（命中格）、3 揮過頭、4 棒子豎起、5 回到備戰。
@@ -83,6 +86,13 @@ export class Player {
     return true;
   }
   private stepIndex = 0;
+  /** 往同一個方向連走了幾步（阿凱走滿幾步進入衝刺）、往哪個方向 */
+  runSteps = 0;
+  private runDir = 0;
+  /** 衝刺中（HeroSystem 設定）：有慣性，放開或反向會滑一段 */
+  dashing = false;
+  private skidT = 0;
+  private wasDashing = false;
   private recoil = 0;
   /** 外力（受擊、霰彈後座力）造成的速度，會很快衰減 */
   private pushX = 0;
@@ -164,12 +174,29 @@ export class Player {
     if (facing !== this.facing) this.squashAmt = Math.max(this.squashAmt, 0.6);
     this.facing = facing;
 
+    // 連走步數：放開左右、或改按反方向就重算
+    const inDir = Math.abs(moveX) > 0.3 ? Math.sign(moveX) : 0;
+    if (inDir === 0 || (this.runDir !== 0 && inDir !== this.runDir)) {
+      this.runSteps = 0;
+      this.runDir = inDir;
+    } else if (this.runDir === 0) this.runDir = inDir;
+    // 衝刺結束（放開、反向、出手）後還會滑一小段
+    if (this.wasDashing && !this.dashing) this.skidT = SKID.time;
+    this.wasDashing = this.dashing;
+    this.skidT = Math.max(0, this.skidT - dt);
+
     // 倒退走較慢
     const back = moveX !== 0 && Math.sign(moveX) !== this.facing ? m.backpedal : 1;
     const tx = moveX * m.speedX * back * this.speedMul;
     const ty = moveY * m.speedY * this.speedMul;
     // 加速／煞車：指數逼近目標速度，放開時煞得比起步快
-    const kx = Math.abs(tx) > Math.abs(this.vx) * 0.5 && tx !== 0 ? m.accel : m.decel;
+    let kx: number = Math.abs(tx) > Math.abs(this.vx) * 0.5 && tx !== 0 ? m.accel : m.decel;
+    // 慣性：衝刺中或剛停下時，煞車和反向都很慢（腳底會揚塵）
+    const braking = tx === 0 || Math.sign(tx) !== Math.sign(this.vx);
+    if ((this.dashing || this.skidT > 0) && braking && Math.abs(this.vx) > 10) {
+      kx = SKID.decel;
+      if (Math.random() < dt * 25) Fx.of(this.scene)?.footDust(this.footX, this.footY, Math.sign(this.vx));
+    }
     const ky = Math.abs(ty) > Math.abs(this.vy) * 0.5 && ty !== 0 ? m.accel : m.decel;
     this.vx += (tx - this.vx) * (1 - Math.exp(-kx * dt));
     this.vy += (ty - this.vy) * (1 - Math.exp(-ky * dt));
@@ -201,6 +228,7 @@ export class Player {
 
   private step(speed: number): void {
     this.stepIndex ^= 1;
+    if (this.runDir !== 0 && Math.sign(this.vx) === this.runDir) this.runSteps++;
     Fx.of(this.scene)?.footDust(this.footX - this.vx * 0.04, this.footY, Math.sign(this.vx) || this.facing);
     GameEvents.of(this.scene).emit('player:step', {
       x: this.footX,

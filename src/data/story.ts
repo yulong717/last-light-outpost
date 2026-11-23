@@ -107,7 +107,7 @@ export const OPENINGS: Record<HeroId, Chapter> = {
       options: [
         {
           label: '衝過球場',
-          hint: '條件戰鬥：撐 20 秒（試試奔跑）',
+          hint: '條件戰鬥：撐 20 秒（試試衝刺打）',
           action: {
             type: 'field',
             field: { mode: 'fight', goal: 'survive', title: '撐 20 秒，衝到保健室', zombies: 4, seconds: 20 },
