@@ -89,7 +89,11 @@ export class MeleeSystem {
   private streak = 0;
   private streakT = 0;
   private streakText?: Phaser.GameObjects.Text;
-  /** 主角技能給的近戰加成（阿凱奔跑中），由 HeroSystem 每幀設定 */
+  /** 衝刺中（阿凱）：這時出手是衝刺攻擊，由 HeroSystem 每幀設定 */
+  dashing = false;
+  /** 這一下是衝刺攻擊 */
+  private dashSwing = false;
+  /** 主角技能給的近戰加成，由 HeroSystem 每幀設定 */
   bonus = { damageMul: 1, knockback: 0, stagger: 0 };
   /** 這一刀起手時的加成（揮到一半停止奔跑也算數） */
   private swingBonus = { damageMul: 1, knockback: 0, stagger: 0 };
@@ -113,7 +117,7 @@ export class MeleeSystem {
     const len = this.phaseLen(this.phase);
     // 打中之後判定段停在「打到」那一格，卡肉時看得到球棒壓在對方身上
     const contact = this.phase === 'active' && this.hitCount > 0;
-    return { phase: this.phase, k: Math.min(1, this.t / Math.max(0.001, len)), dir: this.dir, thrust: this.finisher && !this.def.steps, contact, step: this.chainIdx };
+    return { phase: this.phase, k: Math.min(1, this.t / Math.max(0.001, len)), dir: this.dir, thrust: this.finisher && !this.def.steps, contact, step: this.dashSwing ? 1 : this.chainIdx };
   }
 
   get busy(): boolean {
@@ -125,7 +129,7 @@ export class MeleeSystem {
     return { idx: this.comboTimer > 0 || this.busy ? this.chainIdx : 0, len: this.def.comboEvery, streak: this.streak, names: this.def.steps?.map((s) => s.name) };
   }
 
-  /** 技能耗體力（奔跑、閃身、擊倒）：扣完之後一段時間不回復。不夠就回傳 false、不扣 */
+  /** 技能耗體力（閃身、擊倒）：扣完之後一段時間不回復。不夠就回傳 false、不扣 */
   spend(n: number, allowPartial = false): boolean {
     if (this.stamina < n && !allowPartial) return false;
     this.stamina = Math.max(0, this.stamina - n);
@@ -192,6 +196,7 @@ export class MeleeSystem {
 
   /** 這一下是連段招式表裡的哪一招（沒有招式表就是 undefined） */
   private get step(): MeleeStep | undefined {
+    if (this.dashSwing && this.def.dashStep) return this.def.dashStep;
     return this.def.steps?.[Math.max(0, this.chainIdx - 1)];
   }
 
@@ -214,6 +219,9 @@ export class MeleeSystem {
     // 刀類：在連段時間內接著揮就是下一刀；一串打完重新開始
     const continuing = this.comboTimer > 0 && d.comboEvery > 1 && this.chainIdx < d.comboEvery;
     this.chainIdx = continuing ? this.chainIdx + 1 : 1;
+    // 衝刺攻擊：獨立的一招，打完連段就結束（當成收尾）
+    this.dashSwing = this.dashing && !!d.dashStep && !continuing;
+    if (this.dashSwing) this.chainIdx = Math.max(1, d.comboEvery);
     const cost = d.stamina * (this.chainIdx > 1 ? 0.8 : 1);
     this.tired = this.stamina < cost;
     this.stamina = Math.max(0, this.stamina - cost);
@@ -227,7 +235,7 @@ export class MeleeSystem {
     this.hitSet.clear();
     this.hitCount = 0;
     // 連段第一下固定由上往下，之後左右來回（橫掃、回掃）
-    this.dir = this.chainIdx === 1 ? 1 : -this.dir;
+    this.dir = this.chainIdx === 1 || this.dashSwing ? 1 : -this.dir;
     // 連段中可以轉身：往按下的那一邊揮
     this.facing = aimX !== undefined ? (aimX >= player.footX ? 1 : -1) : player.facing;
     player.facing = this.facing;
@@ -455,7 +463,7 @@ export class MeleeSystem {
     const cy = player.footY - 28;
     const heavy = d.swing === 'heavy';
     const st = this.step;
-    if (st?.launch) {
+    if (st?.launch && !this.dashSwing) {
       // 下劈：從頭頂後方劈到前方地面的一道直立大弧
       const r = st.reach + 8;
       const steps = 12;

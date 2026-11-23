@@ -600,7 +600,7 @@ export class DefenseScene extends Phaser.Scene {
     }
     const meleeRes = this.melee.update(dt, this.player, this.zombies);
     this.kills += meleeRes.kills;
-    // 負重：拿機槍走得慢、近戰模式輕快、揮鈍器時站定；奔跑變快、被抓住變超慢
+    // 負重：拿機槍走得慢、近戰模式輕快、揮鈍器時站定；衝刺變快、被抓住變超慢
     const heroMul = this.heroSys ? this.heroSys.update(dt, inp.moveX !== 0 || inp.moveY !== 0) : 1;
     this.player.speedMul = this.melee.moveMul(this.weapons.active.def.moveMul) * heroMul;
 

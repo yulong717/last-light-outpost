@@ -119,9 +119,8 @@ export class UIScene extends Phaser.Scene {
     if (!this.touchUI) pixelText(this, GAME_WIDTH - 60, GAME_HEIGHT - 116, '4/X', 7, '#90a4ae').setOrigin(0.5, 1);
     this.buttonRects.joystick = { x: JOYSTICK_ZONE.x + 52 - JOYSTICK_RADIUS - 4, y: JOYSTICK_ZONE.y + JOYSTICK_ZONE.h - 52 - JOYSTICK_RADIUS - 4, w: JOYSTICK_RADIUS * 2 + 8, h: JOYSTICK_RADIUS * 2 + 8 };
     this.buttonRects.fire = { x: 300, y: 150, w: 180, h: 110 };
-    // 主角技能鍵：阿凱奔跑（切換）、馬克擊倒（放在夥伴指令鍵左邊，不要疊在一起）
+    // 主角技能鍵：馬克擊倒（放在夥伴指令鍵左邊，不要疊在一起）；阿凱的衝刺是自動的，不需要按鍵
     const heroId = GameState.data.hero;
-    if (heroId === 'student') this.button(GAME_WIDTH - 152, GAME_HEIGHT - 38, '奔跑', () => (heroTouch.sprint = !heroTouch.sprint));
     if (heroId === 'soldier') this.button(GAME_WIDTH - 152, GAME_HEIGHT - 38, '擊倒', () => (heroTouch.skill = true));
     // 探索帶回來的輔助用品（鍵盤 G／H）
     this.grenadeLabel = this.supplyButton(GAME_WIDTH - 76, GAME_HEIGHT - 76, 'G', 'use-grenade');
@@ -372,10 +371,9 @@ export class UIScene extends Phaser.Scene {
     if (hh) {
       const parts: string[] = [];
       if (hh.grabbed) parts.push(hh.grabbed > 1 ? `被 ${hh.grabbed} 隻纏住！` : '被抓住！打退或殺掉牠');
-      else if (hh.sprinting) parts.push('奔跑中');
+      else if (hh.sprinting) parts.push('衝刺中！攻擊＝衝刺打');
       if (hh.skill) parts.push(`${hh.skill}${this.touchUI ? '' : ' C'} ${hh.skillReady ? '就緒' : '…'}`);
       if (hh.lastStand !== undefined) parts.push(hh.lastStand ? '大難不死 ✓' : '大難不死 ✗');
-      if (GameState.data.hero === 'student' && !hh.grabbed && !hh.sprinting) parts.push(this.touchUI ? '' : 'Shift 奔跑');
       this.heroText.setText(parts.filter(Boolean).join('　')).setColor(hh.grabbed ? '#ff6b6b' : '#c8c8c8');
     }
     this.waveText.setText(h.tutorial ? '開局教學' : `第 ${GameState.data.day} 夜　第 ${h.wave} / ${h.totalWaves} 波`);
