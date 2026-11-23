@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { LANE_BOTTOM, LANE_TOP } from '../config';
-import { COMPANION_ROLES, MAX_DEPLOYED, crewReady } from '../data/companions';
+import { COMPANION_ROLES, MAX_DEPLOYED, crewReady, type CrewMember } from '../data/companions';
 import { TRAIT_TUNING, traitNames } from '../data/crewTraits';
 import type { Barricade } from '../entities/Barricade';
 import { Companion, type CompanionShot } from '../entities/Companion';
@@ -95,6 +95,19 @@ export class CompanionSystem {
       scene.input.keyboard?.off('keydown-F', this.toggleOrder, this);
       scene.events.off('companion-order', this.toggleOrder, this);
     });
+  }
+
+  /**
+   * 夜裡救到的倖存者：出戰人數還沒滿就從翻進來的位置直接加入戰鬥。回傳是否參戰。
+   */
+  join(member: CrewMember, x: number, y: number): boolean {
+    if (this.companions.filter((c) => c.alive).length >= MAX_DEPLOYED) return false;
+    const def = COMPANION_ROLES[member.role];
+    if (!def) return false;
+    const c = new Companion(this.scene, member, def, x, y);
+    this.companions.push(c);
+    this.healTimers.set(c, 0);
+    return true;
   }
 
   toggleOrder(): void {
