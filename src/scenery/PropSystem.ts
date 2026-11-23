@@ -92,6 +92,10 @@ export interface Interaction {
 
 /** 掩體的擋路範圍：底部一條橢圓 */
 const COVER_DEPTH = 9;
+/** 頂到掩體時每格往旁邊滑幾 px */
+const DETOUR_SLIDE = 1.2;
+/** 多高的道具會擋人、擋到時變多透明 */
+const OCCLUDE = { minH: 20, alpha: 0.45 };
 
 export class PropSystem {
   readonly props: PropObj[] = [];
@@ -560,8 +564,11 @@ export class PropSystem {
 
   // ── 每格 ──
 
-  /** 把人推出掩體的範圍（霧屍會沿著邊緣滑過去） */
-  collide(e: { footX: number; footY: number }): void {
+  /**
+   * 把人推出掩體的範圍。正面頂到時沿著邊緣往有路的那一側滑，
+   * 霧屍（有 laneY）會把目標路線改到掩體外側，繞過去而不是一直頂著卡住。
+   */
+  collide(e: { footX: number; footY: number; laneY?: number }): void {
     for (const o of this.props) {
       if (o.def.wall || (o.kind !== 'cover' && o.kind !== 'car' && o.def.id !== 'pump') || o.w < 14) continue;
       const rx = o.w / 2 + 2;
@@ -577,12 +584,45 @@ export class PropSystem {
       if (Math.abs(dy) * 1.2 > Math.abs(dx) / rx * ry || Math.abs(dx) < rx * 0.6) {
         e.footY = clampLaneY(dy >= 0 ? Math.max(ny, e.footY) : Math.min(ny, e.footY));
         if (e.footY === LANE_TOP || e.footY === LANE_BOTTOM) e.footX = nx;
-      } else e.footX = nx;
+      } else {
+        e.footX = nx;
+        // 正面頂到：往比較近、而且沒被路面邊緣擋住的那一側繞
+        const cy = o.y - ry + 3;
+        let side = dy >= 0 ? 1 : -1;
+        if (side < 0 && cy - ry - 3 < LANE_TOP) side = 1;
+        else if (side > 0 && cy + ry + 3 > LANE_BOTTOM) side = -1;
+        e.footY = clampLaneY(e.footY + side * DETOUR_SLIDE);
+        if (e.laneY !== undefined) e.laneY = clampLaneY(cy + side * (ry + 4));
+      }
+    }
+  }
+
+  /**
+   * 擋住後面角色的大型道具（車、貨車、掩體）變半透明，
+   * 霧屍和主角走到車後面也看得到。
+   */
+  private updateOcclusion(dt: number): void {
+    const who: { footX: number; footY: number }[] = [this.host.player];
+    for (const z of this.host.zombies()) if (!z.dead) who.push(z);
+    for (const o of this.props) {
+      if (o.def.wall || o.def.id === 'tubelight' || o.h < OCCLUDE.minH) continue;
+      const hw = o.w / 2 + 4;
+      let hidden = false;
+      for (const e of who) {
+        if (e.footY < o.y - 1 && e.footY > o.y - o.h + 6 && Math.abs(e.footX - o.x) < hw) {
+          hidden = true;
+          break;
+        }
+      }
+      const target = hidden ? OCCLUDE.alpha : 1;
+      const a = o.img.alpha;
+      if (a !== target) o.img.setAlpha(a + Phaser.Math.Clamp(target - a, -dt * 6, dt * 6));
     }
   }
 
   update(dt: number): void {
     this.time += dt;
+    this.updateOcclusion(dt);
     const p = this.host.player;
     // 油桶點燃倒數
     for (const o of this.props) {

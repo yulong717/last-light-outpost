@@ -96,7 +96,7 @@ export interface HudData {
   /** 近戰模式中（槍收起來） */
   meleeStance: boolean;
   /** 連段進度：第幾下／一串幾下（0 = 沒有連段）；streak 是連擊數 */
-  meleeChain: { idx: number; len: number; streak: number };
+  meleeChain: { idx: number; len: number; streak: number; names?: string[] };
   /** 身上沒有槍（阿凱開局）：鎖在近戰模式，武器欄不列槍 */
   unarmed: boolean;
   /** 體力 0..1 */

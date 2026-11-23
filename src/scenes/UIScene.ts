@@ -338,7 +338,11 @@ export class UIScene extends Phaser.Scene {
       const c = h.meleeChain;
       const pips = c.len > 1 ? '　' + Array.from({ length: c.len }, (_, i) => (i < c.idx ? '■' : '□')).join('') : '';
       this.ammoText.setText(`${h.meleeName}${pips}`).setColor('#ffe082');
-      const style = c.len > 1 ? `刀・快速連砍 ${c.len} 下收尾` : '重擊・打飛一排，每下要重新掄';
+      const style = c.names
+        ? `重擊・${c.names.join('→')}，最後一下打飛`
+        : c.len > 1
+          ? `刀・快速連砍 ${c.len} 下收尾`
+          : '重擊・打飛一排，每下要重新掄';
       this.reserveText.setText(h.unarmed ? `沒有槍　${style}` : style).setColor('#b0bec5');
       this.reloadBar.width = 80 * h.stamina;
     } else {

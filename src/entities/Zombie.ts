@@ -87,7 +87,8 @@ export class Zombie extends Phaser.GameObjects.Sprite {
   /** 走路動態用的相位，讓每隻步伐不同步 */
   private walkPhase = Math.random() * Math.PI * 2;
   /** 朝路障前進時想站的 y，讓屍群沿著柵欄散開而不是擠成一點 */
-  private laneY: number;
+  /** 繞過掩體時 PropSystem 會改這個值，讓牠沿著邊緣走過去而不是一直頂著 */
+  laneY: number;
   private walkKey: string;
   private attackKey: string;
   /** 被打中時往後仰的角度，逐漸回正 */

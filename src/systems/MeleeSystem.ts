@@ -121,8 +121,8 @@ export class MeleeSystem {
   }
 
   /** 目前連段進度（給 HUD）：第幾下／一串幾下 */
-  get chain(): { idx: number; len: number; streak: number } {
-    return { idx: this.comboTimer > 0 || this.busy ? this.chainIdx : 0, len: this.def.comboEvery, streak: this.streak };
+  get chain(): { idx: number; len: number; streak: number; names?: string[] } {
+    return { idx: this.comboTimer > 0 || this.busy ? this.chainIdx : 0, len: this.def.comboEvery, streak: this.streak, names: this.def.steps?.map((s) => s.name) };
   }
 
   /** 技能耗體力（奔跑、閃身、擊倒）：扣完之後一段時間不回復。不夠就回傳 false、不扣 */
