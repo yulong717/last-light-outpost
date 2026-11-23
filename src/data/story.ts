@@ -97,7 +97,7 @@ export const OPENINGS: Record<HeroId, Chapter> = {
     title: '第一章　殺出校園',
     minDay: 1,
     zone: 'school',
-    intro: ['你在據點裡清點身上的東西：一根球棒、一把從警衛室撿來的手槍，只剩兩個彈匣。', '保健室還有藥，體育館的後門通往外面。', '回學校一趟，把能用的都帶出來。'],
+    intro: ['你在據點裡清點身上的東西：一根球棒，沒有別的了。', '保健室還有藥，體育館的後門通往外面。', '回學校一趟，把能用的都帶出來。'],
     objective: '回市立高中的保健室搬藥',
     finale: {
       id: 'story-gym',
@@ -126,7 +126,7 @@ export const OPENINGS: Record<HeroId, Chapter> = {
         },
       ],
     },
-    reward: { supplies: { medkit: 2 }, ammo: { '9mm': 14 }, scrap: 15 },
+    reward: { supplies: { medkit: 2, decoy: 1 }, scrap: 25 },
     outro: ['回到據點，你把藥排在桌上。', '收音機突然傳來敲擊聲：住宅區那邊，好像有人在用手電筒打信號。'],
     openZones: AFTER_OPENING,
     shop: ['machete'],
