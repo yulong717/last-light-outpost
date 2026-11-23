@@ -174,6 +174,14 @@ export interface MeleeStep {
   lunge: number;
   /** 這一招打中會把霧屍打飛（收尾） */
   launch?: boolean;
+  /** 刺擊：判定是窄長的直線，畫面上是直刺 */
+  thrust?: boolean;
+  /** 迴旋：前後一圈都打得到（大鐵鎚掄一圈、開山刀迴旋砍） */
+  spin?: boolean;
+  /** 砸地：以前方落點為中心、這個半徑（px）內全部震到，不限扇形 */
+  slam?: number;
+  /** 這一招最多打幾隻（不寫用武器的 maxTargets） */
+  maxTargets?: number;
 }
 
 export interface MeleeDef {
@@ -230,6 +238,8 @@ export interface MeleeDef {
   steps?: MeleeStep[];
   /** 衝刺攻擊（衝刺中出手時改用這一招） */
   dashStep?: MeleeStep;
+  /** 斷肢機率倍率：刀刃砍得斷手腳（開山刀最高） */
+  gore?: number;
 }
 
 export type WeaponDef = FirearmDef | MeleeDef;
@@ -704,7 +714,7 @@ export const MELEE: MeleeDef[] = [
     kind: 'melee',
     id: 'knife',
     name: '軍用刀',
-    desc: '出手最快，四連刺第四下重戳；幾乎不擊退，靠手速貼身連砍',
+    desc: '刺、連刺、橫劃、重戳四連，出手最快；幾乎不擊退，打暈的霧屍處決加倍',
     damage: 14,
     damageType: 'slash',
     penetration: 0.2,
@@ -720,6 +730,16 @@ export const MELEE: MeleeDef[] = [
     staggerBonus: 1.8,
     comboEvery: 4,
     chainCancel: 0.15,
+    // 四連：左手刺 → 右手刺 → 反手橫劃（掃開兩隻）→ 壓低身體重戳（貫穿、硬直）
+    steps: [
+      { name: '刺', windup: 0.035, active: 0.05, recovery: 0.14, reach: 22, arc: 40, damageMul: 1, knockback: 0, stagger: 0.12, hitStop: 25, trauma: 0, lunge: 40, thrust: true, maxTargets: 1 },
+      { name: '連刺', windup: 0.03, active: 0.05, recovery: 0.14, reach: 22, arc: 40, damageMul: 1, knockback: 0, stagger: 0.12, hitStop: 25, trauma: 0, lunge: 36, thrust: true, maxTargets: 1 },
+      { name: '橫劃', windup: 0.05, active: 0.07, recovery: 0.18, reach: 20, arc: 130, damageMul: 0.9, knockback: 2, stagger: 0.2, hitStop: 35, trauma: 0, lunge: 24, maxTargets: 2 },
+      { name: '重戳', windup: 0.11, active: 0.08, recovery: 0.32, reach: 30, arc: 26, damageMul: 2.3, knockback: 10, stagger: 0.45, hitStop: 70, trauma: 0, lunge: 70, thrust: true, maxTargets: 2 },
+    ],
+    // 衝刺：壓低身體滑步突刺，一路刺穿前面兩隻
+    dashStep: { name: '滑步突刺', windup: 0.03, active: 0.12, recovery: 0.3, reach: 36, arc: 26, damageMul: 1.8, knockback: 8, stagger: 0.4, hitStop: 60, trauma: 0, lunge: 110, thrust: true, maxTargets: 2 },
+    gore: 0.6,
     heft: 0,
     finisherKnock: 8,
     comboMul: 2,
@@ -735,7 +755,7 @@ export const MELEE: MeleeDef[] = [
     kind: 'melee',
     id: 'machete',
     name: '開山刀',
-    desc: '左右來回三連砍，第三下突刺收尾；擊退很弱，砍得快就壓得住',
+    desc: '斜劈、反手砍、跳劈三連，最容易砍斷手腳；衝刺中出手是迴旋砍',
     damage: 24,
     damageType: 'slash',
     penetration: 0.15,
@@ -751,6 +771,15 @@ export const MELEE: MeleeDef[] = [
     staggerBonus: 1.5,
     comboEvery: 3,
     chainCancel: 0.25,
+    // 三連：斜劈 → 反手橫砍（最寬）→ 跳起來往下劈（最重，最容易砍斷手腳）
+    steps: [
+      { name: '斜劈', windup: 0.07, active: 0.08, recovery: 0.22, reach: 28, arc: 100, damageMul: 1, knockback: 1, stagger: 0.22, hitStop: 40, trauma: 0, lunge: 46 },
+      { name: '反手砍', windup: 0.05, active: 0.08, recovery: 0.2, reach: 26, arc: 150, damageMul: 0.9, knockback: 2, stagger: 0.22, hitStop: 40, trauma: 0, lunge: 40, maxTargets: 3 },
+      { name: '跳劈', windup: 0.15, active: 0.1, recovery: 0.34, reach: 32, arc: 70, damageMul: 1.9, knockback: 12, stagger: 0.5, hitStop: 80, trauma: 0, lunge: 64 },
+    ],
+    // 衝刺：轉一圈的迴旋砍，四周都砍得到
+    dashStep: { name: '迴旋砍', windup: 0.06, active: 0.16, recovery: 0.36, reach: 30, arc: 360, damageMul: 1.2, knockback: 8, stagger: 0.35, hitStop: 60, trauma: 0, lunge: 60, spin: true, maxTargets: 4 },
+    gore: 1.8,
     heft: 0,
     finisherKnock: 12,
     comboMul: 1.7,
@@ -805,7 +834,7 @@ export const MELEE: MeleeDef[] = [
     kind: 'melee',
     id: 'axe',
     name: '消防斧',
-    desc: '起手慢，一斧劈開頭盔；打暈的霧屍直接處決',
+    desc: '斜劈接高舉劈落，一斧劈開頭盔；打暈的霧屍直接處決',
     damage: 48,
     damageType: 'slash',
     penetration: 0.5,
@@ -819,9 +848,17 @@ export const MELEE: MeleeDef[] = [
     knockback: 14,
     stagger: 0.55,
     staggerBonus: 2,
-    comboEvery: 0,
-    chainCancel: 1,
+    comboEvery: 2,
+    chainCancel: 0.6,
     heft: 0.1,
+    // 兩下：斜劈（敲掉頭盔）→ 雙手高舉過頭劈下（劈開護甲、打暈的直接處決）
+    steps: [
+      { name: '斜劈', windup: 0.2, active: 0.1, recovery: 0.42, reach: 30, arc: 90, damageMul: 1, knockback: 14, stagger: 0.55, hitStop: 80, trauma: 0, lunge: 45 },
+      { name: '劈落', windup: 0.3, active: 0.12, recovery: 0.55, reach: 34, arc: 50, damageMul: 1.8, knockback: 20, stagger: 0.9, hitStop: 120, trauma: 0, lunge: 55 },
+    ],
+    // 衝刺：帶著衝勁一斧劈下，把正前方那隻劈飛
+    dashStep: { name: '衝鋒劈', windup: 0.06, active: 0.14, recovery: 0.45, reach: 36, arc: 70, damageMul: 1.5, knockback: 40, stagger: 0.8, hitStop: 110, trauma: 0, lunge: 90, launch: true, maxTargets: 2 },
+    gore: 1.4,
     finisherKnock: 0,
     comboMul: 1,
     hitStop: 70,
@@ -836,7 +873,7 @@ export const MELEE: MeleeDef[] = [
     kind: 'melee',
     id: 'sledge',
     name: '大鐵鎚',
-    desc: '最慢最重，掄一圈震飛五隻；揮完要喘一下，連腫脹霧屍都打得退',
+    desc: '掄一圈前後都打，再高舉砸地震暈一整圈；最慢最重，揮完要喘一下',
     damage: 55,
     damageType: 'blunt',
     penetration: 0.3,
@@ -850,9 +887,16 @@ export const MELEE: MeleeDef[] = [
     knockback: 56,
     stagger: 1.2,
     staggerBonus: 1.3,
-    comboEvery: 0,
-    chainCancel: 1,
+    comboEvery: 2,
+    chainCancel: 0.7,
     heft: 0.28,
+    // 兩下：掄一圈（前後都打、震飛整圈）→ 高舉砸地（落點一圈全部震暈）
+    steps: [
+      { name: '掄圈', windup: 0.36, active: 0.16, recovery: 0.58, reach: 32, arc: 360, damageMul: 1, knockback: 50, stagger: 1.1, hitStop: 95, trauma: 0, lunge: 20, spin: true, maxTargets: 5 },
+      { name: '砸地', windup: 0.44, active: 0.1, recovery: 0.72, reach: 26, arc: 360, damageMul: 1.3, knockback: 30, stagger: 1.6, hitStop: 130, trauma: 0, lunge: 30, slam: 52, maxTargets: 8, launch: true },
+    ],
+    // 衝刺：拖著鎚往前衝，最後往前一砸
+    dashStep: { name: '衝鋒砸', windup: 0.08, active: 0.12, recovery: 0.6, reach: 30, arc: 360, damageMul: 1.4, knockback: 40, stagger: 1.4, hitStop: 120, trauma: 0, lunge: 80, slam: 44, maxTargets: 6, launch: true },
     finisherKnock: 0,
     comboMul: 1,
     hitStop: 95,
