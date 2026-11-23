@@ -44,8 +44,9 @@ export class CameraFeel {
       const m = (cam as unknown as { matrix: Phaser.GameObjects.Components.TransformMatrix }).matrix;
       if (this.zoomK !== 1) {
         // 以畫面中心放大（重擊時鏡頭往前衝一下）
-        const ox = cam.width * cam.originX;
-        const oy = cam.height * cam.originY;
+        // 矩陣這一段已經乘過鏡頭縮放（高解析度渲染），畫面中心要換回未縮放的單位
+        const ox = (cam.width * cam.originX) / cam.zoom;
+        const oy = (cam.height * cam.originY) / cam.zoom;
         m.translate(ox, oy);
         m.scale(this.zoomK, this.zoomK);
         m.translate(-ox, -oy);

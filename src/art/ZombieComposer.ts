@@ -13,7 +13,8 @@ import { ZOMBIE_NECK_ROW } from './sprites';
  */
 
 const F = 64;
-const FRAMES = 15;
+/** 0–14 原本的走路、攻擊、倒地；15–25 是 H3 做的受擊、擊飛、落地、爬起（見 REACT_FRAMES） */
+const FRAMES = 26;
 const OUTLINE = 0x120d0a;
 
 export interface BodyLook {
@@ -40,6 +41,7 @@ export type HairStyle = 'long' | 'ponytail' | 'bob';
 /**
  * 每一格「頭頂中心」在 64×64 影格中的位置（朝右的原圖座標）。
  * 0–3 走路、4 蓄力、5 前撲、6–11 中槍後退到倒下前；12–14 已經倒地，頭飾在那之前就掉了。
+ * 15–17 受擊、18–19 擊飛、20–21 落地、22–25 爬起；飛在空中和躺著的格子不畫頭飾（null）。
  * 換了底圖要重量一次（tools/art 的腳本可印出每格的頭部範圍）。
  */
 export const HEAD_ANCHORS: ({ x: number; y: number } | null)[] = [
@@ -58,7 +60,21 @@ export const HEAD_ANCHORS: ({ x: number; y: number } | null)[] = [
   null,
   null,
   null,
+  { x: 34, y: 5 },
+  { x: 12, y: 6 },
+  { x: 39, y: 7 },
+  null,
+  null,
+  null,
+  null,
+  null,
+  null,
+  { x: 42, y: 20 },
+  { x: 39, y: 5 },
 ];
+
+/** 受擊與擊飛影格在 zombie_basic 裡的位置（舊的 15 格底圖沒有這些，要先檢查 hasReact） */
+export const REACT_FRAMES = { hit: [15, 16, 17], rise: 18, fall: 19, bounce: 20, down: 21, getup: [22, 23, 24, 25] } as const;
 
 /** 原圖的腳底列，Zombie 的 origin 用這個 */
 export const FOOT_ROW = 62;

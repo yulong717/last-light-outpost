@@ -633,7 +633,6 @@ export class ExploreFieldScene extends Phaser.Scene {
       this.touchButton(GAME_WIDTH - 76, GAME_HEIGHT - 76, '手雷', () => this.grenade());
       this.touchButton(GAME_WIDTH - 114, GAME_HEIGHT - 38, '醫療', () => this.medkit());
       this.touchButton(GAME_WIDTH - 38, GAME_HEIGHT - 114, '互動', () => this.interact());
-      if (GameState.data.hero === 'student') this.touchButton(GAME_WIDTH - 114, GAME_HEIGHT - 76, '奔跑', () => (heroTouch.sprint = !heroTouch.sprint));
       if (GameState.data.hero === 'soldier') this.touchButton(GAME_WIDTH - 114, GAME_HEIGHT - 76, '擊倒', () => (heroTouch.skill = true));
     }
   }
@@ -676,7 +675,7 @@ export class ExploreFieldScene extends Phaser.Scene {
     else if (this.alerted) parts.unshift(`剩 ${this.zombies.length + this.toSpawn} 隻`);
     const hh = this.heroSys?.hud();
     if (hh?.grabbed) parts.unshift(hh.grabbed > 1 ? `被 ${hh.grabbed} 隻纏住！` : '被抓住！');
-    else if (hh?.sprinting) parts.unshift('奔跑中');
+    else if (hh?.sprinting) parts.unshift('衝刺中');
     if (hh?.skill) parts.push(`${hh.skill} ${hh.skillReady ? '就緒' : '…'}`);
     this.infoText.setText(parts.join('　'));
   }
@@ -726,11 +725,11 @@ export class ExploreFieldScene extends Phaser.Scene {
     this.weapons.update(dt);
     if (melee.swing && p.alive) {
       this.weapons.cancelReload();
-      this.melee.trySwing(p, inp.aimX);
+      this.melee.trySwing(p, inp.aimX, melee.pressed);
     }
     const meleeRes = this.melee.update(dt, p, this.zombies);
     this.kills += meleeRes.kills;
-    // 潛行時腳步放輕；奔跑變快、被抓住變超慢
+    // 潛行時腳步放輕；衝刺變快、被抓住變超慢
     const heroMul = this.heroSys.update(dt, inp.moveX !== 0 || inp.moveY !== 0);
     p.speedMul = (this.alerted ? this.melee.moveMul(this.weapons.active.def.moveMul) : 0.75) * heroMul;
     p.update(dt, inp.moveX, inp.moveY, this.melee.aimX(p, inp.aimX), { minX: 20, maxX: this.worldW - 16 });

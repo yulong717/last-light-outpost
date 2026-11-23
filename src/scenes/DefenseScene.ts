@@ -96,7 +96,7 @@ export interface HudData {
   /** 近戰模式中（槍收起來） */
   meleeStance: boolean;
   /** 連段進度：第幾下／一串幾下（0 = 沒有連段）；streak 是連擊數 */
-  meleeChain: { idx: number; len: number; streak: number };
+  meleeChain: { idx: number; len: number; streak: number; names?: string[] };
   /** 身上沒有槍（阿凱開局）：鎖在近戰模式，武器欄不列槍 */
   unarmed: boolean;
   /** 體力 0..1 */
@@ -596,11 +596,11 @@ export class DefenseScene extends Phaser.Scene {
     // 近戰：拿槍時隨時快揮一下，近戰模式下攻擊鍵就是揮；會打斷換彈
     if (melee.swing && this.player.alive) {
       this.weapons.cancelReload();
-      this.melee.trySwing(this.player, inp.aimX);
+      this.melee.trySwing(this.player, inp.aimX, melee.pressed);
     }
     const meleeRes = this.melee.update(dt, this.player, this.zombies);
     this.kills += meleeRes.kills;
-    // 負重：拿機槍走得慢、近戰模式輕快、揮鈍器時站定；奔跑變快、被抓住變超慢
+    // 負重：拿機槍走得慢、近戰模式輕快、揮鈍器時站定；衝刺變快、被抓住變超慢
     const heroMul = this.heroSys ? this.heroSys.update(dt, inp.moveX !== 0 || inp.moveY !== 0) : 1;
     this.player.speedMul = this.melee.moveMul(this.weapons.active.def.moveMul) * heroMul;
 

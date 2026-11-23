@@ -8,7 +8,7 @@ import { pixelText } from '../utils/text';
 import { GameEvents } from './GameEvents';
 import type { MeleeSystem } from './MeleeSystem';
 
-/** 觸控按鈕：奔跑切換、主動技能（UIScene 設定，HeroSystem 讀） */
+/** 觸控按鈕：主動技能（UIScene 設定，HeroSystem 讀）；sprint 已不用（阿凱改成走滿步數自動衝刺） */
 export const heroTouch = { sprint: false, skill: false };
 
 export interface HeroHud {
@@ -26,8 +26,8 @@ export interface HeroHud {
  * 主角技能與「被霧屍抓住」的狀態。夜晚防守、探索戰鬥共用。
  *
  * - 糾纏：霧屍打到主角就抓住不放，牠死掉、被打退（離開 breakDist）或被打出硬直才鬆手。
- *   抓住期間移動大幅變慢、不能奔跑。
- * - 阿凱：Shift 奔跑（耗體力、近戰加成）；閃身步自動閃過一次攻擊與抓取。
+ *   抓住期間移動大幅變慢、不能衝刺。
+ * - 阿凱：移動比別人快 20%，往同方向連走 7 步自動衝刺（有慣性、可出衝刺攻擊）；閃身步自動閃過一次攻擊與抓取。
  * - 馬克：C 戰術擊倒，秒殺正前方一隻（菁英改成重創＋長硬直）。
  * - 好運姐：幸運一擊（WeaponSystem 的 critChance）、大難不死、抓你的霧屍會滑倒。
  *
@@ -125,7 +125,7 @@ export class HeroSystem {
   }
 
   /**
-   * 每幀呼叫（在 player.update 之前）。回傳主角的移動倍率（奔跑、糾纏）。
+   * 每幀呼叫（在 player.update 之前）。回傳主角的移動倍率（衝刺、糾纏）。
    * moving：這一幀有沒有在按移動。
    */
   update(dt: number, moving: boolean): number {
@@ -134,18 +134,15 @@ export class HeroSystem {
     this.skillCd = Math.max(0, this.skillCd - dt);
     this.updateGrab(dt);
 
-    // 奔跑（阿凱）
-    const wantSprint = this.hero.id === 'student' && moving && p.alive && (this.keys?.shift.isDown || heroTouch.sprint);
-    if (wantSprint && this.grabbers.size === 0 && (this.sprinting ? this.melee.stamina > 0 : this.melee.stamina >= SPRINT.minStart)) {
-      this.sprinting = true;
-      this.melee.spend(SPRINT.drain * dt, true);
-    } else {
-      this.sprinting = false;
-    }
-    this.melee.bonus = this.sprinting
-      ? { damageMul: SPRINT.meleeDamageMul, knockback: SPRINT.meleeKnockback, stagger: SPRINT.meleeStagger }
-      : { damageMul: 1, knockback: 0, stagger: 0 };
-    if (this.sprinting && Math.random() < dt * 10) Fx.of(this.scene)?.footDust(p.footX, p.footY, -p.facing);
+    // 衝刺（阿凱）：同方向連走滿步數自動進入；被抓、出手、放開或反向就結束
+    const student = this.hero.id === 'student';
+    if (student && (this.grabbers.size > 0 || this.melee.busy)) p.runSteps = 0;
+    const was = this.sprinting;
+    this.sprinting = student && moving && p.alive && this.grabbers.size === 0 && p.runSteps >= SPRINT.steps;
+    if (this.sprinting && !was) Fx.of(this.scene)?.dust(p.footX, p.footY, 5);
+    p.dashing = this.sprinting;
+    this.melee.dashing = this.sprinting;
+    if (this.sprinting && Math.random() < dt * 12) Fx.of(this.scene)?.footDust(p.footX, p.footY, -p.facing);
 
     // 主動技能（馬克）
     const skillPressed = (this.keys && Phaser.Input.Keyboard.JustDown(this.keys.skill)) || heroTouch.skill;
@@ -161,7 +158,8 @@ export class HeroSystem {
     }
 
     if (this.grabbers.size > 0) return this.grabbers.size > 1 ? GRAB.slowMulti : GRAB.slow;
-    return this.sprinting ? SPRINT.speedMul : 1;
+    if (!student) return 1;
+    return SPRINT.baseMul * (this.sprinting ? SPRINT.speedMul : 1);
   }
 
   /** 抓人的霧屍：死了、被打遠、被打出硬直就鬆手；好運姐的霧屍會滑倒 */

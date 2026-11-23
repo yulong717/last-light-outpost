@@ -22,6 +22,22 @@ export interface PlayerBounds {
  * - 走路身體前傾、腳步揚塵；轉身時擠壓一下
  * - 被打：閃白轉紅、往後擊退、無敵時間內閃爍
  */
+/** 衝刺的慣性：煞車多慢（越小滑越遠）、停止衝刺後慣性持續幾秒 */
+const SKID = { decel: 2.6, time: 0.5 };
+
+type FramePick = (phase: string, k: number, contact: boolean) => number;
+/**
+ * 揮擊影格的排法。第 1 招的 6 格：0 棒在肩後、1 舉起、2 打到正前方（命中格）、3 揮過頭、4 棒子豎起、5 回到備戰。
+ * back／chop 是第 2、3 招還沒有專屬影格時，借這 6 格排出來的暫代版本。
+ */
+const MELEE_FRAMES: Record<'own' | 'back' | 'chop', FramePick> = {
+  own: (ph, k, hit) => (ph === 'windup' ? (k < 0.5 ? 0 : 1) : ph === 'active' ? (hit || k < 0.5 ? 2 : 3) : k < 0.5 ? 4 : 5),
+  // 回掃：從揮過頭的位置直接反手拉回來
+  back: (ph, k, hit) => (ph === 'windup' ? 3 : ph === 'active' ? (hit || k < 0.6 ? 2 : 1) : k < 0.5 ? 0 : 5),
+  // 下劈：棒子高舉蓄力，再一口氣劈到底
+  chop: (ph, k, hit) => (ph === 'windup' ? (k < 0.6 ? 4 : 1) : ph === 'active' ? (hit || k < 0.5 ? 2 : 3) : k < 0.6 ? 3 : 5),
+};
+
 export class Player {
   readonly sprite: Phaser.GameObjects.Sprite;
   footX: number;
@@ -43,19 +59,40 @@ export class Player {
   aiMeleeFrame = -1;
 
   /** 依近戰階段挑揮擊影格；回傳 true 表示由角色影格自己畫手與球棒 */
-  setMeleePose(mp: { phase: string; k: number; contact?: boolean } | null): boolean {
+  /** 揮擊用哪張影格表：連段第 2、3 招有自己的影格就用（akai_ai_melee2／3），沒有就借第 1 招的格子 */
+  aiMeleeKey = 'akai_ai_melee';
+
+  setMeleePose(mp: { phase: string; k: number; contact?: boolean; step?: number } | null): boolean {
     if (!this.aiAnim || !this.scene.textures.exists('akai_ai_melee') || !mp) {
       this.aiMeleeFrame = -1;
       return false;
     }
     const k = Math.min(0.999, Math.max(0, mp.k));
-    if (mp.phase === 'ready') this.aiMeleeFrame = 99; // 持棒待機／走路
-    else if (mp.phase === 'windup') this.aiMeleeFrame = k < 0.5 ? 0 : 1;
-    else if (mp.phase === 'active') this.aiMeleeFrame = mp.contact || k < 0.5 ? 2 : 3; // 打中就停在命中格
-    else this.aiMeleeFrame = k < 0.5 ? 4 : 5;
-    return this.aiMeleeFrame >= 0;
+    if (mp.phase === 'ready') {
+      this.aiMeleeFrame = 99; // 持棒待機／走路
+      return true;
+    }
+    const step = mp.step ?? 1;
+    const own = step > 1 ? `akai_ai_melee${step}` : 'akai_ai_melee';
+    if (this.scene.textures.exists(own)) {
+      // 每招自己的影格表：起手 0–1、出手 2（命中格）–3、收招 4–5
+      this.aiMeleeKey = own;
+      this.aiMeleeFrame = MELEE_FRAMES.own(mp.phase, k, !!mp.contact);
+    } else {
+      // 還沒有專屬影格：借第 1 招的格子排出不同的順序
+      this.aiMeleeKey = 'akai_ai_melee';
+      this.aiMeleeFrame = (step === 2 ? MELEE_FRAMES.back : step === 3 ? MELEE_FRAMES.chop : MELEE_FRAMES.own)(mp.phase, k, !!mp.contact);
+    }
+    return true;
   }
   private stepIndex = 0;
+  /** 往同一個方向連走了幾步（阿凱走滿幾步進入衝刺）、往哪個方向 */
+  runSteps = 0;
+  private runDir = 0;
+  /** 衝刺中（HeroSystem 設定）：有慣性，放開或反向會滑一段 */
+  dashing = false;
+  private skidT = 0;
+  private wasDashing = false;
   private recoil = 0;
   /** 外力（受擊、霰彈後座力）造成的速度，會很快衰減 */
   private pushX = 0;
@@ -137,12 +174,29 @@ export class Player {
     if (facing !== this.facing) this.squashAmt = Math.max(this.squashAmt, 0.6);
     this.facing = facing;
 
+    // 連走步數：放開左右、或改按反方向就重算
+    const inDir = Math.abs(moveX) > 0.3 ? Math.sign(moveX) : 0;
+    if (inDir === 0 || (this.runDir !== 0 && inDir !== this.runDir)) {
+      this.runSteps = 0;
+      this.runDir = inDir;
+    } else if (this.runDir === 0) this.runDir = inDir;
+    // 衝刺結束（放開、反向、出手）後還會滑一小段
+    if (this.wasDashing && !this.dashing) this.skidT = SKID.time;
+    this.wasDashing = this.dashing;
+    this.skidT = Math.max(0, this.skidT - dt);
+
     // 倒退走較慢
     const back = moveX !== 0 && Math.sign(moveX) !== this.facing ? m.backpedal : 1;
     const tx = moveX * m.speedX * back * this.speedMul;
     const ty = moveY * m.speedY * this.speedMul;
     // 加速／煞車：指數逼近目標速度，放開時煞得比起步快
-    const kx = Math.abs(tx) > Math.abs(this.vx) * 0.5 && tx !== 0 ? m.accel : m.decel;
+    let kx: number = Math.abs(tx) > Math.abs(this.vx) * 0.5 && tx !== 0 ? m.accel : m.decel;
+    // 慣性：衝刺中或剛停下時，煞車和反向都很慢（腳底會揚塵）
+    const braking = tx === 0 || Math.sign(tx) !== Math.sign(this.vx);
+    if ((this.dashing || this.skidT > 0) && braking && Math.abs(this.vx) > 10) {
+      kx = SKID.decel;
+      if (Math.random() < dt * 25) Fx.of(this.scene)?.footDust(this.footX, this.footY, Math.sign(this.vx));
+    }
     const ky = Math.abs(ty) > Math.abs(this.vy) * 0.5 && ty !== 0 ? m.accel : m.decel;
     this.vx += (tx - this.vx) * (1 - Math.exp(-kx * dt));
     this.vy += (ty - this.vy) * (1 - Math.exp(-ky * dt));
@@ -174,6 +228,7 @@ export class Player {
 
   private step(speed: number): void {
     this.stepIndex ^= 1;
+    if (this.runDir !== 0 && Math.sign(this.vx) === this.runDir) this.runSteps++;
     Fx.of(this.scene)?.footDust(this.footX - this.vx * 0.04, this.footY, Math.sign(this.vx) || this.facing);
     GameEvents.of(this.scene).emit('player:step', {
       x: this.footX,
@@ -181,6 +236,11 @@ export class Player {
       foot: this.stepIndex as 0 | 1,
       speed,
     });
+  }
+
+  /** 近戰打中的反作用力：身體壓扁一下 */
+  impact(amount: number): void {
+    this.squashAmt = Math.max(this.squashAmt, amount);
   }
 
   /** 沒有開火影格時的後座力：往後頓 2px */
@@ -250,7 +310,7 @@ export class Player {
     if (!this.alive) return;
     if (this.aiAnim && this.aiMeleeFrame >= 0 && this.aiMeleeFrame < 99) {
       s.anims.stop();
-      s.setTexture('akai_ai_melee', this.aiMeleeFrame);
+      s.setTexture(this.aiMeleeKey, this.aiMeleeFrame);
     } else if (this.aiAnim) {
       const bat = this.aiMeleeFrame === 99;
       const want = (this.walkPhase > 0 ? 'akai_ai_walk' : 'akai_ai_idle') + (bat ? '_bat' : '');
@@ -264,7 +324,8 @@ export class Player {
     s.y = this.footY - bob;
     s.setFlipX(this.facing < 0);
     s.setDepth(depthForY(this.footY));
-    s.angle = this.lean + this.swingLean * this.facing;
+    // 有 AI 動作影格時，姿勢全由影格表現，不再轉動整張貼圖（揮棒時整張圖歪掉很廉價）
+    s.angle = this.aiAnim ? 0 : this.lean + this.swingLean * this.facing;
     // 待機呼吸（走路時停掉）＋ 受擊／轉身擠壓
     const breathe = this.walkPhase > 0 ? 0 : Math.sin(this.breath * (Math.PI / 0.9)) * 0.015 + 0.015;
     s.setScale(this.build.w * (1 + 0.16 * this.squashAmt), this.build.h * (1 + breathe - 0.12 * this.squashAmt));

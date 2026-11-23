@@ -343,8 +343,9 @@ export class ArmoryScene extends Phaser.Scene {
     if (m.stagger >= 0.6) tags.push(['打暈', TAG.control]);
     if (m.penetration >= 0.5) tags.push(['破頭盔', TAG.pierce]);
     if (m.staggerBonus > 1) tags.push(['處決暈眩', TAG.power]);
-    if (m.comboEvery > 1) tags.push([`${m.comboEvery} 連砍`, TAG.speed]);
-    if (m.heft > 0) tags.push(['每下重新掄', TAG.warn]);
+    if (m.steps) tags.push([`${m.steps.length} 段連擊`, TAG.speed]);
+    else if (m.comboEvery > 1) tags.push([`${m.comboEvery} 連砍`, TAG.speed]);
+    if (m.heft > 0 && !m.steps) tags.push(['每下重新掄', TAG.warn]);
     if (swing <= 0.4) tags.push(['出手快', TAG.speed]);
     if (swing >= 0.9) tags.push(['起手慢', TAG.warn]);
     y = this.chips(x, y, w, tags);

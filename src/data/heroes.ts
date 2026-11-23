@@ -55,7 +55,7 @@ export const HEROES: Record<HeroId, HeroDef> = {
     supplies: { medkit: 1 },
     startZone: 'school',
     skills: [
-      { name: '奔跑', key: 'Shift', desc: '移動速度 ×1.5，持續消耗體力。奔跑中近戰傷害 ×1.5、擊退大幅加強' },
+      { name: '衝刺', desc: '移動速度比其他人快 20%；往同一方向連走 7 步自動衝刺（再快 35%，有慣性），衝刺中攻擊是衝刺攻擊，把前方一排撞飛' },
       { name: '閃身步', desc: '被動：霧屍要打到或抓住你時，自動消耗 25% 體力閃開（冷卻 1.5 秒）' },
     ],
     tint: 0xc8d8ff,
@@ -109,16 +109,17 @@ export function getHero(id: HeroId | undefined): HeroDef {
 
 // ── 技能數值 ─────────────────────────────────────────
 
+/**
+ * 阿凱的移動：平常就比別人快 20%；往同一個方向連走 7 步自動進入衝刺（再快 35%），
+ * 衝刺有慣性（放開或反向會滑一段才停）、可以出衝刺攻擊。不耗體力。
+ */
 export const SPRINT = {
-  speedMul: 1.5,
-  /** 每秒耗體力 */
-  drain: 20,
-  /** 體力低於這個值不能開始跑 */
-  minStart: 10,
-  meleeDamageMul: 1.5,
-  /** 擊退加成（像素） */
-  meleeKnockback: 26,
-  meleeStagger: 0.5,
+  /** 平常的移動倍率 */
+  baseMul: 1.2,
+  /** 衝刺時再乘上這個 */
+  speedMul: 1.35,
+  /** 連走幾步進入衝刺 */
+  steps: 7,
 };
 
 export const DODGE = { cost: 25, cooldown: 1.5, iframes: 0.45, dash: 260 };
