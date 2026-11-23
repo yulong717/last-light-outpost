@@ -1,0 +1,115 @@
+{
+ "_meta_doc": "PixelForge-H3 post-process (comparison with tools/art/ai/pixelize.py). Loads picked 512 frames from a folder (load.directory, absolute path), flood chroma key, temporal despike, quantize to 64 px / 16 colours with a shared palette. No auto-crop: frames are already placed on the canvas spec (feet y=61). Output RGBA PNGs. PixelForge alpha is 1=opaque; JoinImageWithAlpha expects a mask (1=transparent), hence InvertMask.",
+ "load": {
+  "class_type": "VHS_LoadImagesPath",
+  "inputs": {
+   "directory": "",
+   "image_load_cap": 0,
+   "skip_first_images": 0,
+   "select_every_nth": 1
+  }
+ },
+ "key": {
+  "class_type": "PixelForgeChromaKey",
+  "inputs": {
+   "images": [
+    "load",
+    0
+   ],
+   "key_color": "#FF00FF",
+   "tolerance": 0.25,
+   "softness": 0.0,
+   "despill": true,
+   "method": "flood",
+   "shadow_tolerance": 1.0,
+   "key_interior": true,
+   "interior_tolerance": 0.5,
+   "matte_erode": 1,
+   "subject_rescue": true,
+   "interior_max_area": 2.0,
+   "temporal_alpha": true,
+   "drop_detached": 5.0
+  }
+ },
+ "stab": {
+  "class_type": "PixelForgeTemporalStabilize",
+  "inputs": {
+   "images": [
+    "key",
+    0
+   ],
+   "alpha": [
+    "key",
+    1
+   ],
+   "mode": "despike",
+   "threshold": 10.0,
+   "commit_frames": 2,
+   "max_hold": 3
+  }
+ },
+ "quant": {
+  "class_type": "PixelForgeQuantize",
+  "inputs": {
+   "images": [
+    "stab",
+    0
+   ],
+   "alpha": [
+    "stab",
+    1
+   ],
+   "pixel_width": 64,
+   "pixel_height": 64,
+   "downsample_filter": "nearest",
+   "palette_mode": "adaptive",
+   "fixed_palette": "PICO-8",
+   "colors": 16,
+   "dither": "none",
+   "dither_strength": 0.0,
+   "shared_palette": true,
+   "upscale_factor": 1,
+   "style_preset": "custom",
+   "palette_method": "kmeans",
+   "mapping_space": "lab",
+   "despeckle": 1,
+   "saturation": 1.0,
+   "contrast": 1.0,
+   "sharpen": 0.0,
+   "flatten": 3,
+   "temporal_lock": 0.0
+  }
+ },
+ "inv": {
+  "class_type": "InvertMask",
+  "inputs": {
+   "mask": [
+    "quant",
+    2
+   ]
+  }
+ },
+ "join": {
+  "class_type": "JoinImageWithAlpha",
+  "inputs": {
+   "image": [
+    "quant",
+    0
+   ],
+   "alpha": [
+    "inv",
+    0
+   ]
+  }
+ },
+ "save": {
+  "class_type": "SaveImage",
+  "inputs": {
+   "images": [
+    "join",
+    0
+   ],
+   "filename_prefix": "ai_art/pf_post"
+  }
+ }
+}

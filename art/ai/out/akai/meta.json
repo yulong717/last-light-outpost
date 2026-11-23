@@ -1,18 +1,18 @@
 {
  "idle": {
-  "source_video": "art/ai/raw/akai/B_idle_s3",
-  "seed": 3,
+  "view": "three-quarter",
+  "source_video": "art/ai/raw/akai/idle34_s2",
+  "seed": 2,
   "workflow": "art/ai/workflows/h3_video_i2v.json",
   "length": 56,
   "res": 512,
-  "first_last": "art/ai/raw/akai/B_akai_noarm.png",
+  "first_last": "art/ai/raw/akai/akai34_noarm.png",
   "picks": [
-   7,
-   13,
-   19,
-   25
+   8,
+   14,
+   20,
+   26
   ],
-  "retries": 0,
   "seeds_tried": [
    1,
    2,
@@ -20,6 +20,8 @@
    4
   ],
   "gen_seconds_per_seed": 30,
+  "palette": "16 (1 outline black + reserved #8A4A2A dark skin, #7C8AA8 stripe + 13 k-means)",
+  "post": "headlock 35, stripes rows 17:35 every 3px",
   "frames": 4,
   "fps": 10,
   "loop": true,
@@ -32,23 +34,23 @@
   ]
  },
  "walk": {
-  "source_video": "art/ai/raw/akai/B_walk_s4",
-  "seed": 4,
+  "view": "three-quarter",
+  "source_video": "art/ai/raw/akai/walk34_s3",
+  "seed": 3,
   "workflow": "art/ai/workflows/h3_video_i2v.json",
   "length": 56,
   "res": 512,
-  "first_last": "art/ai/raw/akai/B_akai_walkkey.png",
+  "first_last": "art/ai/raw/akai/akai34_walkkey.png",
   "picks": [
-   2,
-   5,
-   9,
-   12,
-   16,
-   19,
-   22,
-   26
+   29,
+   32,
+   35,
+   39,
+   42,
+   45,
+   49,
+   52
   ],
-  "retries": 0,
   "seeds_tried": [
    1,
    2,
@@ -56,6 +58,8 @@
    4
   ],
   "gen_seconds_per_seed": 30,
+  "palette": "16 (1 outline black + reserved #8A4A2A dark skin, #7C8AA8 stripe + 13 k-means)",
+  "post": "headlock 35, stripes rows 17:35 every 3px",
   "frames": 8,
   "fps": 10,
   "loop": true,

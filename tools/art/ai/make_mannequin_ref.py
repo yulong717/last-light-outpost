@@ -3,7 +3,7 @@ on a 1024 magenta canvas (16x space: foot row 61 -> bottom edge y=992, centerlin
 
 The figure is cut at the neck row; head and body are scaled separately (LANCZOS, then re-keyed),
 so H3 can redraw the result cleanly. Usage:
-  python tools/art/ai/make_mannequin_ref.py SRC.png NECK_Y OUT.png [--head 16] [--body-width 1.0] [--height 56]
+  python tools/art/ai/make_mannequin_ref.py SRC.png NECK_Y OUT.png [--head 16] [--body-width 1.0] [--head-width 1.0] [--height 56]
 NECK_Y is the source-pixel row of the narrowest neck point.
 """
 from __future__ import annotations
@@ -28,6 +28,7 @@ def main():
     ap.add_argument("--head", type=float, default=16)
     ap.add_argument("--height", type=float, default=56)
     ap.add_argument("--body-width", type=float, default=1.0, help="extra horizontal scale for the body")
+    ap.add_argument("--head-width", type=float, default=1.0, help="extra horizontal scale for the head")
     a = ap.parse_args()
 
     k = key_magenta(Image.open(a.src))
@@ -40,7 +41,7 @@ def main():
     body_h = (a.height - a.head) * S
     hs = head_h / head.height
     bs = body_h / body.height
-    head_r = head.resize((round(head.width * hs), round(head_h)), Image.LANCZOS)
+    head_r = head.resize((round(head.width * hs * a.head_width), round(head_h)), Image.LANCZOS)
     body_r = body.resize((round(body.width * bs * a.body_width), round(body_h)), Image.LANCZOS)
 
     canvas = Image.new("RGBA", (1024, 1024), (255, 0, 255, 255))
@@ -48,7 +49,7 @@ def main():
     top = bottom - round(head_h) - round(body_h)
     mid = MID_X * S
     canvas.alpha_composite(body_r, (round(mid - cx * bs * a.body_width), top + round(head_h)))
-    canvas.alpha_composite(head_r, (round(mid - cx * hs), top))
+    canvas.alpha_composite(head_r, (round(mid - cx * hs * a.head_width), top))
     a.out.parent.mkdir(parents=True, exist_ok=True)
     canvas.convert("RGB").save(a.out)
     print(f"head x{hs:.3f} body x{bs:.3f} top={top} bottom={bottom}")

@@ -56,16 +56,42 @@ VRAM 峰值為 `nvidia-smi` 整卡用量（含桌面）。全程沒有 OOM。
 - 疊圖：`templates_contact.png`、`overlay_check.png`。
 - 失敗：`walk_pass_a`（過渡姿勢）兩個 seed 都畫成大步，沒有收腿；之後改提示詞重做。灰色人台的近腳／遠腳不易區分，contact_a / contact_b 看起來差不多。
 
+## 第二輪修正（REVIEW-02）
+
+| 意見 | 處理 | 結果 |
+| --- | --- | --- |
+| 1. 臉前緣是暗紅外框（`#7B1111`） | `pixelize.py` 外框改為「只從同色系挑較暗色」：彩色像素只找色相差 30° 以內的較暗色，白／灰只找中性較暗色，找不到才用外框黑。調色盤保留深膚色 `#8A4A2A` | 頭部（頂端 17 列）紅色像素：12 格全部 0。臉前緣是深膚色 |
+| 2. 純側面太扁 | 人台改 **3/4 側面**（`three-quarter view facing right, chest slightly turned toward camera`），再橫向加寬（身體 ×1.3、頭 ×1.1）後讓 H3 重畫。比例 56 px／3.5 頭身／腳底 y=61 不變 | 站姿寬 28 px（現有主角約 28 px）；無手臂 23 px。舊的純側面模板移到 `art/ai/mannequins/M/profile/` 保留 |
+| 3. 調色盤有 4 個近黑色 | `pixelize.py palette` 把 OKLab L<0.25 的像素合併成 **1 個外框黑**，另保留深膚色、條紋色，其餘 13 色做 k-means | 16 色：`#030505`（唯一近黑）、深藍 ×4（帽、褲明暗）、`#8A4A2A`、`#D40B0B`、灰 `#70777A`、條紋 `#7C8AA8`、膚 ×2、白衣 4 階（`#ACB7C1`→`#FAFCFC`） |
+| 4. 條紋 | `pixelize.py apply --stripes 17:35`：球衣區（頭頂往下 17–34 列、中性淺色、非外框）每 3 px 畫一條 `#7C8AA8` 直線，以中線 x=32 為基準，各格不會漂 | 條紋清楚，7 號與外框不受影響 |
+
+3/4 版重做流程：3/4 人台 → 無手臂 → 走路大步關鍵格 → 阿凱設定稿（4/4 可用，挑 seed 133）→ 阿凱走路關鍵格（4/4 可用，挑 seed 143）→ idle／walk 影片各 4 seed（idle 挑 seed 2、walk 挑 seed 3）。
+
+### PixelForge-H3 試用（REVIEW-01 第 4 點）
+
+節點已安裝（`blubs-pixel-nodepack`，28 個節點；另裝 bunnyUFO `comfyui_workflows_utils`，28 個節點，需 `pixeloe`、`potracer`）。用 `art/ai/workflows/pf_post.json`（Chroma Key flood → Temporal Stabilize despike → Quantize 64 px／16 色／共用調色盤）處理同一批 walk 畫格，和自寫腳本並排：
+
+| | 自寫 `pixelize.py` | PixelForge（預設參數） |
+| --- | --- | --- |
+| 速度 | 約 5 s（CPU） | 1 s |
+| 腳底 y=61 | ✓ | ✓（沒用 Auto-Crop，畫格已按規格擺好） |
+| 去背 | ✓ | ✗ 兩腿之間殘留洋紅（flood 只去掉連到邊緣的背景） |
+| 色彩 | ✓ | ✗ 第 0、7 格臉變灰綠（映射到錯的色） |
+| 7 號、臉閃動 | ✓（上半身鎖定） | ✗ 每格不同 |
+| 條紋、外框規則 | ✓ | 無 |
+
+結論：後處理**繼續用自寫腳本**。PixelForge 的 `key` 方法、`temporal_lock` 等參數還沒調，之後如果要給其他角色用可再試。bunnyUFO 的 `sprite-from-prompt-h3` 在 768² 需約 21.7GB VRAM，這輪沒跑。
+
 ## 結果
 
 | 角色 | 動作 | 品質 1–5 | 重抽次數 | 耗時 | 問題 |
 | --- | --- | --- | --- | --- | --- |
-| 阿凱 | idle（4 格） | 4 | 0（4 seed 挑 1） | 設定稿 4×30 s ＋ 影片 4×30 s | 呼吸動作很小，1 倍大小幾乎看不出；條紋消失 |
-| 阿凱 | walk（8 格） | 4 | 0（4 seed 挑 1） | 關鍵格 4×15 s ＋ 影片 4×30 s | 步幅足夠；條紋消失 |
+| 阿凱 | idle（4 格，3/4） | 4 | 0（4 seed 挑 1） | 設定稿 4×15–30 s ＋ 影片 4×30 s | 呼吸動作小（遊戲有程式化呼吸，OK） |
+| 阿凱 | walk（8 格，3/4） | 4 | 0（4 seed 挑 1） | 關鍵格 4×15–30 s ＋ 影片 4×30 s | 7 號在 64 px 筆畫較粗糙 |
 
 輸出：`art/ai/out/akai/`（`idle.png/json/gif`、`walk.png/json/gif`、`contact_*.png`、`palette.png`、`meta.json`）。
 
-流程：
+第一輪（純側面）的流程如下，第二輪只換成 3/4 人台與上面的後處理修正：
 1. 設定稿：H3 Image，Picture 1 = 試跑時的阿凱換裝圖、Picture 2 = 無手臂人台 → 無手臂阿凱（4/4 都可用，挑 seed 71）。
 2. 走路關鍵格：H3 Image，Picture 1 = 無手臂阿凱、Picture 2 = `walk_contact_a` 人台（4/4 可用）。
 3. 影片：H3 影片，首尾同幀（idle 用設定稿、walk 用大步關鍵格），56 幀。提示詞加 `long strides, legs clearly alternating, knees lifting, heel strike and toe push-off`（無手臂版不加 `arms swinging`）。**步幅問題解決**：腿明顯交替、跨步大。
@@ -79,7 +105,7 @@ VRAM 峰值為 `nvidia-smi` 整卡用量（含桌面）。全程沒有 OOM。
 - [x] 所有格的支撐腳都在 y=61，循環動作不上下抖、不左右飄（`meta.json` 的 `foot_rows` 全為 61；水平中線整個動作共用）
 - [x] 每個角色 ≤ 16 色，播放不閃色（idle＋walk 共用一組 16 色）
 - [x] 放大 4 倍看：外框連續、沒有孤立雜點、沒有殘留洋紅（目視 contact）
-- [ ] 阿凱認得出：深藍帽、紅色 7 號 ✓；**白色條紋球衣 ✗**（條紋太細，縮到 64 px 消失）
+- [x] 阿凱認得出：深藍帽、紅色 7 號、白色條紋球衣（條紋由腳本畫）
 - [ ] 無手臂版的肩膀位置在各格一致 — 上半身鎖定後一致，待 WeaponRig 實測
 - [x] 每個動作的姿勢讀得懂（walk 1 倍大小看得出在走；idle 幾乎靜止）
 - [ ] H3 設定比較表（pixelart8x LoRA 有／無、倍率、循環方式）— LoRA 找不到、節點未裝，下一輪
@@ -93,7 +119,8 @@ VRAM 峰值為 `nvidia-smi` 整卡用量（含桌面）。全程沒有 OOM。
 - **輸出路徑**：依新規格改為 `art/ai/out/<角色>/`。
 - **H3 Image 官方範本**的提示詞擴寫步驟已移除；`h3_image_edit.json` 加了可選的第二張參考圖（`load2`，不用時 `--set cond.images.image_2=null`）。
 - **pixelart8x LoRA、PixelForge-H3、bunnyUFO 節點**：見上方「H3 配套」。
-- **模型清理**：本機模型資料夾與使用者其他 ComfyUI 專案共用。可刪清單只列本輪為路線 A 下載的 15 個檔案（約 81.9 GB），放在 `art/ai/out/CLEANUP_LIST.md`（不提交），等使用者確認再刪。
+- **模型清理**：本機模型資料夾與使用者其他 ComfyUI 專案共用，只刪本輪為路線 A 下載的 15 個檔案（依檔案大小合計約 81.9 GB；刪除前後 C 槽剩餘空間只差 46 GB，可能同時有其他寫入）。H3 主線模型與其他專案的檔案都沒動。
+- **pixelart8x LoRA**：使用者決定這輪不用 LoRA（H3 原始輸出縮到 64 px 已夠乾淨），等 idle／walk 確認後再評估。
 
 ## 建議
 

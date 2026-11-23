@@ -111,7 +111,15 @@ def load_frames(dirs: list[Path]) -> list[Path]:
     return files
 
 
-def build_palette(dirs: list[Path], k: int, out: Path) -> np.ndarray:
+def hex_rgb(h: str) -> np.ndarray:
+    h = h.lstrip("#")
+    return np.array([int(h[i:i + 2], 16) for i in (0, 2, 4)], np.uint8)
+
+
+def build_palette(dirs: list[Path], k: int, out: Path, dark_l: float = 0.25,
+                  reserve: list[str] | None = None) -> np.ndarray:
+    """k colours total: 1 outline colour (all pixels darker than OKLab L=dark_l merged into one),
+    the reserved colours (e.g. dark skin outline, stripe colour), and k-means on the rest."""
     from sklearn.cluster import KMeans
     px = []
     for f in load_frames(dirs):
@@ -119,10 +127,19 @@ def build_palette(dirs: list[Path], k: int, out: Path) -> np.ndarray:
         px.append(a[a[:, 3] > 0][:, :3])
     px = np.concatenate(px)
     lab = srgb_to_oklab(px)
+    dark = lab[:, 0] < dark_l
+    fixed = []
+    if dark.any():
+        # one outline colour: median of the near-black pixels (keeps their slight tint)
+        fixed.append(np.median(px[dark], axis=0).round().astype(np.uint8))
+    for h in reserve or []:
+        fixed.append(hex_rgb(h))
+    rest = px[~dark]
+    n = max(1, min(k - len(fixed), len(np.unique(rest, axis=0))))
     # weight lightness a bit more so shading ramps survive
     w = np.array([1.5, 1.0, 1.0])
-    km = KMeans(n_clusters=min(k, len(np.unique(px, axis=0))), n_init=8, random_state=0).fit(lab * w)
-    centers = oklab_to_srgb(km.cluster_centers_ / w)
+    km = KMeans(n_clusters=n, n_init=8, random_state=0).fit(srgb_to_oklab(rest) * w)
+    centers = np.concatenate([np.array(fixed, np.uint8).reshape(-1, 3), oklab_to_srgb(km.cluster_centers_ / w)])
     centers = centers[np.argsort(srgb_to_oklab(centers)[:, 0])]  # dark -> light
     img = Image.fromarray(centers.reshape(1, -1, 3).astype(np.uint8), "RGB")
     out.parent.mkdir(parents=True, exist_ok=True)
@@ -195,16 +212,53 @@ def cleanup(img: Image.Image, pal: np.ndarray) -> Image.Image:
     edge = op & (sum(shifted(~op, dy, dx, True) for dy, dx in N4) > 0)
     plab = srgb_to_oklab(pal)
     lab = srgb_to_oklab(a[..., :3].reshape(-1, 3)).reshape(H, W, 3)
+    pchroma = np.hypot(plab[:, 1], plab[:, 2])
+    phue = np.arctan2(plab[:, 2], plab[:, 1])
+    darkest = int(np.argmin(plab[:, 0]))
     for y, x in zip(*np.where(edge)):
         c = lab[y, x]
-        # candidate palette colours darker than this pixel; pick the closest in chroma/hue
-        darker = np.where(plab[:, 0] < c[0] - 0.08)[0]
-        if len(darker) == 0:
-            continue
         if c[0] < 0.35:  # already a dark outline pixel
             continue
-        dd = ((plab[darker, 1:] - c[1:]) ** 2).sum(1) * 4 + (plab[darker, 0] - max(c[0] - 0.45, 0.12)) ** 2
-        a[y, x, :3] = pal[darker[dd.argmin()]]
+        chroma = float(np.hypot(c[1], c[2]))
+        darker = plab[:, 0] < c[0] - 0.08
+        if chroma < 0.04:
+            # neutral (white/grey): only neutral darker colours
+            fam = darker & (pchroma < 0.05)
+        else:
+            # same hue family only (within ~30 deg) so skin never takes the red of the number
+            dh = np.abs((phue - np.arctan2(c[2], c[1]) + np.pi) % (2 * np.pi) - np.pi)
+            fam = darker & (pchroma > 0.02) & (dh < np.radians(30))
+        cand = np.where(fam)[0]
+        if len(cand) == 0:
+            a[y, x, :3] = pal[darkest]
+            continue
+        target = max(c[0] - 0.45, 0.12)
+        dd = (plab[cand, 0] - target) ** 2 + ((plab[cand, 1:] - c[1:]) ** 2).sum(1)
+        a[y, x, :3] = pal[cand[dd.argmin()]]
+    return Image.fromarray(a, "RGBA")
+
+
+def draw_stripes(img: Image.Image, pal: np.ndarray, rows: tuple[int, int], color: np.ndarray,
+                 every: int = 3, x0: int = 32) -> Image.Image:
+    """Vertical pinstripes on the jersey: neutral light pixels (white / light-grey shade) inside the
+    torso rows (relative to the figure's solid top), not on the outline. Columns x where
+    (x - x0) % every == 0, anchored to the canvas centreline so they never crawl between frames."""
+    a = np.array(img)
+    op = a[..., 3] > 0
+    rows_op = np.where(op.sum(1) >= 3)[0]
+    if not len(rows_op):
+        return img
+    top = int(rows_op[0])
+    lab = srgb_to_oklab(a[..., :3].reshape(-1, 3)).reshape(a.shape[0], a.shape[1], 3)
+    chroma = np.hypot(lab[..., 1], lab[..., 2])
+    jersey = op & (lab[..., 0] > 0.70) & (chroma < 0.05)
+    edge = op & (sum(shifted(~op, dy, dx, True) for dy, dx in N4) > 0)
+    band = np.zeros_like(op)
+    band[top + rows[0]: top + rows[1]] = True
+    cols = np.zeros_like(op)
+    cols[:, [x for x in range(a.shape[1]) if (x - x0) % every == 0]] = True
+    m = jersey & band & cols & ~edge
+    a[m, :3] = color
     return Image.fromarray(a, "RGBA")
 
 
@@ -256,11 +310,16 @@ def main():
     p.add_argument("dirs", nargs="+", type=Path)
     p.add_argument("--k", type=int, default=16)
     p.add_argument("--out", type=Path, required=True)
+    p.add_argument("--dark-l", type=float, default=0.25, help="OKLab L below which pixels merge into one outline colour")
+    p.add_argument("--reserve", nargs="*", default=[], help="hex colours always in the palette")
     q = sub.add_parser("apply")
     q.add_argument("dir", type=Path)
     q.add_argument("--palette", type=Path, required=True)
     q.add_argument("--out", type=Path, required=True)
     q.add_argument("--headlock", type=int, default=0, help="rows of head to lock to frame 0 (0=off)")
+    q.add_argument("--stripes", default="", help="Y0:Y1 rows (from the figure's top) to pinstripe, e.g. 17:34")
+    q.add_argument("--stripe-color", default="#7C8AA8")
+    q.add_argument("--stripe-every", type=int, default=3)
     a = ap.parse_args()
 
     if a.cmd == "downscale":
@@ -271,12 +330,18 @@ def main():
         info = downscale(a.frames, a.out, scale, a.align)
         print(json.dumps({"frames": len(info), "scale512": info[0]["scale512"]}))
     elif a.cmd == "palette":
-        pal = build_palette(a.dirs, a.k, a.out)
+        pal = build_palette(a.dirs, a.k, a.out, a.dark_l, a.reserve)
         print(f"{len(pal)} colours -> {a.out}")
     else:
         pal = np.array(Image.open(a.palette).convert("RGB")).reshape(-1, 3)
         files = load_frames([a.dir])
         imgs = [cleanup(quantize(Image.open(f), pal), pal) for f in files]
+        if a.stripes:
+            y0, y1 = (int(v) for v in a.stripes.split(":"))
+            sc = hex_rgb(a.stripe_color)
+            if not (pal == sc).all(1).any():
+                raise SystemExit(f"stripe colour {a.stripe_color} is not in the palette (add it with --reserve)")
+            imgs = [draw_stripes(im, pal, (y0, y1), sc, a.stripe_every) for im in imgs]
         if a.headlock:
             imgs = headlock(imgs, a.headlock, imgs[0])
         a.out.mkdir(parents=True, exist_ok=True)
