@@ -1,0 +1,21 @@
+{
+  "_meta_doc": "MiniMax H3 video I2V (first+last frame), API format. Based on template video_minimax_h3_i2v with turbo 8-step LoRA on, audio branch removed. Inputs: first (first frame), last (last frame; same image for loops), cond.prompt, cond.width/height, cond.length (24 fps, 17k+5 grid: 22, 39, 56, 73, 90, 107, 124...), noise.noise_seed. Frames are saved as PNG sequence.",
+  "unet": {"class_type": "UNETLoader", "inputs": {"unet_name": "minimax_h3_fl2va_pruned_int8_convrot.safetensors", "weight_dtype": "default"}},
+  "lora": {"class_type": "LoraLoaderModelOnly", "inputs": {"model": ["unet", 0], "lora_name": "minimax_h3_fl2v_turbo_8step_v1.0_comfyui_bf16.safetensors", "strength_model": 1.0}},
+  "clip": {"class_type": "CLIPLoader", "inputs": {"clip_name": "qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors", "type": "minimax", "device": "default"}},
+  "vae": {"class_type": "VAELoader", "inputs": {"vae_name": "minimax_h3_video_vae_int8_convrot.safetensors"}},
+  "first": {"class_type": "LoadImage", "inputs": {"image": "PLACEHOLDER.png"}},
+  "last": {"class_type": "LoadImage", "inputs": {"image": "PLACEHOLDER.png"}},
+  "scale_first": {"class_type": "ImageScale", "inputs": {"image": ["first", 0], "upscale_method": "nearest-exact", "width": 512, "height": 512, "crop": "disabled"}},
+  "scale_last": {"class_type": "ImageScale", "inputs": {"image": ["last", 0], "upscale_method": "nearest-exact", "width": 512, "height": 512, "crop": "disabled"}},
+  "cond": {"class_type": "MiniMaxH3ImageToVideo", "inputs": {
+    "clip": ["clip", 0], "vae": ["vae", 0], "first_frame": ["scale_first", 0], "last_frame": ["scale_last", 0],
+    "prompt": "", "width": 512, "height": 512, "length": 56}},
+  "noise": {"class_type": "RandomNoise", "inputs": {"noise_seed": 1}},
+  "ksampler": {"class_type": "KSamplerSelect", "inputs": {"sampler_name": "res_multistep"}},
+  "sched": {"class_type": "BasicScheduler", "inputs": {"model": ["lora", 0], "scheduler": "simple", "steps": 8, "denoise": 1.0}},
+  "guider": {"class_type": "BasicGuider", "inputs": {"model": ["lora", 0], "conditioning": ["cond", 0]}},
+  "sample": {"class_type": "SamplerCustomAdvanced", "inputs": {"noise": ["noise", 0], "guider": ["guider", 0], "sampler": ["ksampler", 0], "sigmas": ["sched", 0], "latent_image": ["cond", 1]}},
+  "decode": {"class_type": "VAEDecode", "inputs": {"samples": ["sample", 0], "vae": ["vae", 0]}},
+  "save": {"class_type": "SaveImage", "inputs": {"images": ["decode", 0], "filename_prefix": "ai_art/h3_video"}}
+}
