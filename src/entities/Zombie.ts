@@ -1,12 +1,12 @@
 import Phaser from 'phaser';
 import { clampLaneY, depthForY } from '../config';
 import type { EnemyDef } from '../data/enemies';
-import { BURST, CHARGE, CROW, ENRAGE, HEAL_AURA, POUNCE, type ArmorPiece } from '../data/zombies';
+import { BURST, CHARGE, CROW, ENRAGE, GORE, HEAL_AURA, POUNCE, type ArmorPiece } from '../data/zombies';
 import { ANIMAL_FRAMES } from '../art/AnimalArt';
 import { Fx } from '../fx/Fx';
-import { CameraFeel } from '../feel/CameraFeel';
 import { ZOMBIE_NECK_ROW } from '../art/sprites';
 import { FOOT_ROW, GEAR_TEXTURE, HAT_ART, HEAD_ANCHORS, REACT_FRAMES } from '../art/ZombieComposer';
+import { armlessTexture, canDismember, crawlInfoOf, crawlTexture, goreParts } from '../art/ZombieGore';
 import { GameEvents } from '../systems/GameEvents';
 import { armorAfter, type DamageInfo } from '../combat/Damage';
 import type { ZombieSpec } from '../systems/ZombieFactory';
@@ -23,6 +23,10 @@ export interface HitInfo {
   type?: string;
   /** 穿甲 0..1：護甲減傷先扣掉這個值，max(0, armor − penetration) */
   penetration?: number;
+  /** 打中的高度（世界 y），決定斷手還是斷腳 */
+  hitY?: number;
+  /** 重擊：斷肢機率提高、擊殺時可能炸頭 */
+  heavy?: boolean;
 }
 
 /** 霧屍每幀需要知道的戰場資訊 */
@@ -91,6 +95,11 @@ export class Zombie extends Phaser.GameObjects.Sprite {
   laneY: number;
   private walkKey: string;
   private attackKey: string;
+  /** 合成的原貼圖（斷肢版本都從它切） */
+  private readonly baseKey: string;
+  /** 斷手：攻擊力變弱；斷腳：趴在地上爬 */
+  armLost = false;
+  legLost = false;
   /** 被打中時往後仰的角度，逐漸回正 */
   private hitLean = 0;
   /** 被鈍器打飛的滑行速度（像素／秒） */
@@ -155,6 +164,7 @@ export class Zombie extends Phaser.GameObjects.Sprite {
     this.footX = x;
     this.footY = clampLaneY(y);
     this.laneY = this.footY;
+    this.baseKey = def.texture;
     this.walkKey = `${def.texture}_walk`;
     this.attackKey = `${def.texture}_attack`;
     // 走路圖的腳底在 64 格中的第 62 列；動物各自的腳底列見 ANIMAL_FRAMES
@@ -200,11 +210,16 @@ export class Zombie extends Phaser.GameObjects.Sprite {
 
   /** 目前的移動速度與攻擊間隔（暴走時變快） */
   private get speedNow(): number {
-    return this.def.speed * (this.enraged ? ENRAGE.speedMul : 1);
+    return this.def.speed * (this.enraged ? ENRAGE.speedMul : 1) * (this.legLost ? GORE.crawl.speedMul : 1);
   }
 
   private get attackIntervalNow(): number {
-    return this.def.attackInterval * (this.enraged ? ENRAGE.attackIntervalMul : 1);
+    return this.def.attackInterval * (this.enraged ? ENRAGE.attackIntervalMul : 1) * (this.legLost ? GORE.crawl.attackMul : 1);
+  }
+
+  /** 攻擊力（斷手變弱） */
+  private get damageNow(): number {
+    return this.def.damage * (this.armLost ? GORE.armDamageMul : 1);
   }
 
   /** 施加硬直（近戰武器用）；硬直抵抗高的職業（消防員）只會頓一下 */
@@ -233,7 +248,9 @@ export class Zombie extends Phaser.GameObjects.Sprite {
       const r = this.getHitRect();
       return { x: r.centerX + (this.flipX ? -1 : 1) * r.width * 0.3, y: r.y };
     }
-    const a = HEAD_ANCHORS[Number(this.frame.name)] ?? (this.anims.isPlaying ? null : HEAD_ANCHORS[0]);
+    const a = this.legLost
+      ? (crawlInfoOf(this.texture.key)?.head[Number(this.frame.name)] ?? null)
+      : (HEAD_ANCHORS[Number(this.frame.name)] ?? (this.anims.isPlaying ? null : HEAD_ANCHORS[0]));
     if (!a) return null;
     const ox = this.originX * this.frame.width;
     const oy = this.originY * this.frame.height;
@@ -288,6 +305,10 @@ export class Zombie extends Phaser.GameObjects.Sprite {
         return new Phaser.Geom.Rectangle(this.footX - 11 * s, cy - 8 * s, 22 * s, 15 * s);
       }
       default: {
+        if (this.legLost) {
+          // 趴在地上爬：又寬又矮
+          return new Phaser.Geom.Rectangle(this.footX - 18 * s, this.footY - 24 * s, 36 * s, 24 * s);
+        }
         const w = 30 * s * (this.spec.widthMul ?? 1);
         const h = 56 * s;
         return new Phaser.Geom.Rectangle(this.footX - w / 2, this.footY - h, w, h);
@@ -299,7 +320,7 @@ export class Zombie extends Phaser.GameObjects.Sprite {
   isHeadshot(hitY: number): boolean {
     if (this.spec.body === 'crow') return false;
     const r = this.getHitRect();
-    return hitY <= r.y + r.height * (this.spec.body === 'dog' ? 0.4 : 0.25);
+    return hitY <= r.y + r.height * (this.spec.body === 'dog' || this.legLost ? 0.4 : 0.25);
   }
 
   update(dt: number, ctx: ZombieContext): void {
@@ -349,7 +370,9 @@ export class Zombie extends Phaser.GameObjects.Sprite {
     // 工人的鐵鎚、消防員的斧頭：拆路障、建築特別快
     const hitBlock = (d: number, y: number) => rawHit(d * this.spec.structureMul, y);
     const minX = blockX + 18 * this.s;
-    const speed = this.speedNow * this.speedJitter * (ctx.speedMul?.(this.footX, this.footY) ?? 1);
+    // 爬行是一下一下往前拖：撐起來時前進，趴下時幾乎不動
+    const pulse = this.legLost ? 0.25 + 1.6 * Math.max(0, Math.sin(this.walkPhase)) : 1;
+    const speed = this.speedNow * pulse * this.speedJitter * (ctx.speedMul?.(this.footX, this.footY) ?? 1);
     // 主角或夥伴在擋路線外側、而且夠近 → 改追最近的那個（2D 追擊）
     const p = this.pickTarget(ctx);
     const dx = p ? p.x - this.footX : 0;
@@ -368,7 +391,7 @@ export class Zombie extends Phaser.GameObjects.Sprite {
     if (p) {
       if (Math.abs(dx) <= REACH_X && Math.abs(dy) <= REACH_Y) {
         this.setFlipX(dx < 0);
-        this.attack(dt, () => p.hit(this.def.damage, this.footX, this.footY, this), Math.sign(dx) || -1);
+        this.attack(dt, () => p.hit(this.damageNow, this.footX, this.footY, this), Math.sign(dx) || -1);
       } else {
         // 站到主角的左邊或右邊，而不是疊在主角身上
         const side = dx >= 0 ? -1 : 1;
@@ -388,7 +411,7 @@ export class Zombie extends Phaser.GameObjects.Sprite {
       this.footX = Math.max(minX, this.footX - v * dt);
       if (charging && this.footX <= minX) {
         this.charged = true;
-        hitBlock(this.def.damage * CHARGE.impactMul, this.footY);
+        hitBlock(this.damageNow * CHARGE.impactMul, this.footY);
         Fx.of(this.scene)?.popText(this.footX - 10, this.footY - 50, '衝撞！', '#ff9a4a');
         GameEvents.of(this.scene).emit('enemy:attack', { enemyId: this.def.id, x: this.footX, y: this.footY });
       }
@@ -397,7 +420,7 @@ export class Zombie extends Phaser.GameObjects.Sprite {
       moved = true;
     } else {
       this.setFlipX(true);
-      this.attack(dt, () => hitBlock(this.def.damage, this.footY), -1);
+      this.attack(dt, () => hitBlock(this.damageNow, this.footY), -1);
     }
 
     // 不能穿過路障
@@ -405,7 +428,9 @@ export class Zombie extends Phaser.GameObjects.Sprite {
     this.footY = clampLaneY(this.footY);
     if (moved) {
       this.attackTimer = 0;
-      if (this.anims.currentAnim?.key !== this.walkKey && this.scene.anims.exists(this.walkKey)) this.play(this.walkKey);
+      if (this.legLost) {
+        if (this.anims.isPlaying && this.anims.currentAnim?.key !== this.attackKey) this.anims.stop();
+      } else if (this.anims.currentAnim?.key !== this.walkKey && this.scene.anims.exists(this.walkKey)) this.play(this.walkKey);
       this.walkPhase += dt * (4 + this.speedNow * 0.12);
     } else if (this.anims.currentAnim?.key === this.walkKey) {
       // 停下來攻擊：不再原地踏步，回到站姿
@@ -447,7 +472,7 @@ export class Zombie extends Phaser.GameObjects.Sprite {
       for (const t of this.targets(ctx)) {
         if (!t.alive || t.x < ctx.blockX) continue;
         if (Math.abs(t.x - this.footX) <= REACH_X && Math.abs(t.y - this.footY) <= REACH_Y + 4) {
-          t.hit(this.def.damage * POUNCE.damageMul, this.footX, this.footY, this);
+          t.hit(this.damageNow * POUNCE.damageMul, this.footX, this.footY, this);
           this.pounceHit = true;
           break;
         }
@@ -510,7 +535,7 @@ export class Zombie extends Phaser.GameObjects.Sprite {
       climb(CROW.strikeAlt, CROW.diveSpeed);
       towards(tgt.x, tgt.y, CROW.diveSpeed);
       if (this.alt <= CROW.strikeAlt + 4 && Math.abs(tgt.x - this.footX) < 12 && Math.abs(tgt.y - this.footY) < 10) {
-        tgt.hit(this.def.damage, this.footX, this.footY);
+        tgt.hit(this.damageNow, this.footX, this.footY);
         GameEvents.of(this.scene).emit('enemy:attack', { enemyId: this.def.id, x: this.footX, y: this.footY });
         this.crowState = 'retreat';
         this.crowTimer = CROW.retreatTime;
@@ -665,7 +690,12 @@ export class Zombie extends Phaser.GameObjects.Sprite {
     }
     const now = this.scene.game.loop.time;
     if (now < this.shakeUntil) this.x += (Math.floor(now / 25) % 2 ? 1 : -1) * this.shakeAmp;
-    if (this.airborne || this.lift > 0) {
+    if (this.legLost) {
+      // 爬行：沒有走路顛簸；兩格依爬的節奏交替（撐起來的那格往前拖）
+      this.y = this.footY;
+      this.angle = 0;
+      if (walking && !this.anims.isPlaying) this.setFrame(Math.sin(this.walkPhase) > 0 ? 1 : 0);
+    } else if (this.airborne || this.lift > 0) {
       this.y = this.footY - this.lift;
       this.angle = this.hitLean;
     } else if (walking) {
@@ -799,6 +829,8 @@ export class Zombie extends Phaser.GameObjects.Sprite {
       dirX: info.dirX,
       type: info.type,
       penetration: info.penetration,
+      hitY: info.hitY,
+      heavy: info.heavy,
     });
   }
 
@@ -817,7 +849,12 @@ export class Zombie extends Phaser.GameObjects.Sprite {
     if (this.hp <= 0) {
       this.dead = true;
       const dir = (info.dirX ?? 1) >= 0 ? 1 : -1;
-      GameEvents.of(this.scene).emit('enemy:death', { enemyId: this.def.id, x: this.footX, y: this.footY, headshot: !!info.headshot });
+      // 爆頭：頭整個炸開；近戰重擊殺掉也有機會
+      const human = this.spec.body === 'human';
+      const explode = human && (!!info.headshot || (!!info.heavy && Math.random() < GORE.heavyHeadBurst));
+      const parts = explode ? goreParts(this.scene, this.baseKey) : null;
+      if (explode && !info.headshot) fx?.popText(this.footX, this.footY - 60 * this.s, '爆頭', '#ffd24a');
+      GameEvents.of(this.scene).emit('enemy:death', { enemyId: this.def.id, x: this.footX, y: this.footY, headshot: !!info.headshot, explode });
       // 倒下時頭飾一定掉
       this.knockOffHat(dir, info.headshot ? 1.3 : 0.7);
       this.mark?.destroy();
@@ -844,12 +881,26 @@ export class Zombie extends Phaser.GameObjects.Sprite {
         // 屍犬、屍熊：身體是橫的，一律播倒地影格
         fx.fall(this, { dir, headshot: false, deathAnim: `${this.def.texture}_death`, forceAnim: true });
         this.destroy();
+      } else if (fx && this.legLost) {
+        // 爬行中被打死：原地癱平
+        const hp = this.headPoint();
+        fx.fall(this, {
+          headX: hp?.x,
+          headY: hp ? hp.y + 5 * this.s : undefined,
+          dir,
+          headshot: explode,
+          flat: { neckX: crawlInfoOf(this.texture.key)?.neckX ?? 40 },
+          explode: explode ? { parts } : undefined,
+        });
+        this.destroy();
       } else if (fx) {
         // 程式化倒地：複製當下影格成屍體，自己立刻移除
         const frame = this.frame.name;
         fx.fall(this, {
           dir,
-          headshot: !!info.headshot,
+          headshot: !!info.headshot || explode,
+          explode: explode ? { parts } : undefined,
+          headX: this.headPoint()?.x,
           headFrame: this.texture.has(`head_${frame}`) ? `head_${frame}` : undefined,
           neckRow: ZOMBIE_NECK_ROW,
           deathAnim: `${this.def.texture}_death`,
@@ -860,6 +911,7 @@ export class Zombie extends Phaser.GameObjects.Sprite {
       }
       return true;
     }
+    this.tryDismember(dealt, info);
     // 囚犯：血量過半暴走
     if (this.spec.profession.ability === 'enrage' && !this.enraged && this.hp < this.maxHp * ENRAGE.below) {
       this.enraged = true;
@@ -878,6 +930,88 @@ export class Zombie extends Phaser.GameObjects.Sprite {
     return false;
   }
 
+  /** 這一下有沒有把手或腳打斷（機率見 GORE） */
+  private tryDismember(dealt: number, info: HitInfo): void {
+    if (this.dead || this.spec.body !== 'human' || this.airborne || dealt <= 0) return;
+    if (this.spec.knockbackResist >= GORE.resistAbove) return;
+    if (this.armLost && this.legLost) return;
+    if (!canDismember(this.scene, this.baseKey)) return;
+    const type = info.type ?? 'ballistic';
+    let part: 'arm' | 'leg' | null;
+    if (info.hitY !== undefined) {
+      const r = this.getHitRect();
+      const rel = (info.hitY - r.y) / r.height;
+      // 爬行中整隻都很矮，打到身體就算手
+      part = this.legLost ? (rel < 0.4 ? null : 'arm') : rel < 0.25 ? null : rel < 0.6 ? 'arm' : 'leg';
+    } else part = Math.random() < (type === 'blast' ? 0.4 : 0.55) ? 'arm' : 'leg';
+    if (part === 'arm' && this.armLost) part = info.hitY === undefined ? 'leg' : null;
+    if (part === 'leg' && this.legLost) part = info.hitY === undefined ? 'arm' : null;
+    if (!part || (part === 'arm' && this.armLost) || (part === 'leg' && this.legLost)) return;
+    const base = GORE.chance[type] ?? GORE.chance.ballistic;
+    const chance = Math.min(GORE.max, base * (info.heavy ? GORE.heavyMul : 1) * Phaser.Math.Clamp((dealt / this.maxHp) * 3, 0.4, 1.6));
+    if (Math.random() >= chance) return;
+    const dir = (info.dirX ?? 1) >= 0 ? 1 : -1;
+    if (part === 'arm') this.loseArm(dir);
+    else this.loseLegs(dir);
+  }
+
+  /** 換成斷肢版本的貼圖，動畫 key 一起換 */
+  private swapTexture(key: string): void {
+    const frame = this.legLost ? 0 : Number(this.frame.name) || 0;
+    this.walkKey = `${key}_walk`;
+    this.attackKey = `${key}_attack`;
+    this.anims.stop();
+    this.setTexture(key, frame);
+    if (!this.legLost && this.scene.anims.exists(this.walkKey)) this.play({ key: this.walkKey, startFrame: Math.min(3, frame) });
+  }
+
+  /** 斷手：前臂飛出去，照樣往前走，但攻擊力變弱 */
+  loseArm(dir: number): void {
+    if (this.armLost || this.dead) return;
+    const key = this.legLost ? crawlTexture(this.scene, this.baseKey, true) : armlessTexture(this.scene, this.baseKey);
+    const parts = goreParts(this.scene, this.baseKey);
+    if (!key || !parts) return;
+    this.armLost = true;
+    this.swapTexture(key);
+    const facing = this.flipX ? -1 : 1;
+    const y = this.legLost ? this.footY - 10 * this.s : this.footY - 32 * this.s;
+    Fx.of(this.scene)?.limb(parts, 'arm', this.footX + facing * 14 * this.s, y, dir, this.footY, {
+      scale: this.s,
+      tint: this.spec.tint ?? this.def.tint,
+      flipX: this.flipX,
+    });
+    GameEvents.of(this.scene).emit('enemy:dismember', { enemyId: this.def.id, x: this.footX, y: this.footY, part: 'arm' });
+  }
+
+  /** 斷腳：腿飛出去、倒在地上，之後趴著往前爬 */
+  loseLegs(dir: number): void {
+    if (this.legLost || this.dead) return;
+    const key = crawlTexture(this.scene, this.baseKey, this.armLost);
+    const parts = goreParts(this.scene, this.baseKey);
+    const info = key ? crawlInfoOf(key) : undefined;
+    if (!key || !parts || !info) return;
+    this.legLost = true;
+    // 倒地中、受擊動作都取消，直接趴下
+    this.downed = false;
+    this.hitT = 0;
+    this.lift = 0;
+    this.hitLean = 0;
+    this.reactFrame = -1;
+    this.swapTexture(key);
+    this.setOrigin(info.cx / 64, FOOT_ROW / 64);
+    const fx = Fx.of(this.scene);
+    fx?.limb(parts, 'leg', this.footX, this.footY - 14 * this.s, dir, this.footY, {
+      scale: this.s,
+      tint: this.spec.tint ?? this.def.tint,
+      flipX: this.flipX,
+    });
+    fx?.dust(this.footX, this.footY, 6);
+    // 頭飾在倒下時掉了
+    this.knockOffHat(dir, 0.6);
+    this.stagger(0.6);
+    GameEvents.of(this.scene).emit('enemy:dismember', { enemyId: this.def.id, x: this.footX, y: this.footY, part: 'leg' });
+  }
+
   /** 卡肉期間原地左右抖（用真實時間，畫面停住也照抖） */
   hitShake(ms: number, amp: number): void {
     this.shakeUntil = this.scene.game.loop.time + ms;
@@ -893,7 +1027,7 @@ export class Zombie extends Phaser.GameObjects.Sprite {
    * power 是起飛的垂直速度（px/s），dist 是大約的水平距離。動物和重量級（擊退抗性高）飛不高。
    */
   launch(dir: number, power: number, dist: number): void {
-    if (this.dead || this.spec.body === 'crow') return;
+    if (this.dead || this.spec.body === 'crow' || this.legLost) return;
     const res = this.spec.knockbackResist;
     if (res >= 0.8) return;
     // 空中追打（浮空連段）：再被打只會小彈一下，不會越打越高
@@ -926,7 +1060,6 @@ export class Zombie extends Phaser.GameObjects.Sprite {
       this.liftVy = -this.liftVy * LAUNCH.bounce;
       this.knockVX *= 0.6;
       this.bouncing = true;
-      CameraFeel.of(this.scene)?.addTrauma(0.08);
       return;
     }
     // 倒地：躺著滑一段，倒地時間到再爬起來（硬直結束後 hitLean 回正＝爬起）
@@ -960,7 +1093,6 @@ export class Zombie extends Phaser.GameObjects.Sprite {
       o.stagger(0.45);
       o.hitShake(70, 1);
       Fx.of(this.scene)?.meleeImpact(o.footX - dir * 4, o.footY - 26 * o.s, dir, 'blunt', o.footY);
-      CameraFeel.of(this.scene)?.addTrauma(0.06);
       this.knockVX *= 0.8;
       if (this.bowled.size >= BOWL_MAX) break;
     }

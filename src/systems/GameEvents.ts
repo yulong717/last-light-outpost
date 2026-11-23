@@ -56,7 +56,9 @@ export interface GameEventMap {
   'enemy:spawn': { enemyId: string; x: number; y: number };
   'enemy:groan': { enemyId: string; x: number; y: number };
   'enemy:attack': { enemyId: string; x: number; y: number };
-  'enemy:death': { enemyId: string; x: number; y: number; headshot: boolean };
+  'enemy:death': { enemyId: string; x: number; y: number; headshot: boolean; explode?: boolean };
+  /** 手或腳被打斷 */
+  'enemy:dismember': { enemyId: string; x: number; y: number; part: 'arm' | 'leg' };
   /** 子彈打在頭盔／防彈衣上；broke 代表這一下把它打壞（頭盔飛走） */
   'enemy:armor': { enemyId: string; x: number; y: number; part: 'helmet' | 'vest'; broke: boolean };
   /** 腫脹霧屍或「爆裂」變異死亡時爆開；場景負責結算範圍傷害 */

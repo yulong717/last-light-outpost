@@ -564,3 +564,23 @@ export function mutationChance(day: number): number {
 export function secondMutationChance(day: number): number {
   return day < 6 ? 0 : Math.min(0.3, 0.05 * (day - 5));
 }
+
+/**
+ * 肢體破壞與爆頭（一般人形霧屍）：
+ * - 斷手：攻擊力剩 armDamageMul，照樣走過來
+ * - 斷腳：倒地改成爬行，速度剩 crawl.speedMul、攻擊間隔乘 crawl.attackMul，判定框變矮
+ * - 爆頭擊殺：頭整個炸開；近戰的重擊（收尾、衝刺打、處決）殺掉時有 heavyHeadBurst 的機率也炸頭
+ *
+ * 機率 ＝ chance[傷害類型] ×（重擊 heavyMul）× clamp(這一下扣的血 ÷ 最大血量 × 3, 0.4, 1.6)，上限 max。
+ * 槍打到哪個部位就斷哪裡（判定框上 25% 是頭、到 60% 是手、以下是腳）；近戰和爆炸隨機。
+ */
+export const GORE = {
+  chance: { ballistic: 0.14, buckshot: 0.24, slash: 0.32, blunt: 0.2, blast: 0.35 } as Record<string, number>,
+  heavyMul: 1.8,
+  max: 0.6,
+  armDamageMul: 0.5,
+  crawl: { speedMul: 0.6, attackMul: 1.4 },
+  heavyHeadBurst: 0.35,
+  /** 擊退抗性高於這個值的（重量級）不會被打斷手腳 */
+  resistAbove: 0.75,
+};

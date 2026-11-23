@@ -422,7 +422,7 @@ export class Companion {
       if (head) result.headshots++;
       fx?.bulletHit(hit.x, hit.y, dirX, hit.z.footY, head);
       const dmg = g.damage * (head ? 2.5 : 1) * (rage ? TRAIT_TUNING.lastStandDamage : 1);
-      const killed = hit.z.takeDamage(dmg, g.knockback, { headshot: head, dirX });
+      const killed = hit.z.takeDamage(dmg, g.knockback, { headshot: head, dirX, hitY: hit.y });
       if (killed) result.kills++;
       GameEvents.of(this.scene).emit('enemy:hit', { enemyId: hit.z.def.id, x: hit.x, y: hit.y, damage: dmg, headshot: head, killed });
     }

@@ -476,7 +476,50 @@ export function composeZombie(scene: Phaser.Scene, look: BodyLook): string {
   for (let f = 0; f < FRAMES; f++) tex.add(f, 0, f * F, 0, F, F);
   registerAnims(scene, key);
   registerHeadFrames(scene, key, ZOMBIE_NECK_ROW);
+  widenByKey.set(key, look.widen);
   return key;
+}
+
+// ───────────────────────── 斷肢用的底圖資訊 ─────────────────────────
+
+const widenByKey = new Map<string, number>();
+
+/** 斷肢（ZombieGore）要知道的底圖資訊：每格的區域分類、軀幹位置、加寬前的中心 */
+export interface GoreBase {
+  /** 底圖某格某點（加寬前座標）的區域：0 透明、2 上衣、3 褲子，其他是皮膚、外框等 */
+  region: (f: number, x: number, y: number) => number;
+  torsoRight: (f: number) => number | null;
+  /** 某格褲子開始的列（至少 4 個褲子像素的第一列） */
+  pantsTop: (f: number) => number;
+  center: (f: number) => number;
+}
+
+export const GORE_REGION = { none: Region.None, shirt: Region.Shirt, pants: Region.Pants } as const;
+
+export function goreBase(scene: Phaser.Scene): GoreBase | null {
+  const base = loadBase(scene);
+  if (!base) return null;
+  const at = (f: number, x: number, y: number) => (x < 0 || x >= F || y < 0 || y >= F ? Region.None : base.region[y * base.w + f * F + x]);
+  const pantsTop = (f: number) => {
+    for (let y = 0; y < F; y++) {
+      let n = 0;
+      for (let x = 0; x < F; x++) if (at(f, x, y) === Region.Pants) n++;
+      if (n >= 4) return y;
+    }
+    return F;
+  };
+  return {
+    region: at,
+    torsoRight: (f) => base.frames[f]?.torso?.r ?? null,
+    pantsTop,
+    center: (f) => frameCenter(base, f),
+  };
+}
+
+/** 這張貼圖是用哪個加寬倍率合成的；不是合成出來的（zombie_basic 原圖）回傳 1，其他貼圖回傳 null */
+export function widenOf(key: string): number | null {
+  if (key === 'zombie_basic') return 1;
+  return widenByKey.get(key) ?? null;
 }
 
 function darken(c: number, k: number): number {

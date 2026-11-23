@@ -119,12 +119,22 @@ export function attachAudio(scene: Phaser.Scene): void {
       alive = Math.max(0, alive - 1);
       updateIntensity();
       play('zombie_death', e.x, { semitones: kindPitch(e.enemyId) });
+      // 頭炸開：濕的爆裂聲
+      if (e.explode) {
+        play('flesh_hit', e.x, { semitones: -7, volume: 1 });
+        play('barricade_break', e.x, { semitones: 5, volume: 0.35 });
+      }
     })
     // 打在頭盔／背心上：金屬「鏘」（沿用路障受擊音，拉高音調）；頭盔飛走時更響
     .on('enemy:armor', (e) => play('barricade_hit', e.x, { semitones: e.part === 'helmet' ? 12 : 8, volume: e.broke ? 0.9 : 0.45 }))
     .on('enemy:burst', (e) => {
       play('barricade_break', e.x, { semitones: -7, volume: 0.9 });
       play('flesh_hit', e.x, { semitones: -5 });
+    })
+    // 斷手斷腳：悶的肉聲疊一個低的鈍擊
+    .on('enemy:dismember', (e) => {
+      play('flesh_hit', e.x, { semitones: -3, volume: 1 });
+      play('melee_blunt', e.x, { semitones: -8, volume: 0.6 });
     })
     .on('enemy:enrage', (e) => play('zombie_groan', e.x, { semitones: -4, volume: 1 }))
     .on('enemy:heal', (e) => play('ui_confirm', e.x, { semitones: -6, volume: 0.25 }))
