@@ -742,7 +742,7 @@ export const MELEE: MeleeDef[] = [
     id: 'bat',
     name: '鋁棒',
     desc: '一棒把整排打飛、打暈；每棒要重新掄，連不起來但最好控場',
-    damage: 18,
+    damage: 22,
     damageType: 'blunt',
     penetration: 0,
     reach: 30,
