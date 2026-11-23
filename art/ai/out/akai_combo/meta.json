@@ -1,0 +1,86 @@
+{
+ "akai_ai_melee2": {
+  "look": "old in-game akai, AKAI_COMBO round 6",
+  "canvas": "64x72, feet row 69, facing right",
+  "workflow": "art/ai/workflows/h3_video_i2v.json (512x576, 8-step turbo)",
+  "seeds_tried": [
+   1,
+   2,
+   3,
+   4
+  ],
+  "palette": "art/ai/out/akai_v4/palette.png (oldlook 62 + 3 bat)",
+  "post": "magenta key, fixed ground (source row 560) and centreline, /8 k-centroid, palette map, keep outline, harmonize jersey + 7 to move 1 (akai_ai_melee) frames with idle stripe pattern 10100, keep largest blob",
+  "frame_layout": "0-1 wind-up, 2 hit (bat straight ahead), 3 swing-through, 4-5 recover to ready",
+  "move": 2,
+  "name": "right swing (backhand return)",
+  "seed": 2,
+  "length": 39,
+  "first_frame": "public/assets/sprites/akai_ai_melee.png frame 3 (x8)",
+  "last_frame": "akai_ai_melee.png frame 5 (x8)",
+  "picks": [
+   1,
+   3,
+   5,
+   8,
+   31,
+   34
+  ],
+  "prompt": "... Backhand return swing: the bat has just swung past his body to the left; using the rebound he whips it back the other way, a fast backhand sweep from left to right across the front of his body at chest height, his torso twisting back to face right, then he returns to the ready batting stance with the bat raised over his shoulder. Feet stay on the ground line. Quick, snappy motion.",
+  "note": "video frames 10-21 are a hold with the bat behind the head; skipped",
+  "frames": 6,
+  "fps": 12,
+  "loop": false,
+  "colours": 59,
+  "foot_rows": [
+   69,
+   69,
+   69,
+   69,
+   69,
+   69
+  ]
+ },
+ "akai_ai_melee3": {
+  "look": "old in-game akai, AKAI_COMBO round 6",
+  "canvas": "64x72, feet row 69, facing right",
+  "workflow": "art/ai/workflows/h3_video_i2v.json (512x576, 8-step turbo)",
+  "seeds_tried": [
+   1,
+   2,
+   3,
+   4
+  ],
+  "palette": "art/ai/out/akai_v4/palette.png (oldlook 62 + 3 bat)",
+  "post": "magenta key, fixed ground (source row 560) and centreline, /8 k-centroid, palette map, keep outline, harmonize jersey + 7 to move 1 (akai_ai_melee) frames with idle stripe pattern 10100, keep largest blob",
+  "frame_layout": "0-1 wind-up, 2 hit (bat straight ahead), 3 swing-through, 4-5 recover to ready",
+  "move": 3,
+  "name": "down swing (overhead smash)",
+  "seed": 2,
+  "length": 56,
+  "first_frame": "move 2 frame 3 (raw video frame 8 of seed 2)",
+  "last_frame": "akai_ai_melee.png frame 5 (x8)",
+  "picks": [
+   9,
+   16,
+   26,
+   29,
+   36,
+   43
+  ],
+  "prompt": "... Overhead smash: he raises the bat high overhead with both hands, leans his upper body back to charge up, then steps forward with the front foot and smashes the bat straight down in a big vertical arc to the ground in front of him, the bat tip hits the ground ahead, he stays bent forward for a moment, then straightens up and returns to the ready batting stance with the bat over his shoulder. Powerful, heavy motion.",
+  "note": "video frames 3-8 (bat straight overhead) exceed the 72-px canvas top and are clipped in generation, so the wind-up uses frames 9 and 16 (leaning back, bat behind head, front foot lifted). In all 4 seeds the smash ends with the bat pointing down-left, so frame 2 = bat level straight ahead, frame 3 = bat down at the ground.",
+  "frames": 6,
+  "fps": 12,
+  "loop": false,
+  "colours": 60,
+  "foot_rows": [
+   69,
+   69,
+   69,
+   71,
+   69,
+   69
+  ]
+ }
+}
