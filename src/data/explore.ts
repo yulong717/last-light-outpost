@@ -328,7 +328,23 @@ export interface FieldSpec {
   seconds?: number;
   /** 條件：不准開槍 */
   meleeOnly?: boolean;
+  /** 單軸空間：橫向捲軸，所有人都在同一條線上，只能左右移動（窄走廊、街道） */
+  axis?: 'single';
+  /** 沿街前進：兩站之間的橫向推進段，走到右邊的下一站才結束；exitLabel 是終點牌子上的字 */
+  walk?: boolean;
+  exitLabel?: string;
 }
+
+/** 沿街前進：街道長度與霧屍數 */
+export const WALK = {
+  worldW: 1600,
+  /** 基礎霧屍數（再依風險、噪音加，見 Expedition.zombieCount） */
+  zombies: 2,
+  /** 霧屍離主角多遠以內才開始動（前方的先站著，走近了才撲過來） */
+  wakeRange: 380,
+  /** 路邊可以打開的箱子、車子數 */
+  extras: 6,
+};
 
 /** 事件的結果：獎勵、代價、說明 */
 export interface Outcome {
@@ -579,10 +595,10 @@ export const EVENTS: ExploreEvent[] = [
     options: [
       {
         label: '只用近戰解決',
-        hint: '條件戰鬥：禁止開槍',
+        hint: '單軸近戰・禁止開槍',
         action: {
           type: 'field',
-          field: { mode: 'fight', goal: 'clear', title: '只能用近戰，別讓整條街醒過來', zombies: 4, meleeOnly: true },
+          field: { mode: 'fight', goal: 'clear', title: '霧屍排成一列：只能用近戰，別讓整條街醒過來', zombies: 4, meleeOnly: true, axis: 'single' },
           success: { text: '沒有一聲槍響。門後是一間沒人碰過的房間。', loot: 'big' },
         },
       },
@@ -760,10 +776,10 @@ export const HORDE_EVENT: ExploreEvent = {
   options: [
     {
       label: '殺出重圍',
-      hint: '條件戰鬥：撐 25 秒',
+      hint: '單軸夾擊：撐 25 秒',
       action: {
         type: 'field',
-        field: { mode: 'fight', goal: 'survive', title: '屍潮來襲！撐 25 秒找到退路', zombies: 6, seconds: 25 },
+        field: { mode: 'fight', goal: 'survive', title: '屍潮來襲！前後夾擊，撐 25 秒找到退路', zombies: 6, seconds: 25, axis: 'single' },
         success: { text: '你們甩掉了屍潮。' },
       },
     },

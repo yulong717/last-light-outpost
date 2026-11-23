@@ -56,7 +56,8 @@ export function wrapCJK(t: Phaser.GameObjects.Text, width: number): Phaser.GameO
       continue;
     }
     t.setText(line + tok);
-    if (t.width > width && line.trim()) {
+    // 句尾標點不單獨換到下一行（避頭點）：寧可這行稍微超出一點
+    if (t.width > width && line.trim() && !/^[。，、！？」』）….：；]$/u.test(tok)) {
       lines.push(line.trimEnd());
       line = tok.trimStart();
     } else line += tok;
