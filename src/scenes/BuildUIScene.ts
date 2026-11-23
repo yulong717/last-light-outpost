@@ -7,7 +7,7 @@ import type { Quote } from '../build/Outpost';
 import { registerUIRect } from '../input/InputManager';
 import { GameState } from '../state/GameState';
 import { ensureCrewTexture } from '../art/CrewArt';
-import { COMPANION_ROLES, MAX_DEPLOYED } from '../data/companions';
+import { COMPANION_ROLES, MAX_DEPLOYED, deployedCrew } from '../data/companions';
 import { ATTRS, TRAIT_BY_ID } from '../data/crewTraits';
 import { BACKGROUND_BY_ID, BODIES, PROF_NAMES, profSummary } from '../data/crewBody';
 import { crewStats } from '../data/crewLoadout';
@@ -212,7 +212,9 @@ export class BuildUIScene extends Phaser.Scene {
     const bg = this.add.rectangle(x0, PANEL_Y, w, h, 0x0d0f14, 0.92).setOrigin(0).setStrokeStyle(1, 0xf5d76e, 0.6);
     this.panel.add(bg);
     this.panelRects.push(registerUIRect({ x: x0, y: PANEL_Y, w, h }));
-    this.text(x0 + 10, PANEL_Y + 7, `隊伍名冊　前 ${MAX_DEPLOYED} 位出戰　點武器列可換武器（一把只能一人拿）`, 9, '#f5d76e');
+    GameState.normalizeDeploy();
+    const nDeployed = deployedCrew(crew).length;
+    this.text(x0 + 10, PANEL_Y + 7, `隊伍名冊　出戰 ${nDeployed}/${MAX_DEPLOYED}　點右上切換出戰／待命，點武器列換武器（一把只能一人拿）`, 9, '#f5d76e');
     if (pages > 1) {
       this.addButton(x0 + w - 70, PANEL_Y + 4, 28, 16, '◀', this.rosterPage > 0, () => {
         this.rosterPage--;
@@ -227,7 +229,7 @@ export class BuildUIScene extends Phaser.Scene {
       this.text(x0 + 10, PANEL_Y + 26, '現在只有你一個人。出門探索、推進主線，就能找到願意跟你走的倖存者。', 8, '#b0bec5');
       return;
     }
-    const ready = crew.filter(crewReady);
+    const deployedList = deployedCrew(crew);
     list.forEach((m, i) => {
       const cx = x0 + 8 + (i % cols) * (cw + 8);
       const cy = PANEL_Y + 24 + Math.floor(i / cols) * (cellH + 4);
@@ -238,10 +240,18 @@ export class BuildUIScene extends Phaser.Scene {
       if (key === 'player') img.setTint(COMPANION_ROLES[m.role].tint);
       this.panel.add(img);
       const isReady = crewReady(m);
-      const deployed = isReady && ready.indexOf(m) < MAX_DEPLOYED;
+      const deployed = deployedList.includes(m);
       const tx0 = cx + 44;
-      this.text(tx0, cy + 3, m.name, 9, '#ffffff');
-      this.text(cx + cw - 6, cy + 4, `${COMPANION_ROLES[m.role].title}${!isReady ? `・負傷 ${m.injuredDays} 天` : deployed ? '・出戰' : '・待命'}`, 8, !isReady ? '#ef9a9a' : deployed ? '#f5d76e' : '#90a4ae').setOrigin(1, 0);
+      const nm = this.text(tx0, cy + 3, m.name, 9, '#ffffff');
+      this.text(tx0 + nm.width + 6, cy + 4, COMPANION_ROLES[m.role].title, 8, '#cfd8dc');
+      // 出戰／待命切換（負傷的不能上場）
+      const tag = !isReady ? `負傷 ${m.injuredDays} 天` : deployed ? '★ 出戰' : '待命';
+      this.toggleButton(cx + cw - 52, cy + 3, 46, 13, tag, isReady, deployed, () => {
+        const res = GameState.setDeployed(m.id, !deployed);
+        this.rosterNote = res.ok ? '' : res.reason ?? '';
+        GameState.save();
+        this.refresh();
+      });
       // 體格・出身・擅長
       const body = BODIES[m.body] ?? BODIES.average;
       const bgDef = BACKGROUND_BY_ID[m.background];
@@ -263,6 +273,15 @@ export class BuildUIScene extends Phaser.Scene {
       this.text(tx0 + 4, cy + 56, label, 8, st.sidearm ? '#90a4ae' : '#ffe082');
     });
     if (this.rosterNote) this.text(x0 + 10, PANEL_Y + h + 4, this.rosterNote, 8, '#ff8a80');
+  }
+
+  /** 名冊的出戰開關：出戰時亮黃色 */
+  private toggleButton(x: number, y: number, w: number, h: number, label: string, enabled: boolean, on: boolean, onPress: () => void): void {
+    const objs = this.button(x, y, w, h, '', enabled, onPress, on ? 0x5a4a14 : 0x2a2f3a);
+    const bg = objs[0] as Phaser.GameObjects.Rectangle;
+    if (on) bg.setStrokeStyle(1, 0xf5d76e, 0.9);
+    this.panel.add(objs);
+    this.text(x + w / 2, y + h / 2, label, 8, !enabled ? '#ef9a9a' : on ? '#f5d76e' : '#90a4ae').setOrigin(0.5);
   }
 
   private weaponLabel(assigned: string | undefined, actual: string, sidearm: boolean, melee: boolean): string {

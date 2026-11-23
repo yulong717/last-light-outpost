@@ -37,7 +37,7 @@ import { CompanionSystem, type CompanionHud, type CompanionOrder } from '../syst
 import type { BuildUIData } from './BuildUIScene';
 import type { GameOverData } from './GameOverScene';
 import { EXPLORE_TIME, getZone } from '../data/explore';
-import { crewReady } from '../data/companions';
+import { deployedCrew } from '../data/companions';
 import { HeroSystem, type HeroHud } from '../systems/HeroSystem';
 import { LUCK } from '../data/heroes';
 import { PROLOGUES } from '../data/story';
@@ -198,7 +198,7 @@ export class DefenseScene extends Phaser.Scene {
       barricadeX: BARRICADE_X,
     });
     // 夜晚強度依可出戰的隊員人數縮放（單人開局比較溫和）
-    const night = buildNight(GameState.data.day, Math.random, GameState.data.crew.filter(crewReady).length);
+    const night = buildNight(GameState.data.day, Math.random, deployedCrew(GameState.data.crew).length);
     prewarmLooks(this, night.flatMap((w) => w.groups.map((g) => g.enemy)));
     this.spawner = new WaveSpawner(this, night, (id) => this.spawnZombie(id));
 
@@ -313,7 +313,8 @@ export class DefenseScene extends Phaser.Scene {
       addZombie: (z) => this.zombies.push(z),
       canStart: () => !this.spawner.done && !this.ended,
       onJoin: (m, x, y) => {
-        if (!this.companions.join(m, x, y)) this.fx.popText(x, y - 54, '出戰人數已滿，明天再上場', '#b0bec5');
+        if (this.companions.join(m, x, y)) m.standby = false;
+        else this.fx.popText(x, y - 54, '出戰人數已滿，先待命', '#b0bec5');
       },
     });
     // 開發測試：網址加 ?rescue 會在入夜 3 秒後觸發

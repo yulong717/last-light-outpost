@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { LANE_BOTTOM, LANE_TOP } from '../config';
-import { COMPANION_ROLES, MAX_DEPLOYED, crewReady, type CrewMember } from '../data/companions';
+import { COMPANION_ROLES, MAX_DEPLOYED, deployedCrew, type CrewMember } from '../data/companions';
 import { TRAIT_TUNING, traitNames } from '../data/crewTraits';
 import type { Barricade } from '../entities/Barricade';
 import { Companion, type CompanionShot } from '../entities/Companion';
@@ -77,8 +77,8 @@ export class CompanionSystem {
   private repairTick = 0;
 
   constructor(private scene: Phaser.Scene, private layout: CompanionLayout) {
-    // 探索中負傷休養的隊員不出戰
-    const crew = GameState.data.crew.filter(crewReady).slice(0, MAX_DEPLOYED);
+    // 名冊裡選了出戰的隊員（負傷休養、設成待命的不上場）
+    const crew = deployedCrew(GameState.data.crew);
     crew.forEach((member, i) => {
       const def = COMPANION_ROLES[member.role];
       if (!def) return;
