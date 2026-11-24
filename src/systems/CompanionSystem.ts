@@ -43,6 +43,11 @@ export interface CompanionLayout {
   maxX: number;
   /** 路障 x：固守時站在它內側 */
   barricadeX: number;
+  /**
+   * 雙面據點（孤島小店）：據點在中間，左邊還有一道路障。
+   * 每位隊員依 CrewMember.side 守左邊或右邊（白天在戰場上點隊員切換）。
+   */
+  dual?: { center: number; barricadeXL: number };
 }
 
 type Patient = { x: number; y: number; ratio: number; heal: (a: number) => number };
@@ -82,9 +87,11 @@ export class CompanionSystem {
     crew.forEach((member, i) => {
       const def = COMPANION_ROLES[member.role];
       if (!def) return;
-      const home = this.holdSpot(member.role, i);
+      const side = layout.dual ? (member.side ?? (i % 2 === 0 ? 1 : -1)) : 1;
+      const home = this.holdSpot(member.role, i, side);
       const c = new Companion(scene, member, def, home.x, home.y);
       this.companions.push(c);
+      if (layout.dual) c.placeAt(home.x, home.y, side);
       this.healTimers.set(c, 0);
     });
 
@@ -125,11 +132,57 @@ export class CompanionSystem {
       .map((c) => ({ x: c.footX, y: c.footY, alive: true, hit: (d: number) => this.hit(c, d) }));
   }
 
-  update(dt: number, player: CompanionPlayerLink, zombies: Zombie[], barricade: Barricade): CompanionShot {
+  /** 這位隊員守哪一側：1 = 右、-1 = 左（只有雙面據點會是 -1） */
+  sideOf(c: Companion): 1 | -1 {
+    if (!this.layout.dual) return 1;
+    if (c.member.side) return c.member.side;
+    // 還沒分配：依序左右輪流
+    return this.companions.indexOf(c) % 2 === 0 ? 1 : -1;
+  }
+
+  /** 雙面據點白天：切換這位隊員守的那一側，回傳新的一側 */
+  toggleSide(c: Companion): 1 | -1 {
+    const next = this.sideOf(c) > 0 ? -1 : 1;
+    c.member.side = next;
+    const i = this.companions.indexOf(c);
+    const home = this.holdSpot(c.def.role, i, next);
+    c.placeAt(home.x, home.y, next);
+    return next;
+  }
+
+  /** 白天：在戰場上點到哪位隊員（雙面據點用來分配左右） */
+  companionAt(x: number, y: number): Companion | null {
+    let best: Companion | null = null;
+    let bestD = 22;
+    for (const c of this.companions) {
+      if (!c.alive) continue;
+      if (y > c.footY + 6 || y < c.footY - 56) continue;
+      const d = Math.abs(c.footX - x);
+      if (d < bestD) {
+        bestD = d;
+        best = c;
+      }
+    }
+    return best;
+  }
+
+  /** 這一側的路障 x */
+  private barX(side: number): number {
+    return side < 0 && this.layout.dual ? this.layout.dual.barricadeXL : this.layout.barricadeX;
+  }
+
+  update(dt: number, player: CompanionPlayerLink, zombies: Zombie[], barricadeOf: (side: number) => Barricade): CompanionShot {
     const total: CompanionShot = { kills: 0, headshots: 0 };
     this.companions.forEach((c, i) => {
       if (!c.alive) return;
-      let { x, y } = this.order === 'follow' && player.alive ? this.followSpot(player, i) : this.holdSpot(c.def.role, i);
+      // s：這位隊員守的那一側（霧屍從哪邊來）；bx：那一側路障；往「外」是 +s
+      const s = this.sideOf(c);
+      const bx = this.barX(s);
+      const barricade = barricadeOf(s);
+      const following = this.order === 'follow' && player.alive;
+      // 往前（朝霧屍）的方向：固守時看守的那一側，跟隨時一般據點照舊往右、雙面據點看主角面向
+      const fwd = following ? (this.layout.dual ? player.facing : 1) : s;
+      let { x, y } = following ? this.followSpot(player, i) : this.holdSpot(c.def.role, i, s);
       let canShoot = true;
       c.status = c.reloading ? '換彈' : this.order === 'hold' ? '固守' : '跟隨';
       // 近戰型：固守時守在路障邊、對準正在拆路障的霧屍；跟隨時衝向附近的霧屍
@@ -140,16 +193,16 @@ export class CompanionSystem {
         if (spot.engaging) c.status = '肉搏';
       }
       // 莽撞：老是站到隊形前面
-      if (c.stats.hooks.has('reckless')) x += TRAIT_TUNING.recklessStep;
+      if (c.stats.hooks.has('reckless')) x += fwd * TRAIT_TUNING.recklessStep;
       // 膽小：被貼身就往後退
       if (c.wantsToRetreat) {
-        x = c.footX - 30;
+        x = c.footX - fwd * 30;
         c.status = '後退';
       }
 
       // 工兵：路障受損就去修
       if (c.stats.repairPerSec && barricade.alive && barricade.hp < barricade.maxHp) {
-        x = this.layout.barricadeX - 14;
+        x = bx - s * 14;
         y = c.footY;
         const atSpot = Math.abs(c.footX - x) < 6;
         if (atSpot) {
@@ -172,10 +225,10 @@ export class CompanionSystem {
         const h = c.stats.heal;
         const patient = this.findPatient(c, player, h.range * 2.5);
         if (patient && Math.hypot(patient.x - c.footX, patient.y - c.footY) > h.range * 0.7) {
-          x = patient.x - 16;
+          x = patient.x - fwd * 16;
           y = patient.y;
           // 固守時不離開路障內側
-          if (this.order === 'hold') x = Math.min(x, this.layout.barricadeX - 14);
+          if (this.order === 'hold') x = s > 0 ? Math.min(x, bx - 14) : Math.max(x, bx + 14);
         }
         const t = (this.healTimers.get(c) ?? 0) - dt;
         this.healTimers.set(c, Math.max(0, t));
@@ -251,14 +304,19 @@ export class CompanionSystem {
   /** 近戰隊員要站的位置 */
   private meleeSpot(c: Companion, player: CompanionPlayerLink, zombies: Zombie[]): { x: number; y: number; engaging: boolean } {
     const reach = c.meleeReach;
-    const bx = this.layout.barricadeX;
+    const s = this.sideOf(c);
+    const bx = this.barX(s);
+    const center = this.layout.dual?.center;
     const following = this.order === 'follow' && player.alive;
     // 找目標：固守時只管貼在路障前的，跟隨時管主角附近的
     let best: Zombie | null = null;
     let bestD = Infinity;
     for (const z of zombies) {
       if (z.dead) continue;
-      const ok = following ? Math.abs(z.footX - player.footX) < 110 : z.footX < bx + 50;
+      // 固守：只管自己這一側、貼在路障前的
+      const ok = following
+        ? Math.abs(z.footX - player.footX) < 110
+        : (z.footX - bx) * s < 50 && (center === undefined || (z.footX - center) * s > 0);
       if (!ok) continue;
       const d = Math.hypot(z.footX - c.footX, (z.footY - c.footY) * 1.5);
       if (d < bestD) {
@@ -268,9 +326,9 @@ export class CompanionSystem {
     }
     if (best) {
       // 站在目標靠據點這一側、剛好打得到的距離
-      const side = following && best.footX < c.footX ? 1 : -1;
+      const side = following ? (best.footX < c.footX ? 1 : -1) : -s;
       let x = best.footX + side * Math.max(10, reach * 0.7);
-      if (!following) x = Math.min(x, bx + Math.max(0, reach - 16));
+      if (!following) x = s > 0 ? Math.min(x, bx + Math.max(0, reach - 16)) : Math.max(x, bx - Math.max(0, reach - 16));
       return { x, y: best.footY, engaging: true };
     }
     if (following) {
@@ -279,7 +337,7 @@ export class CompanionSystem {
       // 近戰的人站在主角前面
       return { x: player.footX + Math.abs(o.x) * 0.8 * player.facing, y: player.footY + o.y, engaging: false };
     }
-    return { x: bx - 4, y: c.footY, engaging: false };
+    return { x: bx - s * 4, y: c.footY, engaging: false };
   }
 
   /** 範圍內受傷最重（血量比例最低、且低於 9 成）的人 */
@@ -298,10 +356,12 @@ export class CompanionSystem {
     return best;
   }
 
-  private holdSpot(role: string, i: number): { x: number; y: number } {
-    const bx = this.layout.barricadeX;
-    // 射手靠路障、醫護退到牆邊、工兵站中間方便衝去修
-    const x = role === 'shooter' ? bx - 18 : role === 'medic' ? this.layout.minX + 8 : bx - 32;
+  private holdSpot(role: string, i: number, s: number = 1): { x: number; y: number } {
+    const bx = this.barX(s);
+    // 射手靠路障、醫護退到牆邊（雙面據點：小店門口）、工兵站中間方便衝去修
+    const dual = this.layout.dual;
+    const wall = dual ? dual.center + s * 48 : this.layout.minX + 8;
+    const x = role === 'shooter' ? bx - s * 18 : role === 'medic' ? wall : bx - s * 32;
     return { x, y: HOLD_Y[i % HOLD_Y.length] };
   }
 

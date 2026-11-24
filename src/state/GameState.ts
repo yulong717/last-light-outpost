@@ -24,6 +24,8 @@ export interface GameStateData {
   crew: CrewMember[];
   /** 主路障目前耐久（白天修理、夜裡被拆，跨夜保留） */
   barricadeHp: number;
+  /** 雙面據點（孤島小店）左側路障的耐久；沒有就當滿血 */
+  barricadeHpL?: number;
   barricadeLevel: number;
   /** 各槽位上蓋的建築（槽位定義見 src/data/buildings.ts） */
   buildings: SavedBuilding[];
@@ -291,6 +293,7 @@ class GameStateStore {
     d.barricadeLevel = 1;
     d.barricadeMaxHp = BARRICADE_LEVELS[0].maxHp;
     d.barricadeHp = d.barricadeMaxHp;
+    d.barricadeHpL = undefined;
     d.baseHp = d.baseMaxHp;
     d.outpostMap = node.map;
     return refund;

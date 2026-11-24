@@ -100,6 +100,8 @@ export interface SlotDef {
   x: number;
   y: number;
   kinds: BuildingKind[];
+  /** 雙面據點的槽位：霧屍從哪一側來（1 = 右、-1 = 左）。一般據點不填 */
+  dir?: 1 | -1;
 }
 
 export const SLOTS: SlotDef[] = [
@@ -117,6 +119,34 @@ export const SLOTS: SlotDef[] = [
   { id: 'far-1', x: 390, y: 262, kinds: ['spikes', 'lamp', 'sandbag'] },
   { id: 'far-2', x: 390, y: 318, kinds: ['spikes', 'lamp', 'sandbag'] },
 ];
+
+/**
+ * 雙面據點（孤島小店）的格局：小店在戰場正中間，左右各一道路障。
+ * 霧屍敲到小店門面（center ± storeHalf）就是在打據點。
+ */
+export const DUAL = {
+  center: 640,
+  storeHalf: 40,
+  /** 路障離中心多遠 */
+  barricadeOff: 150,
+};
+
+/** 雙面據點每一側的槽位（dx 是離中心的距離，左側鏡像） */
+const DUAL_SIDE: { id: string; dx: number; y: number; kinds: BuildingKind[] }[] = [
+  { id: 'tower-far', dx: 106, y: 258, kinds: ['turret', 'lamp'] },
+  { id: 'tower-near', dx: 106, y: 324, kinds: ['turret', 'lamp'] },
+  { id: 'front-1', dx: 204, y: 250, kinds: ['sandbag', 'spikes'] },
+  { id: 'front-2', dx: 204, y: 290, kinds: ['sandbag', 'spikes'] },
+  { id: 'front-3', dx: 204, y: 330, kinds: ['sandbag', 'spikes'] },
+  { id: 'mid-2', dx: 290, y: 288, kinds: ['sandbag', 'spikes', 'lamp'] },
+];
+
+export const DUAL_SLOTS: SlotDef[] = ([1, -1] as const).flatMap((dir) =>
+  DUAL_SIDE.map((s) => ({ id: `${dir > 0 ? 'R' : 'L'}-${s.id}`, x: DUAL.center + dir * s.dx, y: s.y, kinds: s.kinds, dir })),
+);
+
+/** 所有槽位（存檔還原用）；一般據點只開放沒有 dir 的那些 */
+export const ALL_SLOTS: SlotDef[] = [...SLOTS, ...DUAL_SLOTS];
 
 /** 廢料收支 */
 export const ECONOMY = {
@@ -163,5 +193,5 @@ export function setActiveSlots(ids: string[] | null): void {
 }
 
 export function activeSlots(): SlotDef[] {
-  return activeIds ? SLOTS.filter((s) => activeIds!.includes(s.id)) : SLOTS;
+  return activeIds ? ALL_SLOTS.filter((s) => activeIds!.includes(s.id)) : SLOTS;
 }

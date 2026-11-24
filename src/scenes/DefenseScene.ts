@@ -12,7 +12,7 @@ import {
   setSingleLane,
 } from '../config';
 import { getOutpostMap } from '../data/scenery';
-import { setActiveSlots } from '../data/buildings';
+import { DUAL, setActiveSlots } from '../data/buildings';
 import { addUiCamera, setViewZoom, splitUiObjects } from '../render/RenderScale';
 import type { WaveDef } from '../data/waves';
 import { BuildMode } from '../build/BuildMode';
@@ -127,6 +127,16 @@ const BASE_X = 44;
 const PLAYER_X = 80;
 const BARRICADE_X = 160;
 
+/** 一道防線：霧屍從 side 那一側來（1 = 右、-1 = 左），先打路障，路障倒了打據點 */
+interface Front {
+  side: 1 | -1;
+  barricade: Barricade;
+  /** 路障的 x */
+  barX: number;
+  /** 路障倒了以後霧屍敲的據點邊緣 */
+  baseX: number;
+}
+
 /**
  * 一天的流程：先是白天布置（在槽位上蓋建築、修理路障），按「開始夜晚」後進入夜晚防守。
  * 夜晚防守：2.5D 帶狀戰場。主角可在地面帶上前後左右移動，
@@ -139,6 +149,16 @@ export class DefenseScene extends Phaser.Scene {
   private heroSys?: HeroSystem;
   private spawner!: WaveSpawner;
   private barricade!: Barricade;
+  /** 防線：一般據點只有右邊一道；雙面據點（孤島小店）左右各一道 */
+  private fronts: Front[] = [];
+  /** 雙面據點 */
+  private dual = false;
+  /** 據點中心 x（雙面據點）／主角起始位置 */
+  private homeX = PLAYER_X;
+  /** 下一隻霧屍從哪邊來（雙面據點左右交錯） */
+  private nextSide: 1 | -1 = 1;
+  /** 雙面據點白天：隊員頭上的「守左／守右」標籤 */
+  private sideTags: Phaser.GameObjects.Text[] = [];
   private player!: Player;
   private companions!: CompanionSystem;
   private zombies: Zombie[] = [];
@@ -188,7 +208,10 @@ export class DefenseScene extends Phaser.Scene {
     // 單軸據點（窄巷）：大家都在同一條線上、只開放部分槽位；場景結束還原
     const map = getOutpostMap(GameState.data.outpostMap);
     setSingleLane(!!map.single);
-    setActiveSlots(map.single?.slots ?? null);
+    setActiveSlots(map.single?.slots ?? map.dual?.slots ?? null);
+    this.dual = !!map.dual;
+    this.homeX = this.dual ? DUAL.center : PLAYER_X;
+    this.sideTags = [];
     this.uiCam = undefined;
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       setSingleLane(false);
@@ -200,14 +223,24 @@ export class DefenseScene extends Phaser.Scene {
     this.fx = Fx.attach(this);
     this.camFeel = CameraFeel.attach(this);
     // 貼地霧放在地面帶中段，燈掛在據點外牆上
-    createAtmosphere(this, { groundY: LANE_TOP + 14, lamp: { x: BASE_X - 6, y: GROUND_Y - 70 } });
+    createAtmosphere(this, { groundY: LANE_TOP + 14, lamp: this.dual ? { x: DUAL.center, y: GROUND_Y - 120 } : { x: BASE_X - 6, y: GROUND_Y - 70 } });
 
     const st = GameState.data;
-    this.barricade = new Barricade(this, BARRICADE_X, st.barricadeMaxHp);
+    const barXR = this.dual ? DUAL.center + DUAL.barricadeOff : BARRICADE_X;
+    const barXL = DUAL.center - DUAL.barricadeOff;
+    this.barricade = new Barricade(this, barXR, st.barricadeMaxHp);
+    const barricadeL = this.dual ? new Barricade(this, barXL, st.barricadeMaxHp, -1) : undefined;
+    this.fronts = [{ side: 1, barricade: this.barricade, barX: barXR, baseX: this.dual ? DUAL.center + DUAL.storeHalf : BASE_X }];
+    if (barricadeL) this.fronts.push({ side: -1, barricade: barricadeL, barX: barXL, baseX: DUAL.center - DUAL.storeHalf });
     // 據點建築與路障耐久從 GameState 還原（跨夜保留）
-    this.outpost = new Outpost(this, this.barricade);
-    this.build = new BuildMode(this, this.outpost, { barricadeX: BARRICADE_X, baseX: BASE_X });
-    this.player = new Player(this, PLAYER_X, (LANE_TOP + LANE_BOTTOM) / 2, GameState.hero.maxHp);
+    this.outpost = new Outpost(this, this.barricade, barricadeL);
+    this.build = new BuildMode(this, this.outpost, {
+      barricadeX: barXR,
+      baseX: BASE_X,
+      dual: this.dual ? { barricadeXL: barXL, center: DUAL.center, half: 3.5 * 34 } : undefined,
+      pickExtra: this.dual ? (x, y) => this.toggleCrewSide(x, y) : undefined,
+    });
+    this.player = new Player(this, this.homeX, (LANE_TOP + LANE_BOTTOM) / 2, GameState.hero.maxHp);
     this.props = new PropSystem(this, {
       player: this.player,
       zombies: () => this.zombies,
@@ -222,14 +255,20 @@ export class DefenseScene extends Phaser.Scene {
 
     this.drops = new ZombieDrops(this, {
       heal: (a) => this.player.heal(a),
-      repair: (a) => (this.barricade.alive ? this.barricade.repair(a) : 0),
+      // 雙面據點：修比較爛的那一道
+      repair: (a) => {
+        const bar = this.weakestBarricade();
+        return bar.alive ? bar.repair(a) : 0;
+      },
     });
 
     // 戰場比畫面寬：鏡頭跟著主角水平捲動，中間留一段不跟的死區
     const cam = this.cameras.main;
     cam.startFollow(this.player.sprite, true, 0.12, 0);
     cam.setDeadzone(160, GAME_HEIGHT);
-    cam.setFollowOffset(-90, 0);
+    cam.setFollowOffset(this.dual ? 0 : -90, 0);
+    // 雙面據點：兩邊都要看，鏡頭置中跟著主角，死區縮小（主角站在小店前時左右路障都在畫面裡）
+    if (this.dual) cam.setDeadzone(40, GAME_HEIGHT);
     if (map.single) {
       // 單軸：鏡頭拉近，HUD 類物件另用不縮放的鏡頭畫（同探索的單軸關卡）
       setViewZoom(cam, 1.5);
@@ -249,12 +288,14 @@ export class DefenseScene extends Phaser.Scene {
 
     // NPC 夥伴：白天就站在固守位置，入夜才開始行動
     this.companions = new CompanionSystem(this, {
-      minX: BASE_X + 14,
+      minX: this.dual ? 16 : BASE_X + 14,
       maxX: WORLD_WIDTH - 16,
-      barricadeX: BARRICADE_X,
+      barricadeX: barXR,
+      dual: this.dual ? { center: DUAL.center, barricadeXL: barXL } : undefined,
     });
     // 夜晚強度依可出戰的隊員人數縮放（單人開局比較溫和）
-    const night = singleLaneNight(buildNight(GameState.data.day, Math.random, deployedCrew(GameState.data.crew).length), map.single);
+    const base = buildNight(GameState.data.day, Math.random, deployedCrew(GameState.data.crew).length);
+    const night = map.dual ? scaleNight(base, map.dual.waves) : singleLaneNight(base, map.single);
     prewarmLooks(this, night.flatMap((w) => w.groups.map((g) => g.enemy)));
     this.spawner = new WaveSpawner(this, night, (id) => this.spawnZombie(id));
 
@@ -264,7 +305,7 @@ export class DefenseScene extends Phaser.Scene {
     });
     if (data.tutorial) this.startTutorial();
     else this.startDay(!!data.newDay);
-    if (data.refund) this.time.delayedCall(500, () => this.fx.popText(PLAYER_X + 40, LANE_TOP - 40, `換據點：舊建築拆回 +${data.refund} 廢料`, '#f5d76e'));
+    if (data.refund) this.time.delayedCall(500, () => this.fx.popText(this.homeX + 40, LANE_TOP - 40, `換據點：舊建築拆回 +${data.refund} 廢料`, '#f5d76e'));
   }
 
   /**
@@ -325,6 +366,7 @@ export class DefenseScene extends Phaser.Scene {
     // 黃昏的暖色濾鏡，入夜時淡掉
     this.dusk = this.add.rectangle(0, 0, GAME_WIDTH, GAME_HEIGHT, 0xff9a4a, 0.1).setOrigin(0).setScrollFactor(0).setDepth(89);
     this.build.enter();
+    if (this.dual) this.showSideTags();
     const data: BuildUIData = { mode: this.build, onStartNight: () => this.startNight(), onExplore: () => this.goExplore() };
     this.scene.launch('BuildUI', data);
     this.showStoryIntro();
@@ -333,7 +375,7 @@ export class DefenseScene extends Phaser.Scene {
       GameState.startNewDay();
       GameState.data.scrap += ECONOMY.dailySalvage;
       this.time.delayedCall(300, () => {
-        this.fx.popText(PLAYER_X, LANE_TOP - 40, `附近撿拾 +${ECONOMY.dailySalvage} 廢料`, '#f5d76e');
+        this.fx.popText(this.homeX, LANE_TOP - 40, `附近撿拾 +${ECONOMY.dailySalvage} 廢料`, '#f5d76e');
         this.build.events.emit('changed');
       });
     }
@@ -385,13 +427,16 @@ export class DefenseScene extends Phaser.Scene {
     const slots = st.dayTime;
     if (slots <= 0) return;
     st.dayTime = 0;
-    const repair = Math.round(this.barricade.maxHp * EXPLORE_TIME.idleRepairRatio * slots);
-    const before = this.barricade.hp;
-    if (this.barricade.alive) this.barricade.repair(repair);
+    let fixed = 0;
+    for (const f of this.fronts) {
+      const bar = f.barricade;
+      const before = bar.hp;
+      if (bar.alive) bar.repair(Math.round(bar.maxHp * EXPLORE_TIME.idleRepairRatio * slots));
+      fixed += bar.hp - before;
+    }
     const scrap = EXPLORE_TIME.idleScrap * slots;
     st.scrap += scrap;
-    const fixed = this.barricade.hp - before;
-    this.fx.popText(BARRICADE_X, LANE_TOP - 50, `留守整備：路障 +${fixed}　廢料 +${scrap}`, '#9ad17a');
+    this.fx.popText(this.homeX, LANE_TOP - 50, `留守整備：路障 +${fixed}　廢料 +${scrap}`, '#9ad17a');
   }
 
   /** 入夜：收起布置介面，開始出怪 */
@@ -399,6 +444,8 @@ export class DefenseScene extends Phaser.Scene {
     if (this.phase === 'night' || this.ended || this.scene.isActive('Story')) return;
     this.phase = 'night';
     this.build.exit();
+    for (const t of this.sideTags) t.destroy();
+    this.sideTags = [];
     if (tutorial) {
       const st = GameState.data;
       this.tutorialSnap = {
@@ -417,7 +464,7 @@ export class DefenseScene extends Phaser.Scene {
     this.scene.stop('Armory');
     if (this.dusk) this.tweens.add({ targets: this.dusk, alpha: 0, duration: 800, onComplete: () => this.dusk?.destroy() });
     // 入夜調色：壓暗偏藍，據點燈與主角身邊留光（src/fx/Atmosphere.ts）
-    nightGrade(this, [{ x: BASE_X - 6, y: GROUND_Y - 40, scale: 1.3 }], this.player.sprite);
+    nightGrade(this, [this.dual ? { x: DUAL.center, y: GROUND_Y - 40, scale: 1.6 } : { x: BASE_X - 6, y: GROUND_Y - 40, scale: 1.3 }], this.player.sprite);
     // 武器在入夜才上膛：白天在軍械庫換的配置、買的子彈都算進去
     const armory = GameState.data.armory;
     this.weapons = new WeaponSystem(this, armory.loadout, armory.ammo, !!armory.finitePistol, GameState.data.hero === 'lucky' ? LUCK.critChance : 0);
@@ -441,7 +488,7 @@ export class DefenseScene extends Phaser.Scene {
         weapons: () => this.weapons,
         zombies: () => this.zombies,
         spawn: (id, x) => this.spawnZombie(id, x),
-        barricadeX: BARRICADE_X,
+        barricadeX: this.fronts[0].barX,
         touch: this.sys.game.device.input.touch,
         unarmed: GameState.data.armory.loadout.length === 0,
         onDone: () => this.finishTutorial(),
@@ -457,8 +504,9 @@ export class DefenseScene extends Phaser.Scene {
     this.spawner.start();
     // 拯救倖存者：今晚會不會發生、什麼時候發生，建立時就擲好
     this.rescue = new RescueEvent(this, {
-      blockX: () => (this.barricade.alive ? this.barricade.frontX : BASE_X),
-      safeX: () => (this.barricade.alive ? BARRICADE_X - 22 : BASE_X + 20),
+      // 倖存者從右邊跑來（雙面據點也是右側）
+      blockX: () => (this.barricade.alive ? this.barricade.frontX : this.fronts[0].baseX),
+      safeX: () => (this.barricade.alive ? this.fronts[0].barX - 22 : this.fronts[0].baseX + 20),
       zombies: () => this.zombies,
       addZombie: (z) => this.zombies.push(z),
       canStart: () => !this.spawner.done && !this.ended,
@@ -491,11 +539,57 @@ export class DefenseScene extends Phaser.Scene {
   /** 戰場：依選擇的據點地圖畫出街口／加油站／校園，再擺上油桶、車、木箱 */
   private drawBackdrop(): void {
     this.scenery = outpostScenery(this, GameState.data.outpostMap, WORLD_WIDTH, GameState.data.day);
+    // 雙面據點：小店畫在背景立面上（SceneryBuilder 的 islandshop），門口鋪一塊地墊標出「據點」範圍
+    if (this.dual) {
+      const c = DUAL.center;
+      const h = DUAL.storeHalf;
+      this.add.rectangle(c - h, LANE_TOP - 8, h * 2, LANE_BOTTOM - LANE_TOP + 16, 0xf0e8a0, 0.06).setOrigin(0).setDepth(1);
+      for (const x of [c - h, c + h - 2]) this.add.rectangle(x, LANE_TOP - 8, 2, LANE_BOTTOM - LANE_TOP + 16, 0xe0d890, 0.25).setOrigin(0).setDepth(1);
+      return;
+    }
     // 據點外牆與射擊平台（整條地面帶都被外牆擋住）
     this.add.rectangle(0, GROUND_Y - 84, BASE_X, GAME_HEIGHT - GROUND_Y + 84, 0x3d4450).setOrigin(0);
     this.add.rectangle(0, GROUND_Y - 84, BASE_X, 3, 0x6a7280).setOrigin(0);
     for (let y = GROUND_Y - 78; y < GAME_HEIGHT; y += 10) this.add.rectangle(0, y, BASE_X, 1, 0x2e333c).setOrigin(0);
     this.add.rectangle(BASE_X, GROUND_Y, 6, GAME_HEIGHT - GROUND_Y, 0x555d6b).setOrigin(0);
+  }
+
+  /** 耐久比例最低的那道路障（一般據點就是主路障） */
+  private weakestBarricade(): Barricade {
+    let best = this.barricade;
+    for (const f of this.fronts) if (f.barricade.hp / f.barricade.maxHp < best.hp / best.maxHp) best = f.barricade;
+    return best;
+  }
+
+  /** 雙面據點白天：點隊員換守左邊／右邊 */
+  private toggleCrewSide(x: number, y: number): boolean {
+    if (this.phase !== 'day') return false;
+    const c = this.companions?.companionAt(x, y);
+    if (!c) return false;
+    const side = this.companions.toggleSide(c);
+    GameState.save();
+    this.fx.popText(c.footX, c.footY - 64, side < 0 ? '改守左邊' : '改守右邊', '#fff59d');
+    return true;
+  }
+
+  /** 隊員頭上的「守左／守右」小字（白天），提示可以點選換邊 */
+  private showSideTags(): void {
+    for (const t of this.sideTags) t.destroy();
+    this.sideTags = this.companions.companions.map(() =>
+      pixelText(this, 0, 0, '', 7, '#fff59d').setOrigin(0.5, 1).setDepth(150).setStroke('#000000', 3),
+    );
+    this.updateSideTags();
+    this.fx.popText(DUAL.center, LANE_TOP - 70, '霧屍會從左右兩邊來：點隊員切換守哪一側', '#fff59d');
+  }
+
+  private updateSideTags(): void {
+    if (!this.sideTags.length) return;
+    this.companions.companions.forEach((c, i) => {
+      const t = this.sideTags[i];
+      if (!t) return;
+      t.setVisible(c.alive);
+      t.setText(this.companions.sideOf(c) < 0 ? '◀守左' : '守右▶').setPosition(c.footX, c.footY - 66);
+    });
   }
 
   /** 戰場上的物資箱：廢料，偶爾有手上槍的子彈 */
@@ -511,12 +605,22 @@ export class DefenseScene extends Phaser.Scene {
 
   private spawnZombie(id: string, atX?: number): void {
     if (this.ended) return;
-    // 在鏡頭右緣外生成，主角在據點附近時節奏不會被拉長
-    const right = Math.min(WORLD_WIDTH, this.cameras.main.scrollX + GAME_WIDTH);
-    const x = atX ?? right + 20 + Phaser.Math.Between(0, 20);
+    // 雙面據點：左右大致交錯，偶爾連續從同一邊來
+    let side: 1 | -1 = 1;
+    if (this.dual) {
+      side = atX !== undefined ? (atX < DUAL.center ? -1 : 1) : this.nextSide;
+      if (atX === undefined) this.nextSide = Math.random() < 0.7 ? (side > 0 ? -1 : 1) : side;
+    }
+    // 在鏡頭邊緣外生成，主角在據點附近時節奏不會被拉長
+    const cam = this.cameras.main;
+    const right = Math.min(WORLD_WIDTH, cam.scrollX + GAME_WIDTH);
+    const left = Math.max(0, cam.scrollX);
+    const x = atX ?? (side > 0 ? right + 20 + Phaser.Math.Between(0, 20) : left - 20 - Phaser.Math.Between(0, 20));
     const y = Phaser.Math.Between(LANE_TOP, LANE_BOTTOM);
     // 職業／動物＋隨機外觀、體型、性別＋變異（見 src/systems/ZombieFactory.ts）
     const z = spawnEnemy(this, id, x, y, { day: GameState.data.day });
+    z.side = side;
+    z.setFlipX(side > 0);
     this.zombies.push(z);
     const spec = z.spec;
     this.introduce(spec.profession.id);
@@ -543,8 +647,10 @@ export class DefenseScene extends Phaser.Scene {
     const inRange = (x: number, y: number) => Math.hypot(x - e.x, (y - e.y) * 1.6) <= e.radius;
     if (this.player.alive && inRange(this.player.footX, this.player.footY)) this.player.takeDamage(e.damage, e.x, e.y);
     for (const t of this.companions.targets()) if (t.alive && inRange(t.x, t.y)) t.hit(e.damage, e.x, e.y);
-    const ctx = this.zombieContext();
-    if (Math.abs(e.x - ctx.blockX) <= e.radius) ctx.hitBlock(e.damage, e.y);
+    for (const f of this.fronts) {
+      const ctx = this.zombieContext(f);
+      if (Math.abs(e.x - ctx.blockX) <= e.radius) ctx.hitBlock(e.damage, e.y);
+    }
     this.camFeel.addTrauma(0.3);
     // 連鎖引爆稍微錯開，看得出一顆接一顆
     const victims = this.zombies.filter((z) => !z.dead && inRange(z.footX, z.footY));
@@ -557,30 +663,37 @@ export class DefenseScene extends Phaser.Scene {
     });
   }
 
-  /** 霧屍要攻擊的擋路線：路障還在就是路障，否則是據點外牆；前面有沙包牆時先拆沙包 */
-  private zombieContext(): ZombieContext {
-    const blocker = this.barricade.alive
+  /**
+   * 霧屍要攻擊的擋路線：路障還在就是路障，否則是據點外牆；前面有沙包牆時先拆沙包。
+   * 雙面據點每一側各有一份，霧屍用自己那一側的（z.side）。
+   */
+  private zombieContext(front: Front = this.fronts[0]): ZombieContext {
+    const bar = front.barricade;
+    const blocker = bar.alive
       ? {
-          blockX: this.barricade.frontX,
+          blockX: bar.frontX,
           hitBlock: (d: number, y: number) => {
-            this.barricade.takeDamage(d, y);
-            const bx = this.barricade.frontX;
-            GameEvents.of(this).emit('barricade:hit', { damage: d, y, hp: this.barricade.hp, maxHp: this.barricade.maxHp, x: bx });
-            if (!this.barricade.alive) GameEvents.of(this).emit('barricade:break', { x: bx });
+            bar.takeDamage(d, y);
+            const bx = bar.frontX;
+            GameEvents.of(this).emit('barricade:hit', { damage: d, y, hp: bar.hp, maxHp: bar.maxHp, x: bx });
+            if (!bar.alive) {
+              GameEvents.of(this).emit('barricade:break', { x: bx });
+              if (this.dual) this.fx.popText(bx, LANE_TOP - 30, front.side < 0 ? '左側路障倒了！' : '右側路障倒了！', '#ff8a80');
+            }
           },
         }
       : {
-          blockX: BASE_X,
+          blockX: front.baseX,
           hitBlock: (d: number) => {
             const st = GameState.data;
             st.baseHp = Math.max(0, st.baseHp - d);
-            GameEvents.of(this).emit('base:hit', { damage: d, hp: st.baseHp, maxHp: st.baseMaxHp, x: BASE_X });
+            GameEvents.of(this).emit('base:hit', { damage: d, hp: st.baseHp, maxHp: st.baseMaxHp, x: front.baseX });
           },
         };
     const minFront = blocker.blockX;
     return {
       ...blocker,
-      blockerFor: (x, y) => this.outpost.blockerFor(x, y, minFront),
+      blockerFor: (x, y) => this.outpost.blockerFor(x, y, minFront, front.side),
       speedMul: (x, y) => this.outpost.speedMul(x, y),
       player: { x: this.player.footX, y: this.player.footY, alive: this.player.alive },
       // 受擊回饋（震動、紅邊、卡肉）在 wireFeedback() 裡訂閱 player:hurt
@@ -597,6 +710,7 @@ export class DefenseScene extends Phaser.Scene {
     const dt = Math.min(deltaMs / 1000, 0.05) * this.fx.timeScale;
     if (this.phase === 'day') {
       this.build.update(dt);
+      this.updateSideTags();
       // 白天：槍口朝前稍微放低；在軍械庫換了配置，手上的槍跟著換
       this.rig.setWeapon(GameState.data.armory.loadout[0] ?? 'm1911');
       this.updateRig(dt, this.player.footX + 100, this.player.footY - 20);
@@ -629,7 +743,7 @@ export class DefenseScene extends Phaser.Scene {
 
     // 主角移動：據點外牆內側到戰場右緣（揮擊中不轉身）
     // 近戰模式＋觸控：面向跟著搖桿（沒有槍要瞄）
-    this.player.update(dt, inp.moveX, inp.moveY, this.melee.aimX(this.player, this.melee.stance ? meleeAim : inp.aimX), { minX: BASE_X + 14, maxX: WORLD_WIDTH - 16 });
+    this.player.update(dt, inp.moveX, inp.moveY, this.melee.aimX(this.player, this.melee.stance ? meleeAim : inp.aimX), { minX: this.dual ? 16 : BASE_X + 14, maxX: WORLD_WIDTH - 16 });
 
     const p = this.player;
     // 手上的武器先擺好姿勢，子彈從真正的槍口射出
@@ -670,14 +784,15 @@ export class DefenseScene extends Phaser.Scene {
         heal: (a) => p.heal(a),
       },
       this.zombies,
-      this.barricade,
+      (side) => this.outpost.barricadeOf(side),
     );
     this.kills += ally.kills;
     this.headshots += ally.headshots;
 
     // 敵人
-    const ctx = this.zombieContext();
-    for (const z of this.zombies) z.update(dt, ctx);
+    const ctxs = this.fronts.map((f) => this.zombieContext(f));
+    const ctxL = ctxs[1] ?? ctxs[0];
+    for (const z of this.zombies) z.update(dt, z.side < 0 ? ctxL : ctxs[0]);
     // 場景道具：油桶、火堆、汽車警報、掉落物；掩體擋路
     this.props.update(dt);
     this.props.collide(this.player);
@@ -816,8 +931,9 @@ export class DefenseScene extends Phaser.Scene {
       playerMaxHp: this.player.maxHp,
       baseHp: st.baseHp,
       baseMaxHp: st.baseMaxHp,
-      barricadeHp: this.barricade.hp,
-      barricadeMaxHp: this.barricade.maxHp,
+      // 雙面據點：顯示比較危險的那一道
+      barricadeHp: this.weakestBarricade().hp,
+      barricadeMaxHp: this.weakestBarricade().maxHp,
       weaponName: w.def.name,
       weaponId: w.def.id,
       weaponModel: w.def.model,
@@ -873,6 +989,14 @@ export class DefenseScene extends Phaser.Scene {
     };
     this.time.delayedCall(800, () => this.scene.start('GameOver', data));
   }
+}
+
+/** 雙面據點：每組霧屍數量乘上倍率（兩邊分攤，總量稍多） */
+function scaleNight(night: WaveDef[], mul: number): WaveDef[] {
+  return night.map((w) => ({
+    ...w,
+    groups: w.groups.map((g) => ({ ...g, count: Math.max(1, Math.round(g.count * mul)), interval: g.interval / mul })),
+  }));
 }
 
 /**

@@ -34,6 +34,7 @@ export const ROUTE_NODES: RouteNode[] = [
   { id: 'street', kind: 'outpost', name: '街口五金行', x: 290, y: 235, map: 'street' },
   { id: 'schoolyard', kind: 'outpost', name: '光明國小', x: 235, y: 100, map: 'school' },
   { id: 'gasstation', kind: 'outpost', name: '公路加油站', x: 430, y: 270, map: 'gasstation' },
+  { id: 'islandshop', kind: 'outpost', name: '孤島小店', x: 368, y: 178, map: 'islandshop', blurb: '路口正中間的便利商店，兩邊都會有霧屍來。' },
   // ── 探索點（區域） ──
   { id: 'gas', kind: 'explore', name: '', x: 0, y: 0, zone: 'gas' },
   { id: 'homes', kind: 'explore', name: '', x: 0, y: 0, zone: 'homes' },
@@ -70,6 +71,10 @@ export const ROUTE_EDGES: [string, string, number][] = [
   ['street', 'police', 2],
   ['hospital', 'police', 2],
   ['hospital', 'checkpoint', 2],
+  ['market', 'islandshop', 1],
+  ['street', 'islandshop', 1],
+  ['islandshop', 'hospital', 2],
+  ['islandshop', 'police', 2],
   ['police', 'checkpoint', 2],
 ];
 

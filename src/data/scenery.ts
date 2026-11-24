@@ -8,7 +8,7 @@
 export type Setting = 'ext' | 'int';
 
 /** 室外的主建築立面 */
-export type FacadeStyle = 'gas' | 'market' | 'homes' | 'hospital' | 'police' | 'military' | 'street' | 'school' | 'parking' | 'rooftop' | 'alley';
+export type FacadeStyle = 'gas' | 'market' | 'homes' | 'hospital' | 'police' | 'military' | 'street' | 'school' | 'parking' | 'rooftop' | 'alley' | 'islandshop';
 /** 室內的牆面風格 */
 export type InteriorStyle = 'garage' | 'store' | 'house' | 'ward' | 'precinct' | 'bunker' | 'warehouse' | 'lobby' | 'classroom';
 export type FarStyle = 'city' | 'hills' | 'industrial';
@@ -561,6 +561,14 @@ export interface OutpostMapDef {
    * waves：夜晚霧屍數量倍率；runners：平民霧屍換成跑者的比例；slots：開放的建築槽位（不填 = 全部）。
    */
   single?: { waves: number; runners: number; slots: string[] };
+  /**
+   * 雙面據點（孤島小店）：據點在戰場正中間，左右各一道路障，霧屍同時從兩邊來。
+   * waves：夜晚霧屍數量倍率；slots：開放的建築槽位（src/data/buildings.ts 的 DUAL_SLOTS）。
+   * 隊員白天在戰場上點一下就能換守左邊或右邊。
+   */
+  dual?: { waves: number; slots: string[] };
+  /** 不擺隨機道具的範圍（據點、路障、槽位附近）；不填 = [[0, 430]] */
+  keepClear?: [number, number][];
 }
 
 export const OUTPOST_MAPS: OutpostMapDef[] = [
@@ -636,6 +644,30 @@ export const OUTPOST_MAPS: OutpostMapDef[] = [
     single: { waves: 1.45, runners: 0.35, slots: ['tower-far', 'tower-near', 'front-2', 'mid-2'] },
   },
 ];
+
+OUTPOST_MAPS.push({
+  id: 'islandshop',
+  name: '孤島小店',
+  blurb: '空曠路口正中間的 24 小時便利商店，燈還亮著。四面都沒有遮蔽，霧屍會從左右兩邊同時湧上來。',
+  perks: ['雙面防守：左右各一道路障', '隊員分配到兩側，主角居中支援'],
+  theme: 'street',
+  facade: 'islandshop',
+  pieces: [
+    { prop: 'car_white', x: 140, lane: 300, frame: 1, kind: 'cover' },
+    { prop: 'lamppost', x: 200, lane: 'wall' },
+    { prop: 'trashbags', x: 70, lane: 'back' },
+    { prop: 'car_red', x: 1130, lane: 270, flip: true },
+    { prop: 'lamppost', x: 1080, lane: 'wall' },
+    { prop: 'jersey', x: 1220, lane: 330 },
+  ],
+  barrels: [250, 1030],
+  crates: [60, 1210],
+  dual: {
+    waves: 1.2,
+    slots: ['R-tower-far', 'R-tower-near', 'R-front-1', 'R-front-2', 'R-front-3', 'R-mid-2', 'L-tower-far', 'L-tower-near', 'L-front-1', 'L-front-2', 'L-front-3', 'L-mid-2'],
+  },
+  keepClear: [[290, 990]],
+});
 
 export function getOutpostMap(id: string | undefined): OutpostMapDef {
   return OUTPOST_MAPS.find((m) => m.id === id) ?? OUTPOST_MAPS[0];

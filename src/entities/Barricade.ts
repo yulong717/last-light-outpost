@@ -13,17 +13,21 @@ export class Barricade {
   maxHp: number;
   private segments: Phaser.GameObjects.Image[] = [];
 
-  constructor(private scene: Phaser.Scene, x: number, maxHp: number) {
+  /**
+   * dir：霧屍從哪一側來（1 = 右邊，預設；-1 = 左邊，雙面據點的左側路障）。
+   */
+  constructor(private scene: Phaser.Scene, x: number, maxHp: number, readonly dir: 1 | -1 = 1) {
     this.x = x;
     this.maxHp = maxHp;
     this.hp = maxHp;
     const step = 22;
     for (let y = LANE_TOP - 4; y <= LANE_BOTTOM + 4; y += step) {
-      // 越遠（y 越小）的段稍微往右上偏一點，做出透視斜線
+      // 越遠（y 越小）的段稍微往外上偏一點，做出透視斜線
       const img = scene.add
-        .image(x + (y - LANE_BOTTOM) * 0.08, y, 'barricade', 0)
+        .image(x + dir * (y - LANE_BOTTOM) * 0.08, y, 'barricade', 0)
         .setOrigin(0.5, 1)
-        .setDepth(depthForY(y));
+        .setDepth(depthForY(y))
+        .setFlipX(dir < 0);
       this.segments.push(img);
     }
   }
@@ -32,9 +36,9 @@ export class Barricade {
     return this.hp > 0;
   }
 
-  /** 擋住敵人的最右邊 x（以最近那一段為準，敵人停在這條線外） */
+  /** 擋住敵人的那條線（以最近那一段為準，敵人停在這條線外） */
   get frontX(): number {
-    return this.x + 10;
+    return this.x + 10 * this.dir;
   }
 
   /**
@@ -48,7 +52,7 @@ export class Barricade {
     const seg = this.segmentNear(hitY ?? (LANE_TOP + LANE_BOTTOM) / 2);
     // 被打：木屑飛濺 + 那一段晃一下
     const fx = Fx.of(this.scene);
-    fx?.woodChips(this.frontX - 2, seg.y - seg.displayHeight / 2, seg.y, 4);
+    fx?.woodChips(this.frontX - 2 * this.dir, seg.y - seg.displayHeight / 2, seg.y, 4);
     this.scene.tweens.add({ targets: seg, angle: Phaser.Math.FloatBetween(-3, 3), duration: 50, yoyo: true });
     if (!this.alive) {
       for (const s of this.segments) fx?.woodChips(s.x, s.y - s.displayHeight / 2, s.y, 6);

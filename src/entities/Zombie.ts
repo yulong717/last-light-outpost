@@ -140,6 +140,11 @@ export class Zombie extends Phaser.GameObjects.Sprite {
   private bouncing = false;
   private reactFrame = -1;
   dead = false;
+  /**
+   * 從哪一側進攻：1 = 從右邊往左走（預設），-1 = 從左邊往右走（雙面據點的左側）。
+   * 擋路線、追人、衝刺都依這個方向鏡像；生成時由場景設定，配合同一側的 ZombieContext。
+   */
+  side: 1 | -1 = 1;
   /** 下次低吼前的秒數（給音效用） */
   private groanIn = 1 + Math.random() * 6;
 
@@ -410,7 +415,8 @@ export class Zombie extends Phaser.GameObjects.Sprite {
     const rawHit = blk ? blk.hit : ctx.hitBlock;
     // 工人的鐵鎚、消防員的斧頭：拆路障、建築特別快
     const hitBlock = (d: number, y: number) => rawHit(d * this.spec.structureMul, y);
-    const minX = blockX + 18 * this.s;
+    const side = this.side;
+    const minX = blockX + side * 18 * this.s;
     // 爬行是一下一下往前拖：撐起來時前進，趴下時幾乎不動
     const pulse = this.legLost ? 0.25 + 1.6 * Math.max(0, Math.sin(this.walkPhase)) : 1;
     const speed = this.speedNow * pulse * this.speedJitter * (ctx.speedMul?.(this.footX, this.footY) ?? 1);
@@ -450,33 +456,33 @@ export class Zombie extends Phaser.GameObjects.Sprite {
         moved = true;
       }
       this.laneY = this.footY;
-    } else if (this.footX > minX) {
+    } else if ((this.footX - minX) * side > 0) {
       // 主角躲在路障後：往主角那一排擠（聞得到活人），不是隨便找個位置敲路障
       const seen = this.nearestLiving(ctx);
       if (seen) this.laneY = Phaser.Math.Linear(this.laneY, seen.y, Math.min(1, dt * 0.8));
       // 屍熊：接近擋路線時衝撞，撞上的第一下特別重
-      const charging = this.spec.body === 'bear' && !this.charged && this.footX - minX < CHARGE.from;
+      const charging = this.spec.body === 'bear' && !this.charged && (this.footX - minX) * side < CHARGE.from;
       const v = charging ? speed * CHARGE.speedMul : speed;
-      this.footX = Math.max(minX, this.footX - v * dt);
-      if (charging && this.footX <= minX) {
+      this.footX = this.clampFront(this.footX - side * v * dt, minX);
+      if (charging && (this.footX - minX) * side <= 0) {
         this.charged = true;
         hitBlock(this.damageNow * CHARGE.impactMul, this.footY);
-        Fx.of(this.scene)?.popText(this.footX - 10, this.footY - 50, '衝撞！', '#ff9a4a');
+        Fx.of(this.scene)?.popText(this.footX - side * 10, this.footY - 50, '衝撞！', '#ff9a4a');
         GameEvents.of(this.scene).emit('enemy:attack', { enemyId: this.def.id, x: this.footX, y: this.footY });
       }
       this.footY += Phaser.Math.Clamp(this.laneY - this.footY, -speed * 0.5 * dt, speed * 0.5 * dt);
-      this.setFlipX(true);
+      this.setFlipX(side > 0);
       moved = true;
     } else {
-      this.setFlipX(true);
+      this.setFlipX(side > 0);
       // 敲路障時也慢慢往主角那一排挪
       const seen = this.nearestLiving(ctx);
       if (seen && this.atkWind <= 0) this.footY += Phaser.Math.Clamp(seen.y - this.footY, -speed * 0.25 * dt, speed * 0.25 * dt);
-      this.attack(dt, () => hitBlock(this.damageNow, this.footY), -1, false);
+      this.attack(dt, () => hitBlock(this.damageNow, this.footY), -side, false);
     }
 
     // 不能穿過路障
-    this.footX = Math.max(minX, this.footX);
+    this.footX = this.clampFront(this.footX, minX);
     this.footY = clampLaneY(this.footY);
     if (moved) {
       this.cancelWindup();
@@ -511,7 +517,8 @@ export class Zombie extends Phaser.GameObjects.Sprite {
   private updateDash(dt: number, ctx: ZombieContext): boolean {
     const blk = ctx.blockerFor?.(this.footX, this.footY);
     const blockX = blk ? blk.blockX : ctx.blockX;
-    const minX = blockX + 18 * this.s;
+    const side = this.side;
+    const minX = blockX + side * 18 * this.s;
     switch (this.dashState) {
       case 'stalk': {
         this.dashCd -= dt;
@@ -520,14 +527,14 @@ export class Zombie extends Phaser.GameObjects.Sprite {
         let best: ZombieTarget | null = null;
         let bestD = SPRINT.range;
         for (const t of this.targets(ctx)) {
-          if (!t.alive || t.x < ctx.blockX) continue;
+          if (!t.alive || this.behind(t.x, ctx.blockX)) continue;
           const d = Math.hypot(t.x - this.footX, (t.y - this.footY) * 1.6);
           if (d < bestD && d > SPRINT.minRange) {
             bestD = d;
             best = t;
           }
         }
-        const gap = this.footX - minX;
+        const gap = (this.footX - minX) * side;
         if (!best && !(gap < SPRINT.range && gap > SPRINT.minRange)) return false;
         this.startWindup(best);
         return true;
@@ -536,8 +543,8 @@ export class Zombie extends Phaser.GameObjects.Sprite {
         this.dashT -= dt;
         const tgt = this.dashTarget;
         if (tgt && !tgt.alive) this.dashTarget = null;
-        const tx = this.dashTarget ? this.dashTarget.x : minX - 40;
-        this.dashDir = Math.sign(tx - this.footX) || -1;
+        const tx = this.dashTarget ? this.dashTarget.x : minX - side * 40;
+        this.dashDir = Math.sign(tx - this.footX) || -side;
         this.setFlipX(this.dashDir < 0);
         const k = 1 - this.dashT / SPRINT.windup;
         this.alertIcon?.setVisible(Math.floor(this.dashT * 10) % 2 === 0 || k > 0.6);
@@ -562,7 +569,7 @@ export class Zombie extends Phaser.GameObjects.Sprite {
           t.hit(this.damageNow * SPRINT.impactMul, this.footX, this.footY, this);
           this.impact();
           ended = true;
-        } else if (this.footX <= minX) {
+        } else if ((this.footX - minX) * side <= 0) {
           // 撞上路障／建築
           this.footX = minX;
           const rawHit = blk ? blk.hit : ctx.hitBlock;
@@ -570,7 +577,7 @@ export class Zombie extends Phaser.GameObjects.Sprite {
           this.impact();
           ended = true;
         }
-        this.footX = Math.max(minX, this.footX);
+        this.footX = this.clampFront(this.footX, minX);
         if (ended) {
           this.dashState = 'recover';
           this.dashT = SPRINT.recover;
@@ -629,14 +636,14 @@ export class Zombie extends Phaser.GameObjects.Sprite {
   private startDash(minX: number): void {
     const t = this.dashTarget;
     // 方向在這一刻鎖定：看到牠起跑時往旁邊閃就能躲掉
-    const tx = t ? t.x : minX - 40;
+    const tx = t ? t.x : minX - this.side * 40;
     const ty = t ? t.y : this.footY;
     const dx = tx - this.footX;
     const dy = ty - this.footY;
     const d = Math.hypot(dx, dy) || 1;
     this.dashVx = (dx / d) * SPRINT.speed;
     this.dashVy = (dy / d) * SPRINT.speed * 0.7;
-    this.dashDir = Math.sign(dx) || -1;
+    this.dashDir = Math.sign(dx) || -this.side;
     this.dashState = 'dash';
     this.dashT = SPRINT.maxTime;
     this.alertIcon?.setVisible(false);
@@ -716,7 +723,7 @@ export class Zombie extends Phaser.GameObjects.Sprite {
     this.footY = clampLaneY(this.footY + this.pounceVy * dt);
     if (!this.pounceHit) {
       for (const t of this.targets(ctx)) {
-        if (!t.alive || t.x < ctx.blockX) continue;
+        if (!t.alive || this.behind(t.x, ctx.blockX)) continue;
         if (Math.abs(t.x - this.footX) <= REACH_X && Math.abs(t.y - this.footY) <= REACH_Y + 4) {
           t.hit(this.damageNow * POUNCE.damageMul, this.footX, this.footY, this);
           this.pounceHit = true;
@@ -725,7 +732,7 @@ export class Zombie extends Phaser.GameObjects.Sprite {
       }
     }
     // 不能撲過路障
-    this.footX = Math.max(ctx.blockX + 18 * this.s, this.footX);
+    this.footX = this.clampFront(this.footX, ctx.blockX + this.side * 18 * this.s);
     // 撲的時候身體離地一點
     this.lunge = 0;
     this.sync(0, dt);
@@ -806,6 +813,16 @@ export class Zombie extends Phaser.GameObjects.Sprite {
     this.sync(1, dt);
   }
 
+  /** 不能越過擋路線：x 夾在 front 的外側（依進攻方向） */
+  private clampFront(x: number, front: number): number {
+    return this.side > 0 ? Math.max(front, x) : Math.min(front, x);
+  }
+
+  /** tx 在擋路線內側（據點那邊）：躲在路障後面的人不會被追 */
+  private behind(tx: number, blockX: number): boolean {
+    return (tx - blockX) * this.side < 0;
+  }
+
   private targets(ctx: ZombieContext): ZombieTarget[] {
     const pl = ctx.player;
     return [{ x: pl.x, y: pl.y, alive: pl.alive, hit: ctx.hitPlayer }, ...(ctx.others ?? [])];
@@ -818,7 +835,7 @@ export class Zombie extends Phaser.GameObjects.Sprite {
     // 探索戰鬥會把 aggroRange 設很大；屍犬本來就看得比較遠
     let bestD = Math.max(ctx.aggroRange ?? 0, this.spec.body === 'dog' ? POUNCE.aggro : AGGRO_RANGE);
     for (const t of list) {
-      if (!t.alive || t.x < ctx.blockX) continue;
+      if (!t.alive || this.behind(t.x, ctx.blockX)) continue;
       const d = Math.hypot(t.x - this.footX, (t.y - this.footY) * 1.6) * (t.lure ?? 1);
       if (d < bestD) {
         bestD = d;

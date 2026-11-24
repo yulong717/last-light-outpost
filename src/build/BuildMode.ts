@@ -5,13 +5,18 @@ import { Fx } from '../fx/Fx';
 import { isPointerOverUI } from '../input/InputManager';
 import type { Outpost } from './Outpost';
 
-export type Selection = { type: 'slot'; id: string } | { type: 'barricade' } | { type: 'wall' } | null;
+/** barricade 的 side：-1 = 雙面據點的左側路障，不填 = 主路障 */
+export type Selection = { type: 'slot'; id: string } | { type: 'barricade'; side?: -1 } | { type: 'wall' } | null;
 
 export interface BuildGeometry {
   /** 主路障的 x */
   barricadeX: number;
   /** 據點外牆右緣的 x */
   baseX: number;
+  /** 雙面據點：左側路障的 x、小店的範圍（中心與半寬） */
+  dual?: { barricadeXL: number; center: number; half: number };
+  /** 點到槽位以外的東西（雙面據點點隊員換邊）：回傳 true 代表這一下已經處理掉 */
+  pickExtra?: (x: number, y: number) => boolean;
 }
 
 /**
@@ -83,6 +88,8 @@ export class BuildMode {
       this.result(this.outpost.upgrade(sel.id), `-${q.cost}`);
     } else if (sel?.type === 'barricade') {
       const q = this.outpost.barricadeUpgradeQuote();
+      // 兩道路障共用等級；強化完兩道都亮一下
+      this.setHighlight(sel, true);
       this.result(this.outpost.upgradeBarricade(), `-${q.cost}`);
     }
   }
@@ -92,7 +99,7 @@ export class BuildMode {
     const before = this.outpost.scrap;
     let ok = false;
     if (sel?.type === 'slot') ok = this.outpost.repair(sel.id);
-    else if (sel?.type === 'barricade') ok = this.outpost.repairBarricade();
+    else if (sel?.type === 'barricade') ok = this.outpost.repairBarricade(sel.side ?? 1);
     else if (sel?.type === 'wall') ok = this.outpost.repairWall();
     this.result(ok, `-${before - this.outpost.scrap}`);
   }
@@ -147,7 +154,10 @@ export class BuildMode {
       }
     }
     if (this.hover?.type === 'wall' || sel?.type === 'wall') {
-      g.lineStyle(1, sel?.type === 'wall' ? 0xffd24a : 0xffffff, 0.7).strokeRect(1, GROUND_Y - 83, this.geom.baseX + 4, 360 - GROUND_Y + 82);
+      const d = this.geom.dual;
+      const col = sel?.type === 'wall' ? 0xffd24a : 0xffffff;
+      if (d) g.lineStyle(1, col, 0.7).strokeRect(d.center - d.half, GROUND_Y - 130, d.half * 2, 130);
+      else g.lineStyle(1, col, 0.7).strokeRect(1, GROUND_Y - 83, this.geom.baseX + 4, 360 - GROUND_Y + 82);
     }
   }
 
@@ -157,9 +167,9 @@ export class BuildMode {
     if (!this.active || p.wasTouch) return;
     const next = isPointerOverUI(p) ? null : this.pick(p);
     if (JSON.stringify(next) === JSON.stringify(this.hover)) return;
-    if (this.hover?.type === 'barricade' && this.selection?.type !== 'barricade') this.outpost.barricade.setHighlight(false);
+    if (this.hover?.type === 'barricade' && !this.sameSel(this.hover, this.selection)) this.outpost.barricadeOf(this.hover.side ?? 1).setHighlight(false);
     this.hover = next;
-    if (next?.type === 'barricade') this.outpost.barricade.setHighlight(true);
+    if (next?.type === 'barricade') this.outpost.barricadeOf(next.side ?? 1).setHighlight(true);
     this.scene.input.setDefaultCursor(next ? 'pointer' : 'default');
   }
 
@@ -169,6 +179,8 @@ export class BuildMode {
       this.select(null);
       return;
     }
+    const w = this.scene.cameras.main.getWorldPoint(p.x, p.y);
+    if (this.geom.pickExtra?.(w.x, w.y)) return;
     this.select(this.pick(p));
   }
 
@@ -187,8 +199,14 @@ export class BuildMode {
       }
     }
     if (best) return best;
-    if (Math.abs(w.x - this.geom.barricadeX) <= 18 && w.y >= LANE_TOP - 60 && w.y <= LANE_BOTTOM + 10) {
-      return { type: 'barricade' };
+    const inBand = w.y >= LANE_TOP - 60 && w.y <= LANE_BOTTOM + 10;
+    if (Math.abs(w.x - this.geom.barricadeX) <= 18 && inBand) return { type: 'barricade' };
+    const d = this.geom.dual;
+    if (d) {
+      if (Math.abs(w.x - d.barricadeXL) <= 18 && inBand) return { type: 'barricade', side: -1 };
+      // 小店：點店面（地平線上方）
+      if (Math.abs(w.x - d.center) <= d.half && w.y >= GROUND_Y - 130 && w.y < GROUND_Y + 4) return { type: 'wall' };
+      return null;
     }
     if (w.x <= this.geom.baseX + 6 && w.y >= GROUND_Y - 84) return { type: 'wall' };
     return null;
@@ -196,7 +214,11 @@ export class BuildMode {
 
   private setHighlight(sel: Selection, on: boolean): void {
     if (sel?.type === 'slot') this.outpost.buildings.get(sel.id)?.setHighlight(on);
-    else if (sel?.type === 'barricade') this.outpost.barricade.setHighlight(on);
+    else if (sel?.type === 'barricade') this.outpost.barricadeOf(sel.side ?? 1).setHighlight(on);
+  }
+
+  private sameSel(a: Selection, b: Selection): boolean {
+    return JSON.stringify(a) === JSON.stringify(b);
   }
 
   /** 操作結果：成功跳出花費字樣，失敗（多半是廢料不足）跳紅字 */
@@ -214,7 +236,8 @@ export class BuildMode {
       const s = activeSlots().find((x) => x.id === sel.id)!;
       return { x: s.x, y: s.y - 40 };
     }
-    if (sel?.type === 'barricade') return { x: this.geom.barricadeX, y: LANE_TOP - 50 };
+    if (sel?.type === 'barricade') return { x: sel.side && this.geom.dual ? this.geom.dual.barricadeXL : this.geom.barricadeX, y: LANE_TOP - 50 };
+    if (this.geom.dual) return { x: this.geom.dual.center, y: GROUND_Y - 60 };
     return { x: this.geom.baseX / 2 + 4, y: GROUND_Y - 60 };
   }
 }
