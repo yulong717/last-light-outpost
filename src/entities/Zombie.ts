@@ -1315,6 +1315,8 @@ export class Zombie extends Phaser.GameObjects.Sprite {
 
   /** 卡肉期間原地左右抖（用真實時間，畫面停住也照抖） */
   hitShake(ms: number, amp: number): void {
+    // 同一刀裡已經被銷毀（例如腫脹霧屍爆開把旁邊的炸死、屍體直接回收）：scene 已經不在了
+    if (!this.scene) return;
     this.shakeUntil = this.scene.game.loop.time + ms;
     this.shakeAmp = amp;
   }

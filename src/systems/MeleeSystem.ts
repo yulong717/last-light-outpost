@@ -478,12 +478,12 @@ export class MeleeSystem {
       const stop = Math.min(HIT_STOP_MAX, (st ? st.hitStop : d.hitStop) + extra);
       fx?.freeze(stop);
       // 卡肉時只有被打的那隻在抖，攻擊者定格
-      for (const v of victims) v.z.hitShake(stop + 20, VICTIM_SHAKE[v.tier]);
+      for (const v of victims) if (v.z.scene) v.z.hitShake(stop + 20, VICTIM_SHAKE[v.tier]);
       // 鏡頭不晃、不推、不放大（全畫面晃動刺眼又暈），力道全靠卡肉、被打的那隻抖和身體反應
       // 攻擊者也吃到反作用力：身體壓扁一下（卡肉時定格在壓扁的樣子）
       player.impact(heavy || fin ? 1 : 0.6);
       // 被打的腳下揚塵，看得出力道傳到地上
-      for (const v of victims) if (v.tier !== 'light') fx?.dust(v.z.footX, v.z.footY, v.tier === 'heavy' ? 6 : 3);
+      for (const v of victims) if (v.tier !== 'light' && v.z.scene) fx?.dust(v.z.footX, v.z.footY, v.tier === 'heavy' ? 6 : 3);
       rumble(heavy ? 45 : fin ? 35 : 14, heavy ? 0.85 : fin ? 0.6 : 0.3);
       // 鈍器打在肉上會反震：人往後頓一點
       if (blunt) player.push(-this.facing * 30);
