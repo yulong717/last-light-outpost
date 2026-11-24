@@ -1,16 +1,16 @@
 {
- "colours": 56,
+ "colours": 58,
  "main": 48,
- "reserved": 8,
- "main_lstar_min": 8.2,
+ "reserved": 10,
+ "main_lstar_min": 8.1,
  "main_lstar_max": 89.6,
  "main_sat_max": 0.6,
  "families": {
-  "grey": 16,
-  "green": 9,
-  "warm": 8,
+  "grey": 13,
+  "green": 12,
+  "warm": 9,
   "red": 8,
-  "blue": 7
+  "blue": 6
  },
  "sources": {
   "akai_ai_idle": "public/assets/sprites/akai_ai_idle.png",

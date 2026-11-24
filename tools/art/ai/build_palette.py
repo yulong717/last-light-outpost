@@ -1,7 +1,9 @@
-"""Master palette (STYLE_ANCHOR §1): 48 colours + 8 reserved -> art/ai/palette/master.gpl + swatch.
+"""Master palette (STYLE_ANCHOR §1): 48 colours + 10 reserved -> art/ai/palette/master.gpl + swatch.
 
   python tools/art/ai/build_palette.py            # build master.gpl, palette_swatch.png
   python tools/art/ai/build_palette.py check IMG  # report colours of IMG not in master.gpl
+
+Reserved: 10 (blood 2, fire 2, fog white, hint yellow, UI 2, hero identity 2: jersey red + stripe blue).
 
 Sources (unique colours, each source weighted equally so the 1664-px zombie strip does not
 dominate): akai_ai_idle.png, zombie_basic.png, refs/zombie_basic_palette.png, plus small seed
@@ -42,7 +44,10 @@ RESERVED = [  # name, hex
     ("fire", "e0702a"), ("fire light", "ffc24a"),
     ("fog white", "e8ece6"), ("hint yellow", "f2d64e"),
     ("ui amber", "f2c14e"), ("ui ink", "0a0a0c"),
+    # hero identity colours (round 7 review): exact akai_ai_idle values, exempt from the 0.6 saturation cap
+    ("hero jersey red", "ee333a"), ("hero stripe blue", "7a8cc0"),
 ]
+IDENTITY = ["ee333a", "7a8cc0"]  # never merged / removed by post-processing
 K = 48
 LSTAR_MIN, LSTAR_MAX = 8.0, 90.0
 SAT_MAX = 0.6
@@ -133,9 +138,19 @@ def build():
     cols = fix(cols)  # clamp sources first so the darks merge instead of piling up at L*=8
     w = np.array([1.5, 1.0, 1.0])
     X = srgb_to_oklab(cols) * w
-    km = KMeans(n_clusters=K, n_init=16, random_state=0).fit(X, sample_weight=wts)
-    centres = oklab_to_srgb(km.cluster_centers_ / w)
-    centres = fix(centres)
+    # identity colours live in the reserved block: if a main centre lands on one (within OKLab 0.03),
+    # ask k-means for one more cluster and drop that centre, so the 48 main colours stay distinct
+    ident = srgb_to_oklab(np.array([hx(h) for h in IDENTITY]))
+    for k in range(K, K + len(IDENTITY) + 1):
+        km = KMeans(n_clusters=k, n_init=16, random_state=0).fit(X, sample_weight=wts)
+        centres = fix(oklab_to_srgb(km.cluster_centers_ / w))
+        d = np.sqrt(((srgb_to_oklab(centres)[:, None] - ident[None]) ** 2).sum(-1)).min(1)
+        centres = centres[d >= 0.03]
+        if len(centres) >= K:
+            if len(centres) > K:  # drop the extra centres closest to the identity colours
+                d = d[d >= 0.03]
+                centres = centres[np.sort(np.argsort(-d)[:K])]
+            break
     centres = np.unique(centres, axis=0)
     assert len(centres) == K, f"collapsed to {len(centres)} colours"
     idx, fam = ramp_order(centres)
@@ -145,7 +160,7 @@ def build():
 
     OUT.mkdir(parents=True, exist_ok=True)
     lines = ["GIMP Palette", "Name: Last Light Outpost master", "Columns: 8",
-             "# 48 main colours (index 0-47, grouped by hue family, dark -> light) + 8 reserved (48-55)",
+             "# 48 main colours (index 0-47, grouped by hue family, dark -> light) + 10 reserved (48-57)",
              "# built by tools/art/ai/build_palette.py"]
     for name, c in entries:
         lines.append(f"{c[0]:3d} {c[1]:3d} {c[2]:3d}\t{name}")

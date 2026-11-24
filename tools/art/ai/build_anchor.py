@@ -22,8 +22,8 @@ import numpy as np
 from PIL import Image, ImageDraw
 
 sys.path.insert(0, str(Path(__file__).parent))
-from build_palette import check, load_gpl, lstar  # noqa: E402
-from pixelize import cleanup, despill, quantize, srgb_to_oklab  # noqa: E402
+from build_palette import IDENTITY, check, load_gpl, lstar  # noqa: E402
+from pixelize import cleanup, despill, limit_colours, quantize, remove_islands, srgb_to_oklab  # noqa: E402
 from sprite_utils import k_centroid, key_magenta  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -62,6 +62,13 @@ PROMPT = (
     "and right side, muted grey-green post-apocalyptic colours with low saturation, only the boy and the oil drum "
     "a little more colourful. No ground, no floor line, no cast shadows, no background scenery, no text, no frames."
 )
+
+
+# round 7 review: drum re-run with big flat rust shapes (seed 2 is kept for everything else)
+PROMPT_DRUM = PROMPT.replace(
+    "clean shaded paint with only a few small rust spots. ",
+    "large flat rust patches, simple shapes, no small specks or noise. ")
+assert PROMPT_DRUM != PROMPT
 
 
 # ---------------------------------------------------------------- layout
@@ -174,15 +181,15 @@ def layout():
 
 # ---------------------------------------------------------------- gen
 
-def gen(seeds: list[int], prompt: str, tag: str):
+def gen(seeds: list[int], prompt: str, tag: str, prefix: str = "s"):
     py = ROOT / ".venv-art/Scripts/python.exe"
     for s in seeds:
-        out = RAW / f"s{s}"
+        out = RAW / f"{prefix}{s}"
         cmd = [str(py), "-I", str(ROOT / "tools/art/ai/run_comfy.py"), str(ROOT / "art/ai/workflows/h3_image_edit_3ref.json"),
                "--image", f"load1={RAW / 'layout_8x.png'}", "--image", f"load2={RAW / 'akai_ref_16x.png'}",
                "--image", f"load3={RAW / 'zombie_ref_16x.png'}",
                "--set", f"sampler.seed={s}", "--set", f"cond.prompt={prompt}",
-               "--set", f"save.filename_prefix=ai_art/style_anchor_s{s}", "--out", str(out), "--tag", f"{tag} seed {s}"]
+               "--set", f"save.filename_prefix=ai_art/style_anchor_{prefix}{s}", "--out", str(out), "--tag", f"{tag} seed {s}"]
         r = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", cwd=ROOT)
         print(f"seed {s}:", (r.stdout.strip().splitlines() or [""])[-1], r.stderr[-500:] if r.returncode else "")
 
@@ -287,46 +294,49 @@ def post_one(raw: Path, pal: np.ndarray) -> tuple[Image.Image, Image.Image]:
     small = k_centroid(keyed, S)
     small, post_one.shifts = snap_feet(small)
     post_one.phase = (ox, oy)
-    q = quantize(small, pal)
-    clean = cleanup(q, pal, outline=True)
-    clean = quantize(clean, pal)  # cleanup may average; snap again
-    return small, clean
-
-
-MAX_COLOURS = 16  # spec §2: each asset <= 16 colours
-
-
-def limit_colours(img: Image.Image, max_c: int = MAX_COLOURS) -> tuple[Image.Image, dict]:
-    """Per slot: merge the least-used colour into the nearest (OKLab) remaining colour of the same
-    object until <= max_c remain. The darkest colour (outline) is never merged away."""
-    a = np.array(img)
-    counts = {}
+    # per object palette: reserved colours (blood, fire, UI, hero identity) are not for props;
+    # only Akai may use the two hero identity colours on top of the 48 main colours
+    out = np.zeros((H, W, 4), np.uint8)
     for name, (x0, x1), _ in SLOTS:
-        blk = a[:, x0:x1]
-        op = blk[..., 3] > 0
-        keys = blk[..., 0].astype(np.int64) * 65536 + blk[..., 1].astype(np.int64) * 256 + blk[..., 2]
-        u, c = np.unique(keys[op], return_counts=True)
-        before = len(u)
-        rgb = np.stack([(u >> 16) & 255, (u >> 8) & 255, u & 255], 1).astype(np.uint8)
-        lab = srgb_to_oklab(rgb)
-        alive = list(range(len(u)))
-        cnt = dict(zip(range(len(u)), c))
-        darkest = int(np.argmin(lab[:, 0]))
-        remap = {i: i for i in alive}
-        while len(alive) > max_c:
-            i = min((j for j in alive if j != darkest), key=lambda j: cnt[j])
-            alive.remove(i)
-            k = min(alive, key=lambda j: float(((lab[i] - lab[j]) ** 2).sum()))
-            cnt[k] += cnt[i]
-            for src, dst in remap.items():
-                if dst == i:
-                    remap[src] = k
-        for src, dst in remap.items():
-            if src != dst:
-                m = op & (keys == u[src])
-                blk[m, :3] = rgb[dst]
-        counts[name] = [before, len(alive)]
-    return Image.fromarray(a, "RGBA"), counts
+        sp = slot_palette(pal, name)
+        crop = small.crop((x0, 0, x1, H))
+        q = quantize(crop, sp)
+        c = cleanup(q, sp, outline=True)
+        c = quantize(c, sp)  # cleanup may average; snap again
+        out[:, x0:x1] = np.array(c)
+    return small, Image.fromarray(out, "RGBA")
+
+
+def slot_palette(pal: np.ndarray, name: str) -> np.ndarray:
+    main = pal[:48]
+    if name == "akai":
+        ident = np.array([[int(h[i:i + 2], 16) for i in (0, 2, 4)] for h in IDENTITY], np.uint8)
+        return np.concatenate([main, ident])
+    return main
+
+
+MAX_COLOURS = 10  # round 7 review: each object <= 10 colours (spec allows 16)
+ISLAND_PX = 2      # round 7 review: single-colour patches of <= 2 px are noise
+
+
+def slot_mask(name: str) -> np.ndarray:
+    x0, x1 = next(x for n, x, _ in SLOTS if n == name)
+    m = np.zeros((H, W), bool)
+    m[:, x0:x1] = True
+    return m
+
+
+def tidy(img: Image.Image) -> tuple[Image.Image, dict]:
+    """Per object: remove <=2 px islands, cap at 10 colours, remove islands the merge created.
+    Hero identity colours (jersey red, stripe blue) and the darkest colour are protected."""
+    stats = {}
+    for name, _, _ in SLOTS:
+        reg = slot_mask(name)
+        img, n1 = remove_islands(img, ISLAND_PX, reg, IDENTITY)
+        img, cc = limit_colours(img, MAX_COLOURS, reg, IDENTITY)
+        img, n2 = remove_islands(img, ISLAND_PX, reg, IDENTITY)
+        stats[name] = {"colours": cc, "island_px_fixed": n1 + n2}
+    return img, stats
 
 
 def sheet(rows: list[tuple[str, Image.Image]], scale: int = 4) -> Image.Image:
@@ -351,19 +361,21 @@ def sheet(rows: list[tuple[str, Image.Image]], scale: int = 4) -> Image.Image:
     return out
 
 
-def post(seeds: list[int] | None):
+def post(seeds: list[int] | None, prefix: str = "s"):
     pal = load_gpl()
     rows, summary = [], {}
-    dirs = sorted((p for p in RAW.glob("s*") if p.is_dir() and p.name[1:].isdigit()), key=lambda p: int(p.name[1:]))
+    n0 = len(prefix)
+    dirs = sorted((p for p in RAW.glob(f"{prefix}*") if p.is_dir() and p.name[n0:].isdigit()),
+                  key=lambda p: int(p.name[n0:]))
     for d in dirs:
-        s = int(d.name[1:])
+        s = int(d.name[n0:])
         if seeds and s not in seeds:
             continue
         raws = sorted(d.glob("style_anchor_*.png"))
         if not raws:
             continue
         small, clean = post_one(raws[-1], pal)
-        clean, ncol = limit_colours(clean)
+        clean, ncol = tidy(clean)
         clean.save(d / "anchor_64.png")
         small.save(d / "anchor_64_unquant.png")
         m = measure(clean)
@@ -374,22 +386,56 @@ def post(seeds: list[int] | None):
         rows.append((f"seed {s}  raw/8", small))
         rows.append((f"seed {s}  master.gpl  {chk['colours']}c  h={h}", clean))
     OUTD.mkdir(parents=True, exist_ok=True)
-    sheet(rows).save(RAW / "seeds_detail_x4.png")
-    sheet([r for r in rows if "master" in r[0]]).save(OUTD / "anchor_seeds_x4.png")
-    (RAW / "post_summary.json").write_text(json.dumps(summary, indent=1), encoding="utf-8")
+    if prefix == "s":
+        sheet(rows).save(RAW / "seeds_detail_x4.png")
+        sheet([r for r in rows if "master" in r[0]]).save(OUTD / "anchor_seeds_x4.png")
+    else:
+        drum_sheet(summary, prefix).save(OUTD / "drum_seeds_x4.png")
+    (RAW / f"post_summary_{prefix}.json").write_text(json.dumps(summary, indent=1), encoding="utf-8")
     print(json.dumps(summary, indent=1))
 
 
-def pick(seed: int):
+def drum_sheet(summary: dict, prefix: str, scale: int = 6) -> Image.Image:
+    """Drum slot of every drum seed side by side (6x, magenta, foot line + 28/31 px guides)."""
+    x0, x1 = next(x for n, x, _ in SLOTS if n == "drum")
+    cw, top = x1 - x0, 24
+    tiles = []
+    for s, v in summary.items():
+        im = Image.open(RAW / f"{prefix}{s}" / "anchor_64.png").crop((x0, top, x1, H))
+        bg = Image.new("RGBA", im.size, (255, 0, 255, 255))
+        bg.alpha_composite(im)
+        t = bg.convert("RGB").resize((cw * scale, (H - top) * scale), Image.NEAREST)
+        d = ImageDraw.Draw(t)
+        for hh, col in ((0, (0, 255, 0)), (28, (255, 255, 255)), (31, (255, 255, 0))):
+            y = (FOOT + 1 - hh - top) * scale
+            d.line([(0, y), (t.width, y)], fill=col)
+        m = v["measure"]["drum"]
+        tiles.append((f"s{s} {m['w']}x{m['h']} {v['colours_per_object']['drum']['colours'][1]}c", t))
+    out = Image.new("RGB", (len(tiles) * (cw * scale + 8), (H - top) * scale + 14), (20, 20, 20))
+    d = ImageDraw.Draw(out)
+    for i, (lab, t) in enumerate(tiles):
+        out.paste(t, (i * (cw * scale + 8), 14))
+        d.text((i * (cw * scale + 8) + 2, 1), lab, fill=(255, 255, 255))
+    return out
+
+
+def pick(seed: int, drum: int | None = None):
     src = RAW / f"s{seed}"
     OUTD.mkdir(parents=True, exist_ok=True)
-    img = Image.open(src / "anchor_64.png")
+    img = Image.open(src / "anchor_64.png").convert("RGBA")
+    if drum is not None:  # splice the re-run drum slot into the chosen anchor
+        x0, x1 = next(x for n, x, _ in SLOTS if n == "drum")
+        d = Image.open(RAW / f"drum_s{drum}" / "anchor_64.png").convert("RGBA")
+        a, b = np.array(img), np.array(d)
+        a[:, x0:x1] = b[:, x0:x1]
+        img = Image.fromarray(a, "RGBA")
     img.save(OUTD / "anchor.png")
     img.resize((W * 4, H * 4), Image.NEAREST).save(OUTD / "anchor_x4.png")
     gen_meta = json.loads((src / "meta.json").read_text(encoding="utf-8"))
-    summary = json.loads((RAW / "post_summary.json").read_text(encoding="utf-8"))
+    summary = json.loads((RAW / "post_summary_s.json").read_text(encoding="utf-8"))
     meta = {
         "picked_seed": seed,
+        "drum_from": (f"drum re-run seed {drum} (PROMPT_DRUM)" if drum is not None else "same seed"),
         "size": [W, H], "generated_at": [W * S, H * S], "downscale": S,
         "workflow": "art/ai/workflows/h3_image_edit_3ref.json",
         "references": {"Picture 1": "layout (tools/art/ai/build_anchor.py layout): akai frame 0 re-proportioned to 3.5 heads "
@@ -400,11 +446,17 @@ def pick(seed: int):
         "palette": "art/ai/palette/master.gpl",
         "slots": [{"name": n, "x": list(x), "target_wh": list(t)} for n, x, t in SLOTS],
         "post": "grid phase detect -> key magenta -> despill -> k_centroid /8 -> snap each object's bottom to y=61 "
-                "-> quantize master.gpl (OKLab) -> cleanup (orphans, specks, selout outline) -> quantize -> "
-                "<=16 colours per object (merge least-used into nearest)",
+                "-> per object quantize to master.gpl main 48 (+ hero identity 2 for akai) (OKLab) -> cleanup (orphans, specks, selout outline) -> quantize -> "
+                "per object: remove <=2 px single-colour islands, <=10 colours (merge cheapest: pixels x distance^2), "
+                "islands again; hero identity colours + darkest colour protected",
         "seeds": summary,
         "generation": gen_meta,
     }
+    if drum is not None:
+        meta["drum_seeds"] = json.loads((RAW / "post_summary_drum_s.json").read_text(encoding="utf-8"))
+        meta["drum_generation"] = json.loads((RAW / f"drum_s{drum}" / "meta.json").read_text(encoding="utf-8"))
+        meta["drum_prompt_change"] = ("clean shaded paint with only a few small rust spots -> "
+                                      "large flat rust patches, simple shapes, no small specks or noise")
     (OUTD / "meta.json").write_text(json.dumps(meta, indent=1, ensure_ascii=False), encoding="utf-8")
     print("picked", seed)
 
@@ -416,16 +468,19 @@ def main():
     ap.add_argument("--seeds", nargs="*", type=int, default=[1, 2, 3, 4])
     ap.add_argument("--prompt-file", type=Path)
     ap.add_argument("--tag", default="style anchor")
+    ap.add_argument("--drum", action="store_true", help="gen/post: drum re-run (PROMPT_DRUM, raw/style/drum_s*)")
+    ap.add_argument("--drum-seed", type=int, help="pick: take the drum slot from this drum re-run seed")
     a = ap.parse_args()
     if a.cmd == "layout":
         layout()
     elif a.cmd == "gen":
-        prompt = a.prompt_file.read_text(encoding="utf-8").strip() if a.prompt_file else PROMPT
-        gen(a.seeds, prompt, a.tag)
+        prompt = a.prompt_file.read_text(encoding="utf-8").strip() if a.prompt_file else (
+            PROMPT_DRUM if a.drum else PROMPT)
+        gen(a.seeds, prompt, a.tag, "drum_s" if a.drum else "s")
     elif a.cmd == "post":
-        post(a.seeds if a.seeds != [1, 2, 3, 4] else None)
+        post(a.seeds if a.seeds != [1, 2, 3, 4] else None, "drum_s" if a.drum else "s")
     else:
-        pick(a.seed)
+        pick(a.seed, a.drum_seed)
 
 
 if __name__ == "__main__":

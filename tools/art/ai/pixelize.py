@@ -286,6 +286,129 @@ def cleanup(img: Image.Image, pal: np.ndarray, outline: bool = True) -> Image.Im
     return Image.fromarray(a, "RGBA")
 
 
+def _keys(a: np.ndarray) -> np.ndarray:
+    return a[..., 0].astype(np.int64) * 65536 + a[..., 1].astype(np.int64) * 256 + a[..., 2]
+
+
+def limit_colours(img: Image.Image, max_c: int, region: np.ndarray | None = None,
+                  protect: list[str] | None = None) -> tuple[Image.Image, list[int]]:
+    """Reduce the colours inside `region` (bool mask, default all) to <= max_c: repeatedly merge the
+    colour whose merge costs least (pixels x OKLab distance^2) into its nearest remaining one. Never merged away: the darkest colour
+    (outline) and `protect` hex colours (e.g. hero identity red / stripe blue)."""
+    a = np.array(img.convert("RGBA"))
+    op = a[..., 3] > 0
+    if region is not None:
+        op &= region
+    keys = _keys(a)
+    u, c = np.unique(keys[op], return_counts=True)
+    if len(u) <= max_c:
+        return Image.fromarray(a, "RGBA"), [len(u), len(u)]
+    rgb = np.stack([(u >> 16) & 255, (u >> 8) & 255, u & 255], 1).astype(np.uint8)
+    lab = srgb_to_oklab(rgb)
+    keep = {int(np.argmin(lab[:, 0]))}
+    lab = lab * np.array([1.0, 2.0, 2.0])  # hue counts double: dark brown hair != dark navy cap
+    for h in protect or []:
+        keep |= set(np.where(u == int(h, 16))[0].tolist())
+    alive = list(range(len(u)))
+    cnt = dict(enumerate(c.tolist()))
+    remap = {i: i for i in alive}
+    while len(alive) > max_c:
+        cand = [j for j in alive if j not in keep]
+        if not cand:
+            break
+        # drop the colour whose merge costs least: pixels x squared OKLab distance to its nearest
+        # survivor (close shades merge first; a small but distinct colour, e.g. hair, survives)
+        def near(j):
+            return min((o for o in alive if o != j), key=lambda o: float(((lab[j] - lab[o]) ** 2).sum()))
+        i = min(cand, key=lambda j: cnt[j] * float(((lab[j] - lab[near(j)]) ** 2).sum()))
+        k = near(i)
+        alive.remove(i)
+        cnt[k] += cnt[i]
+        for src, dst in remap.items():
+            if dst == i:
+                remap[src] = k
+    for src, dst in remap.items():
+        if src != dst:
+            a[op & (keys == u[src]), :3] = rgb[dst]
+    return Image.fromarray(a, "RGBA"), [len(u), len(alive)]
+
+
+def remove_islands(img: Image.Image, max_px: int = 2, region: np.ndarray | None = None,
+                   protect: list[str] | None = None, passes: int = 2, similar: float = 0.06,
+                   dark_l: float = 0.35) -> tuple[Image.Image, int]:
+    """Recolour isolated patches of <= max_px pixels (8-connected) inside the sprite.
+
+    "Isolated" is judged on colour groups, not exact colours: palette colours closer than `similar`
+    (OKLab) count as one group, so a line drawn in alternating shades (crate brace, plank seam) is one
+    long patch and survives, while a speck that differs from everything around it is removed.
+    Each removed pixel takes the most common colour of a different group among its opaque
+    8-neighbours (edge pixels prefer edge neighbours, so the outline stays an outline).
+    Never touched: dark colours (OKLab L < dark_l: outline, pupils) and `protect` colours."""
+    from scipy import ndimage
+    a = np.array(img.convert("RGBA"))
+    H, W = a.shape[:2]
+    total = 0
+    prot = {int(h, 16) for h in protect or []}
+    for _ in range(passes):
+        op = a[..., 3] > 0
+        if region is not None:
+            op &= region
+        keys = _keys(a)
+        edge = op & (sum(shifted(~(a[..., 3] > 0), dy, dx, True) for dy, dx in N4) > 0)
+        u = np.unique(keys[op])
+        if not len(u):
+            break
+        lab = srgb_to_oklab(np.stack([(u >> 16) & 255, (u >> 8) & 255, u & 255], 1).astype(np.uint8))
+        # union-find colour groups
+        parent = list(range(len(u)))
+
+        def root(i):
+            while parent[i] != i:
+                parent[i] = parent[parent[i]]
+                i = parent[i]
+            return i
+        d = np.sqrt(((lab[:, None] - lab[None]) ** 2).sum(-1))
+        for i in range(len(u)):
+            for j in range(i + 1, len(u)):
+                if d[i, j] < similar:
+                    parent[root(i)] = root(j)
+        group_of = {int(k): root(i) for i, k in enumerate(u)}
+        gmap = np.full(keys.shape, -1, np.int64)
+        for k, g in group_of.items():
+            gmap[op & (keys == k)] = g
+        safe = {int(k) for i, k in enumerate(u) if lab[i, 0] < dark_l or int(k) in prot}
+        changed = 0
+        newa = a.copy()
+        for g in set(group_of.values()):
+            lbl, n = ndimage.label(gmap == g, structure=np.ones((3, 3)))
+            if not n:
+                continue
+            sizes = ndimage.sum(np.ones_like(lbl), lbl, range(1, n + 1))
+            for ci in np.where(sizes <= max_px)[0] + 1:
+                for y, x in zip(*np.where(lbl == ci)):
+                    if int(keys[y, x]) in safe:
+                        continue
+                    nb, nbe = [], []
+                    for dy, dx in N8:
+                        yy, xx = y + dy, x + dx
+                        if 0 <= yy < H and 0 <= xx < W and a[yy, xx, 3] > 0 and gmap[yy, xx] != g:
+                            nb.append(keys[yy, xx])
+                            if edge[yy, xx]:
+                                nbe.append(keys[yy, xx])
+                    pool = nbe if edge[y, x] and nbe else nb
+                    if not pool:
+                        continue
+                    vals, cnt = np.unique(pool, return_counts=True)
+                    v = int(vals[cnt.argmax()])
+                    newa[y, x, :3] = [(v >> 16) & 255, (v >> 8) & 255, v & 255]
+                    changed += 1
+        a = newa
+        total += changed
+        if not changed:
+            break
+    return Image.fromarray(a, "RGBA"), total
+
+
 def draw_stripes(img: Image.Image, pal: np.ndarray, rows: tuple[int, int], color: np.ndarray,
                  every: int = 3, x0: int = 32) -> Image.Image:
     """Vertical pinstripes on the jersey: neutral light pixels (white / light-grey shade) inside the
