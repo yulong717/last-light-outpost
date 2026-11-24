@@ -58,6 +58,6 @@ export const ENEMIES: Record<string, EnemyDef> = {
     height: 56,
     color: PLACEHOLDER_COLORS.zombieBrute,
     texture: 'zombie_brute',
-    scale: 1.3,
+    scale: 1,
   },
 };

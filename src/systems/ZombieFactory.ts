@@ -104,6 +104,7 @@ function rollLook(scene: Phaser.Scene, p: ProfessionDef, female = false): string
     blood: Phaser.Math.Between(b0, b1),
     widen: +(p.widen * Phaser.Math.FloatBetween(0.95, 1.06)).toFixed(2),
     seed: Phaser.Math.Between(1, 9999),
+    base: p.base,
     hair: female ? { style: pick(['long', 'long', 'ponytail', 'bob'] as const), color: pick(HAIR_COLORS) } : null,
     skirt: female && Math.random() < (p.skirtChance ?? 0) ? pick(SKIRT_COLORS) : null,
   };
@@ -113,7 +114,7 @@ function rollLook(scene: Phaser.Scene, p: ProfessionDef, female = false): string
     look.pants = p.look.pants[i] ?? look.pants;
   }
   const key = composeZombie(scene, look);
-  if (key !== 'zombie_basic') pool.push(key);
+  if (!key.startsWith('zombie_')) pool.push(key);
   return key;
 }
 

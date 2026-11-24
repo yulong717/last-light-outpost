@@ -59,9 +59,12 @@ export interface ProfessionDef {
   speed: number;
   damage: number;
   attackInterval: number;
+  /** 整體大小；底圖已畫成對的尺寸，這裡只做小幅調整（巨屍有自己的 XL 底圖，不再放大） */
   scale: number;
   /** 身形加寬（1 = 原圖） */
   widen: number;
+  /** 人形底圖：'basic' 一般霧屍（M 人台，預設）、'brute' 巨屍（XL 壯人台） */
+  base?: 'basic' | 'brute';
   /** 對路障、建築的傷害倍率（工人拿鐵鎚、消防員拿斧頭） */
   structureMul?: number;
   /** 擊退抵抗（0..1） */
@@ -153,7 +156,8 @@ export const PROFESSIONS: Record<string, ProfessionDef> = {
     speed: 50,
     damage: 3,
     attackInterval: 0.6,
-    scale: 0.9,
+    // 一般霧屍的瘦版：瘦弱體型（0.98）× 0.98 ≈ 54 高（規格 §2.1）
+    scale: 0.98,
     widen: 0.92,
     hats: { none: 5, cap: 2, bandana: 2 },
     look: {
@@ -163,7 +167,7 @@ export const PROFESSIONS: Record<string, ProfessionDef> = {
       blood: [1, 3],
     },
     femaleChance: 0.5,
-    builds: { thin: 5, average: 3, tall: 1 },
+    builds: { thin: 8, average: 2 },
     unlockDay: 1,
     weight: 4,
     threat: 1.5,
@@ -206,8 +210,10 @@ export const PROFESSIONS: Record<string, ProfessionDef> = {
     speed: 13,
     damage: 15,
     attackInterval: 1.6,
-    scale: 1.3,
-    widen: 1.22,
+    // XL 壯人台的底圖（約 62 高、寬 1.4 倍），不再把一般霧屍放大 1.3 倍
+    base: 'brute',
+    scale: 1,
+    widen: 1,
     structureMul: 1.5,
     knockbackResist: 0.6,
     staggerResist: 0.4,

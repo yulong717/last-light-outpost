@@ -4,8 +4,7 @@ import type { EnemyDef } from '../data/enemies';
 import { BURST, CHARGE, CROW, ENRAGE, GORE, HEAL_AURA, POUNCE, SPRINT, type ArmorPiece } from '../data/zombies';
 import { ANIMAL_FRAMES } from '../art/AnimalArt';
 import { Fx } from '../fx/Fx';
-import { ZOMBIE_NECK_ROW } from '../art/sprites';
-import { FOOT_ROW, GEAR_TEXTURE, HAT_ART, HEAD_ANCHORS, REACT_FRAMES } from '../art/ZombieComposer';
+import { GEAR_TEXTURE, HAT_ART, REACT_FRAMES, zombieBaseOf, type ZombieBaseSpec } from '../art/ZombieComposer';
 import { armlessTexture, canDismember, crawlInfoOf, crawlTexture, goreParts, warmGore } from '../art/ZombieGore';
 import { GameEvents } from '../systems/GameEvents';
 import { armorAfter, type DamageInfo } from '../combat/Damage';
@@ -110,6 +109,8 @@ export class Zombie extends Phaser.GameObjects.Sprite {
   private attackKey: string;
   /** 合成的原貼圖（斷肢版本都從它切） */
   private readonly baseKey: string;
+  /** 人形霧屍用的底圖規格（影格大小、腳底、脖子、頭頂錨點、判定框） */
+  private readonly base: ZombieBaseSpec;
   /** 斷手：攻擊力變弱；斷腳：趴在地上爬 */
   armLost = false;
   legLost = false;
@@ -197,15 +198,16 @@ export class Zombie extends Phaser.GameObjects.Sprite {
     this.footY = clampLaneY(y);
     this.laneY = this.footY;
     this.baseKey = def.texture;
+    this.base = zombieBaseOf(def.texture);
     // 斷肢／爆頭碎塊的貼圖趁空檔先切好，第一次打斷手、爆頭時才不會卡住（手機上很明顯）
     if (spec.body === 'human') warmGore(scene, this.baseKey, true);
     this.walkKey = `${def.texture}_walk`;
     this.attackKey = `${def.texture}_attack`;
-    // 走路圖的腳底在 64 格中的第 62 列；動物各自的腳底列見 ANIMAL_FRAMES
+    // 人形的腳底列、影格大小跟著底圖（一般霧屍 64 格第 62 列、巨屍 72 格第 69 列）；動物各自的腳底列見 ANIMAL_FRAMES
     if (spec.body !== 'human') {
       const info = ANIMAL_FRAMES[spec.body];
       this.setOrigin(0.5, spec.body === 'crow' ? 0.5 : info.footRow / info.h);
-    } else this.setOrigin(0.5, scene.anims.exists(this.walkKey) ? FOOT_ROW / 64 : 1);
+    } else this.setOrigin(0.5, scene.anims.exists(this.walkKey) ? this.base.foot / this.base.size : 1);
     if (spec.body === 'crow') {
       this.alt = CROW.cruiseAlt + Phaser.Math.Between(-10, 14);
       this.crowShadow = scene.add.ellipse(x, this.footY, 12, 3, 0x000000, 0.3);
@@ -286,7 +288,7 @@ export class Zombie extends Phaser.GameObjects.Sprite {
     }
     const a = this.legLost
       ? (crawlInfoOf(this.texture.key)?.head[Number(this.frame.name)] ?? null)
-      : (HEAD_ANCHORS[Number(this.frame.name)] ?? (this.anims.isPlaying ? null : HEAD_ANCHORS[0]));
+      : (this.base.anchors[Number(this.frame.name)] ?? (this.anims.isPlaying ? null : this.base.anchors[0]));
     if (!a) return null;
     const ox = this.originX * this.frame.width;
     const oy = this.originY * this.frame.height;
@@ -345,8 +347,8 @@ export class Zombie extends Phaser.GameObjects.Sprite {
           // 趴在地上爬：又寬又矮
           return new Phaser.Geom.Rectangle(this.footX - 18 * s, this.footY - 24 * s, 36 * s, 24 * s);
         }
-        const w = 30 * s * (this.spec.widthMul ?? 1);
-        const h = 56 * s;
+        const w = this.base.hit.w * s * (this.spec.widthMul ?? 1);
+        const h = this.base.hit.h * s;
         return new Phaser.Geom.Rectangle(this.footX - w / 2, this.footY - h, w, h);
       }
     }
@@ -1199,7 +1201,7 @@ export class Zombie extends Phaser.GameObjects.Sprite {
           explode: explode ? { parts } : undefined,
           headX: this.headPoint()?.x,
           headFrame: this.texture.has(`head_${frame}`) ? `head_${frame}` : undefined,
-          neckRow: ZOMBIE_NECK_ROW,
+          neckRow: this.base.neck,
           deathAnim: `${this.def.texture}_death`,
         });
         this.destroy();
@@ -1297,7 +1299,7 @@ export class Zombie extends Phaser.GameObjects.Sprite {
     this.hitLean = 0;
     this.reactFrame = -1;
     this.swapTexture(key);
-    this.setOrigin(info.cx / 64, FOOT_ROW / 64);
+    this.setOrigin(info.cx / this.base.size, this.base.foot / this.base.size);
     const fx = Fx.of(this.scene);
     fx?.limb(parts, 'leg', this.footX, this.footY - 14 * this.s, dir, this.footY, {
       scale: this.s,
