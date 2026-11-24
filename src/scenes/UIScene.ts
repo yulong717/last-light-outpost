@@ -4,6 +4,7 @@ import { heroTouch } from '../systems/HeroSystem';
 import { JOYSTICK_RADIUS, JOYSTICK_ZONE, joystick, queueAction, registerUIRect } from '../input/InputManager';
 import { GameState } from '../state/GameState';
 import { pixelText } from '../utils/text';
+import { isPortraitNow, watchOrientation } from '../utils/orientation';
 import { AudioManager } from '../audio/AudioManager';
 import { PAL, PixelBar, drawPanel, drawPlate, ensureUiTextures, icon, iconKey, type IconName } from '../ui/theme';
 import type { HudData } from './DefenseScene';
@@ -50,6 +51,7 @@ export class UIScene extends Phaser.Scene {
   private touchUI = false;
   private stick!: Phaser.GameObjects.Graphics;
   private rotateHint!: Phaser.GameObjects.Container;
+  private pausedForRotate = false;
   private unregister: (() => void)[] = [];
   private last?: HudData;
 
@@ -139,8 +141,12 @@ export class UIScene extends Phaser.Scene {
     this.buttonRects.fire = { x: 300, y: 150, w: 180, h: 110 };
 
     this.buildRotateHint();
-    this.scale.on(Phaser.Scale.Events.ORIENTATION_CHANGE, this.checkOrientation, this);
-    this.checkOrientation();
+    this.pausedForRotate = false;
+    const stopWatch = watchOrientation((portrait) => {
+      this.scale.refresh(); // iOS 旋轉後畫布尺寸偶爾沒跟上，順便重算一次
+      this.applyOrientation(portrait);
+    });
+    this.applyOrientation(isPortraitNow());
 
     const defense = this.scene.get('Defense');
     defense.events.on('hud', this.onHud, this);
@@ -154,7 +160,7 @@ export class UIScene extends Phaser.Scene {
       defense.events.off('wave-start', this.onWaveStart, this);
       defense.events.off('horde-warning', this.onHordeWarning, this);
       defense.events.off('tutorial', this.onTutorial, this);
-      this.scale.off(Phaser.Scale.Events.ORIENTATION_CHANGE, this.checkOrientation, this);
+      stopWatch();
       this.unregister.forEach((fn) => fn());
     });
   }
@@ -675,11 +681,17 @@ export class UIScene extends Phaser.Scene {
     this.rotateHint = this.add.container(0, 0, [bg, text]).setDepth(1000);
   }
 
-  private checkOrientation(): void {
-    const portrait = this.sys.game.device.input.touch && window.innerHeight > window.innerWidth;
+  private applyOrientation(portraitNow: boolean): void {
+    const portrait = this.sys.game.device.input.touch && portraitNow;
     this.rotateHint.setVisible(portrait);
     const defense = this.scene.get('Defense');
-    if (portrait && defense.scene.isActive()) defense.scene.pause();
-    else if (!portrait && defense.scene.isPaused()) defense.scene.resume();
+    if (portrait && defense.scene.isActive()) {
+      defense.scene.pause();
+      this.pausedForRotate = true;
+    } else if (!portrait && this.pausedForRotate) {
+      // 只恢復「因為直向而暫停」的情況，不誤解除其他暫停
+      this.pausedForRotate = false;
+      if (defense.scene.isPaused()) defense.scene.resume();
+    }
   }
 }
