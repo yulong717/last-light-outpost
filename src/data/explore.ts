@@ -23,7 +23,7 @@ export const EXPLORE_TIME = {
 
 // ── 輔助用品 ───────────────────────────────────────────
 
-export type SupplyId = 'medkit' | 'grenade' | 'lockpick' | 'decoy';
+export type SupplyId = 'medkit' | 'lockpick' | 'decoy';
 
 export interface SupplyDef {
   id: SupplyId;
@@ -36,13 +36,11 @@ export interface SupplyDef {
 
 export const SUPPLIES: Record<SupplyId, SupplyDef> = {
   medkit: { id: 'medkit', name: '醫療包', desc: '回復 45 生命（探索中或夜裡 H 鍵）', max: 5, start: 1 },
-  grenade: { id: 'grenade', name: '手榴彈', desc: '丟向準星，範圍爆炸（夜裡或探索戰鬥 G 鍵）', max: 4, start: 1 },
   lockpick: { id: 'lockpick', name: '開鎖工具', desc: '直接打開上鎖的櫃子和門，不必 QTE', max: 3, start: 0 },
   decoy: { id: 'decoy', name: '噪音誘餌', desc: '引開屍群：跳過一場戰鬥，或讓噪音歸零', max: 3, start: 0 },
 };
 
 export const MEDKIT_HEAL = 45;
-export const GRENADE = { radius: 64, damage: 140, fuse: 0.55, cooldown: 0.8 };
 
 // ── 掉落 ───────────────────────────────────────────────
 
@@ -140,9 +138,9 @@ export const ZONES: ZoneDef[] = [
     mapY: 265,
     color: 0x7a8a4a,
     zombies: { basic: 8, runner: 3, police: 1 },
-    loot: { scrap: [14, 22], ammo: { '556': 2, '9mm': 3 }, supplies: { grenade: 1, medkit: 1 }, weapons: ['machete'] },
+    loot: { scrap: [14, 22], ammo: { '556': 2, '9mm': 3 }, supplies: { medkit: 1 }, weapons: ['machete'] },
     survivors: { shooter: 2, medic: 1 },
-    tags: ['5.56', '手榴彈', '9mm'],
+    tags: ['5.56', '9mm'],
     floor: 0x2c2a2a,
     wall: 0x463c38,
   },
@@ -176,7 +174,7 @@ export const ZONES: ZoneDef[] = [
     mapY: 250,
     color: 0xe0a040,
     zombies: { basic: 6, worker: 3, runner: 1, dog: 1.5 },
-    loot: { scrap: [14, 22], ammo: { '9mm': 4, '12ga': 2 }, supplies: { grenade: 1, decoy: 2, lockpick: 1 }, weapons: ['bat', 'machete'] },
+    loot: { scrap: [14, 22], ammo: { '9mm': 4, '12ga': 2 }, supplies: { decoy: 2, lockpick: 1 }, weapons: ['bat', 'machete'] },
     survivors: { engineer: 3, shooter: 1 },
     tags: ['廢料', '9mm', '誘餌'],
     floor: 0x34302a,
@@ -230,7 +228,7 @@ export const ZONES: ZoneDef[] = [
     mapY: 120,
     color: 0xe06a6a,
     zombies: { basic: 4, nurse: 3, runner: 2, brute: 1, dog: 1 },
-    loot: { scrap: [20, 32], ammo: { '9mm': 3, '556': 1 }, supplies: { medkit: 5, grenade: 1 }, weapons: ['mp5', 'axe'] },
+    loot: { scrap: [20, 32], ammo: { '9mm': 3, '556': 1 }, supplies: { medkit: 5 }, weapons: ['mp5', 'axe'] },
     survivors: { medic: 4, shooter: 1 },
     tags: ['大量醫療包', '醫護', 'MP5'],
     floor: 0x2a3034,
@@ -248,7 +246,7 @@ export const ZONES: ZoneDef[] = [
     mapY: 230,
     color: 0x5a80d0,
     zombies: { police: 4, basic: 3, prisoner: 2, runner: 1 },
-    loot: { scrap: [24, 36], ammo: { '9mm': 3, '357': 2, '12ga': 3, '556': 1 }, supplies: { grenade: 2, lockpick: 2 }, weapons: ['python', 'm1014', 'mp5', 'm4a1'] },
+    loot: { scrap: [24, 36], ammo: { '9mm': 3, '357': 2, '12ga': 3, '556': 1 }, supplies: { lockpick: 2 }, weapons: ['python', 'm1014', 'mp5', 'm4a1'] },
     survivors: { shooter: 4, engineer: 1 },
     tags: ['槍械', '霰彈', '射手'],
     floor: 0x272b34,
@@ -257,7 +255,7 @@ export const ZONES: ZoneDef[] = [
   {
     id: 'checkpoint',
     name: '軍方檢查站',
-    blurb: '撤離失敗的檢查站。步槍彈、手榴彈，還有穿全套裝備的士兵霧屍。',
+    blurb: '撤離失敗的檢查站。步槍彈、重武器，還有穿全套裝備的士兵霧屍。',
     time: 2,
     risk: 5,
     unlockDay: 5,
@@ -266,9 +264,9 @@ export const ZONES: ZoneDef[] = [
     mapY: 140,
     color: 0x9a9a50,
     zombies: { soldier: 4, runner: 2, brute: 2, firefighter: 1, dog: 2, bear: 0.6 },
-    loot: { scrap: [30, 44], ammo: { '556': 4, '762': 3, '12ga': 1 }, supplies: { grenade: 4, medkit: 2 }, weapons: ['ak47', 'm4a1', 'mosin', 'm249'] },
+    loot: { scrap: [30, 44], ammo: { '556': 4, '762': 3, '12ga': 1 }, supplies: { medkit: 2 }, weapons: ['ak47', 'm4a1', 'mosin', 'm249'] },
     survivors: { shooter: 3, engineer: 2 },
-    tags: ['步槍彈', '手榴彈', '重武器'],
+    tags: ['步槍彈', '重武器'],
     floor: 0x2e2f28,
     wall: 0x44463a,
   },
@@ -686,11 +684,11 @@ export const EVENTS: ExploreEvent[] = [
     options: [
       {
         label: '小心拆除',
-        hint: 'QTE 時機條・成功拿到手榴彈',
+        hint: 'QTE 時機條・成功拿到零件',
         action: {
           type: 'qte',
           qte: timing('穩住手，在綠區剪線', 2, 1.4),
-          success: { text: '拆下來了，這顆還能用。', bonus: { supplies: { grenade: 1 } } },
+          success: { text: '拆下來了，引信和鐵罐都能拆成零件。', bonus: { scrap: 8 } },
           fail: { text: '轟！你被炸飛了出去。', hurt: 30, noise: 40 },
         },
       },

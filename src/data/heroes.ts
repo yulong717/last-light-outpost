@@ -71,7 +71,7 @@ export const HEROES: Record<HeroId, HeroDef> = {
     melee: 'knife',
     infinitePistol: true,
     ammo: { '556': 90 },
-    supplies: { grenade: 1 },
+    supplies: { medkit: 1 },
     startZone: 'downtown',
     skills: [
       { name: '戰術擊倒', key: 'C', desc: '消耗 30% 體力，近戰秒殺身邊最近的一隻霧屍（優先抓住你的那隻）。菁英改成重創 150 並硬直 2 秒' },

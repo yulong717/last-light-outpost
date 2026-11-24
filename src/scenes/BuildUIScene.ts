@@ -119,7 +119,7 @@ export class BuildUIScene extends Phaser.Scene {
 
   private refresh(): void {
     const s = GameState.data.supplies;
-    this.scrapText.setText(`廢料 ${GameState.data.scrap}　醫療 ${s.medkit} 手雷 ${s.grenade}`);
+    this.scrapText.setText(`廢料 ${GameState.data.scrap}　醫療 ${s.medkit}`);
     this.clearPanel();
     const sel = this.mode.selection;
     if (sel) this.rosterOpen = false;

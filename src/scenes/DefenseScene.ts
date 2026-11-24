@@ -44,7 +44,7 @@ import { HeroSystem, type HeroHud } from '../systems/HeroSystem';
 import { LUCK } from '../data/heroes';
 import { OPENINGS, PROLOGUES } from '../data/story';
 import type { StoryData } from './StoryScene';
-import { throwGrenade, useMedkit } from '../explore/Supplies';
+import { useMedkit } from '../explore/Supplies';
 import { describeLoot } from '../explore/Expedition';
 import { AMMO } from '../data/weapons';
 import { getFirearm } from '../data/weapons';
@@ -447,23 +447,13 @@ export class DefenseScene extends Phaser.Scene {
   }
 
   private wireNightSupplies(): void {
-    // 輔助用品：G 手榴彈、H 醫療包（觸控在 UIScene 的按鈕）
-    this.input.keyboard?.on('keydown-G', this.nightGrenade, this);
+    // 輔助用品：H 醫療包（觸控在 UIScene 的按鈕）
     this.input.keyboard?.on('keydown-H', this.nightMedkit, this);
-    this.events.on('use-grenade', this.nightGrenade, this);
     this.events.on('use-medkit', this.nightMedkit, this);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
-      this.input.keyboard?.off('keydown-G', this.nightGrenade, this);
       this.input.keyboard?.off('keydown-H', this.nightMedkit, this);
-      this.events.off('use-grenade', this.nightGrenade, this);
       this.events.off('use-medkit', this.nightMedkit, this);
     });
-  }
-
-  private nightGrenade(): void {
-    if (this.phase !== 'night' || this.ended) return;
-    const inp = this.input2.state;
-    throwGrenade(this, this.player, inp.aimX, inp.aimY, () => this.zombies, (n) => (this.kills += n));
   }
 
   private nightMedkit(): void {
@@ -703,7 +693,7 @@ export class DefenseScene extends Phaser.Scene {
       this.scrapEarned += n;
       this.fx.popText(z.footX, z.footY - 56 * (z.def.scale ?? 1), `+${n}`, '#f5d76e');
     }
-    // 職業霧屍有機率掉出生前的裝備（警察掉手槍彈、士兵掉步槍彈或手榴彈…）
+    // 職業霧屍有機率掉出生前的裝備（警察掉手槍彈、士兵掉步槍彈…）
     for (const z of this.zombies) if (z.dead) this.drops.onZombieDown(z);
   }
 

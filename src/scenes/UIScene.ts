@@ -44,8 +44,8 @@ interface ActionKey {
  * - 左上面板下方「小隊」：夥伴血條；點標題列切換固守／跟隨（電腦 F）
  * - 上方中央「夜牌」：第幾夜、波次格、據點與路障耐久
  * - 右上：廢料、擊殺、靜音
- * - 觸控右下：換彈、持刀／持槍、手雷、醫療（馬克多一顆擊倒）；點左上武器欄換下一把槍
- * - 電腦右下：只留手雷／醫療／技能的快捷格（G／H／C），其他都用鍵盤
+ * - 觸控右下：換彈、持刀／持槍、醫療（馬克多一顆擊倒）；點左上武器欄換下一把槍
+ * - 電腦右下：只留醫療／技能的快捷格（H／C），其他都用鍵盤
  */
 export class UIScene extends Phaser.Scene {
   private touchUI = false;
@@ -91,7 +91,7 @@ export class UIScene extends Phaser.Scene {
   }[] = [];
 
   // 動作鍵
-  private keys: Partial<Record<'reload' | 'stance' | 'grenade' | 'medkit' | 'skill', ActionKey>> = {};
+  private keys: Partial<Record<'reload' | 'stance' | 'medkit' | 'skill', ActionKey>> = {};
   /** 按鈕位置（教學時閃框提示用） */
   private buttonRects: Partial<Record<Exclude<TutorialFocus, null>, Rect>> = {};
   /** 開局教學的提示框 */
@@ -321,8 +321,7 @@ export class UIScene extends Phaser.Scene {
       // 拇指弧線：最常按的換彈最大、最靠角落
       this.keys.reload = this.actionKey(W - 52, H - 52, 46, 'reload', '換彈', () => queueAction('reload'));
       this.keys.stance = this.actionKey(W - 102, H - 46, 40, 'knife', '持刀', () => queueAction('stance'));
-      this.keys.grenade = this.actionKey(W - 46, H - 92, 34, 'grenade', undefined, () => this.scene.get('Defense').events.emit('use-grenade'));
-      this.keys.medkit = this.actionKey(W - 84, H - 88, 34, 'medkit', undefined, () => this.scene.get('Defense').events.emit('use-medkit'));
+      this.keys.medkit = this.actionKey(W - 46, H - 92, 34, 'medkit', undefined, () => this.scene.get('Defense').events.emit('use-medkit'));
       if (soldier) this.keys.skill = this.actionKey(W - 144, H - 40, 34, 'fist', undefined, () => (heroTouch.skill = true));
       this.buttonRects.reload = this.keys.reload.rect;
       this.buttonRects.stance = this.keys.stance.rect;
@@ -334,8 +333,6 @@ export class UIScene extends Phaser.Scene {
       let x = W - s - 6;
       const y = H - s - 6;
       this.keys.medkit = this.actionKey(x, y, s, 'medkit', undefined, () => this.scene.get('Defense').events.emit('use-medkit'), 'H');
-      x -= s + 4;
-      this.keys.grenade = this.actionKey(x, y, s, 'grenade', undefined, () => this.scene.get('Defense').events.emit('use-grenade'), 'G');
       x -= s + 4;
       if (soldier) this.keys.skill = this.actionKey(x, y, s, 'fist', undefined, () => (heroTouch.skill = true), 'C');
     }
@@ -596,9 +593,7 @@ export class UIScene extends Phaser.Scene {
 
     // 動作鍵
     const s = GameState.data.supplies;
-    this.keys.grenade?.badge?.setText(`${s.grenade}`);
     this.keys.medkit?.badge?.setText(`${s.medkit}`);
-    this.setKey(this.keys.grenade, s.grenade > 0);
     this.setKey(this.keys.medkit, s.medkit > 0);
     if (this.keys.skill) {
       this.setKey(this.keys.skill, !!hh?.skillReady, hh?.skillReady ? PAL.amber : undefined);

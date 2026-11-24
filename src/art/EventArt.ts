@@ -717,7 +717,6 @@ export type IconId =
   | 'scrap'
   | 'ammo'
   | 'medkit'
-  | 'grenade'
   | 'lockpick'
   | 'decoy'
   | 'gun'
@@ -745,7 +744,6 @@ const ICONS: Record<Exclude<IconId, 'none'>, { rows: string[]; pal: Record<strin
   scrap: { rows: ['....##......', '...#aa#.....', '..#aaaa#....', '.#aa##aa#...', '.#a#..#a#...', '.#aa##aa#...', '..#aaaa#.##.', '...#aa#.#bb#', '....##.#bbb#', '.......#bbb#', '........###.', '............'], pal: { a: 0x9aa0a8, b: 0xb07a4a } },
   ammo: { rows: ['..#...#...#.', '.#y#.#y#.#y#', '.#y#.#y#.#y#', '#bbb##bb##bb', '#bbb##bb##bb', '#bbb##bb##bb', '#bbb##bb##bb', '#bbb##bb##bb', '#ddd##dd##dd', '############', '............', '............'], pal: { y: 0xe0c060, b: 0xc8a040, d: 0x8a6a2a } },
   medkit: { rows: ['....####....', '...#....#...', '############', '#wwwwwwwwww#', '#wwwwrrwwww#', '#wwwwrrwwww#', '#wwrrrrrrww#', '#wwwwrrwwww#', '#wwwwrrwwww#', '#gggggggggg#', '############', '............'], pal: { w: 0xe8e8e0, r: 0xd03030, g: 0xa8a8a0 } },
-  grenade: { rows: ['....##......', '...#ss#.##..', '...#ss##s#..', '..######....', '.#gggggg#...', '#gGgGgGgg#..', '#gggggggg#..', '#gGgGgGgg#..', '#gggggggg#..', '.#gggggg#...', '..######....', '............'], pal: { s: 0x9aa0a8, g: 0x5a6a3a, G: 0x3a4a2a } },
   lockpick: { rows: ['..######....', '.#......#...', '.#.####.#...', '.#.#..#.#...', '############', '#yyyyyyyyyy#', '#yyyy##yyyy#', '#yyyy##yyyy#', '#yyyyy#yyyy#', '#yyyyyyyyyy#', '############', '............'], pal: { y: 0xc8a040 } },
   decoy: { rows: ['.##......##.', '#rr#....#rr#', '.#.######.#.', '..#wwwwww#..', '.#ww#wwwww#.', '.#ww#wwwww#.', '.#ww###www#.', '.#wwwwwwww#.', '..#wwwwww#..', '...######...', '..#......#..', '............'], pal: { r: 0xd03030, w: 0xe8e0c8 } },
   gun: { rows: ['............', '.##########.', '#gggggggggg#', '#gGGGGGGGgg#', '.####gg####.', '....#gg#....', '...#gg#.....', '..#gg#......', '..#gg#......', '..####......', '............', '............'], pal: { g: 0x5a5e66, G: 0x8a8e96 } },
