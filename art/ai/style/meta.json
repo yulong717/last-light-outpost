@@ -1,0 +1,578 @@
+{
+ "picked_seed": 2,
+ "size": [
+  192,
+  64
+ ],
+ "generated_at": [
+  1536,
+  512
+ ],
+ "downscale": 8,
+ "workflow": "art/ai/workflows/h3_image_edit_3ref.json",
+ "references": {
+  "Picture 1": "layout (tools/art/ai/build_anchor.py layout): akai frame 0 re-proportioned to 3.5 heads (head 16 / body 40) at akai slot, zombie_basic frame 0 scaled to 56, placeholder crate/drum/lamp; 8x",
+  "Picture 2": "public/assets/sprites/akai_ai_idle.png frame 0, 16x",
+  "Picture 3": "public/assets/sprites/zombie_basic.png frame 0, 16x"
+ },
+ "palette": "art/ai/palette/master.gpl",
+ "slots": [
+  {
+   "name": "akai",
+   "x": [
+    0,
+    38
+   ],
+   "target_wh": [
+    28,
+    56
+   ]
+  },
+  {
+   "name": "zombie",
+   "x": [
+    38,
+    98
+   ],
+   "target_wh": [
+    null,
+    56
+   ]
+  },
+  {
+   "name": "crate",
+   "x": [
+    98,
+    126
+   ],
+   "target_wh": [
+    21,
+    19
+   ]
+  },
+  {
+   "name": "drum",
+   "x": [
+    126,
+    154
+   ],
+   "target_wh": [
+    19,
+    28
+   ]
+  },
+  {
+   "name": "lamp",
+   "x": [
+    154,
+    192
+   ],
+   "target_wh": [
+    14,
+    64
+   ]
+  }
+ ],
+ "post": "grid phase detect -> key magenta -> despill -> k_centroid /8 -> snap each object's bottom to y=61 -> quantize master.gpl (OKLab) -> cleanup (orphans, specks, selout outline) -> quantize -> <=16 colours per object (merge least-used into nearest)",
+ "seeds": {
+  "1": {
+   "grid_phase": [
+    4,
+    0
+   ],
+   "foot_shift": {
+    "akai": -1,
+    "zombie": -1,
+    "crate": -1,
+    "drum": -2,
+    "lamp": -1
+   },
+   "measure": {
+    "akai": {
+     "x": [
+      6,
+      33
+     ],
+     "w": 28,
+     "h": 57,
+     "top": 5,
+     "bottom": 61,
+     "target": [
+      28,
+      56
+     ]
+    },
+    "zombie": {
+     "x": [
+      38,
+      88
+     ],
+     "w": 51,
+     "h": 56,
+     "top": 6,
+     "bottom": 61,
+     "target": [
+      null,
+      56
+     ]
+    },
+    "crate": {
+     "x": [
+      102,
+      123
+     ],
+     "w": 22,
+     "h": 19,
+     "top": 43,
+     "bottom": 61,
+     "target": [
+      21,
+      19
+     ]
+    },
+    "drum": {
+     "x": [
+      130,
+      150
+     ],
+     "w": 21,
+     "h": 31,
+     "top": 31,
+     "bottom": 61,
+     "target": [
+      19,
+      28
+     ]
+    },
+    "lamp": {
+     "x": [
+      165,
+      178
+     ],
+     "w": 14,
+     "h": 62,
+     "top": 0,
+     "bottom": 61,
+     "target": [
+      14,
+      64
+     ]
+    }
+   },
+   "light_ul_minus_lr": {
+    "akai": 0.064,
+    "zombie": 0.183,
+    "crate": 0.031,
+    "drum": 0.01,
+    "lamp": 0.004
+   },
+   "colours": 44,
+   "colours_per_object": {
+    "akai": [
+     26,
+     16
+    ],
+    "zombie": [
+     29,
+     16
+    ],
+    "crate": [
+     7,
+     7
+    ],
+    "drum": [
+     15,
+     15
+    ],
+    "lamp": [
+     15,
+     15
+    ]
+   },
+   "outside_palette": 0
+  },
+  "2": {
+   "grid_phase": [
+    3,
+    1
+   ],
+   "foot_shift": {
+    "akai": 0,
+    "zombie": 0,
+    "crate": 0,
+    "drum": 0,
+    "lamp": 0
+   },
+   "measure": {
+    "akai": {
+     "x": [
+      6,
+      34
+     ],
+     "w": 29,
+     "h": 57,
+     "top": 5,
+     "bottom": 61,
+     "target": [
+      28,
+      56
+     ]
+    },
+    "zombie": {
+     "x": [
+      38,
+      88
+     ],
+     "w": 51,
+     "h": 56,
+     "top": 6,
+     "bottom": 61,
+     "target": [
+      null,
+      56
+     ]
+    },
+    "crate": {
+     "x": [
+      102,
+      123
+     ],
+     "w": 22,
+     "h": 19,
+     "top": 43,
+     "bottom": 61,
+     "target": [
+      21,
+      19
+     ]
+    },
+    "drum": {
+     "x": [
+      129,
+      150
+     ],
+     "w": 22,
+     "h": 31,
+     "top": 31,
+     "bottom": 61,
+     "target": [
+      19,
+      28
+     ]
+    },
+    "lamp": {
+     "x": [
+      165,
+      179
+     ],
+     "w": 15,
+     "h": 62,
+     "top": 0,
+     "bottom": 61,
+     "target": [
+      14,
+      64
+     ]
+    }
+   },
+   "light_ul_minus_lr": {
+    "akai": 0.096,
+    "zombie": 0.167,
+    "crate": 0.095,
+    "drum": 0.017,
+    "lamp": 0.035
+   },
+   "colours": 45,
+   "colours_per_object": {
+    "akai": [
+     19,
+     16
+    ],
+    "zombie": [
+     30,
+     16
+    ],
+    "crate": [
+     13,
+     13
+    ],
+    "drum": [
+     20,
+     16
+    ],
+    "lamp": [
+     19,
+     16
+    ]
+   },
+   "outside_palette": 0
+  },
+  "3": {
+   "grid_phase": [
+    6,
+    2
+   ],
+   "foot_shift": {
+    "akai": 0,
+    "zombie": 0,
+    "crate": 0,
+    "drum": 0,
+    "lamp": 0
+   },
+   "measure": {
+    "akai": {
+     "x": [
+      6,
+      33
+     ],
+     "w": 28,
+     "h": 58,
+     "top": 4,
+     "bottom": 61,
+     "target": [
+      28,
+      56
+     ]
+    },
+    "zombie": {
+     "x": [
+      38,
+      88
+     ],
+     "w": 51,
+     "h": 56,
+     "top": 6,
+     "bottom": 61,
+     "target": [
+      null,
+      56
+     ]
+    },
+    "crate": {
+     "x": [
+      102,
+      123
+     ],
+     "w": 22,
+     "h": 19,
+     "top": 43,
+     "bottom": 61,
+     "target": [
+      21,
+      19
+     ]
+    },
+    "drum": {
+     "x": [
+      130,
+      150
+     ],
+     "w": 21,
+     "h": 30,
+     "top": 32,
+     "bottom": 61,
+     "target": [
+      19,
+      28
+     ]
+    },
+    "lamp": {
+     "x": [
+      163,
+      181
+     ],
+     "w": 19,
+     "h": 62,
+     "top": 0,
+     "bottom": 61,
+     "target": [
+      14,
+      64
+     ]
+    }
+   },
+   "light_ul_minus_lr": {
+    "akai": 0.018,
+    "zombie": 0.183,
+    "crate": 0.047,
+    "drum": 0.028,
+    "lamp": -0.007
+   },
+   "colours": 39,
+   "colours_per_object": {
+    "akai": [
+     23,
+     16
+    ],
+    "zombie": [
+     32,
+     16
+    ],
+    "crate": [
+     8,
+     8
+    ],
+    "drum": [
+     21,
+     16
+    ],
+    "lamp": [
+     10,
+     10
+    ]
+   },
+   "outside_palette": 0
+  },
+  "4": {
+   "grid_phase": [
+    5,
+    4
+   ],
+   "foot_shift": {
+    "akai": 0,
+    "zombie": 0,
+    "crate": 0,
+    "drum": 0,
+    "lamp": 0
+   },
+   "measure": {
+    "akai": {
+     "x": [
+      6,
+      33
+     ],
+     "w": 28,
+     "h": 58,
+     "top": 4,
+     "bottom": 61,
+     "target": [
+      28,
+      56
+     ]
+    },
+    "zombie": {
+     "x": [
+      36,
+      88
+     ],
+     "w": 53,
+     "h": 55,
+     "top": 7,
+     "bottom": 61,
+     "target": [
+      null,
+      56
+     ]
+    },
+    "crate": {
+     "x": [
+      102,
+      122
+     ],
+     "w": 21,
+     "h": 19,
+     "top": 43,
+     "bottom": 61,
+     "target": [
+      21,
+      19
+     ]
+    },
+    "drum": {
+     "x": [
+      129,
+      150
+     ],
+     "w": 22,
+     "h": 31,
+     "top": 31,
+     "bottom": 61,
+     "target": [
+      19,
+      28
+     ]
+    },
+    "lamp": {
+     "x": [
+      165,
+      178
+     ],
+     "w": 14,
+     "h": 62,
+     "top": 0,
+     "bottom": 61,
+     "target": [
+      14,
+      64
+     ]
+    }
+   },
+   "light_ul_minus_lr": {
+    "akai": 0.072,
+    "zombie": 0.181,
+    "crate": 0.099,
+    "drum": 0.008,
+    "lamp": -0.007
+   },
+   "colours": 46,
+   "colours_per_object": {
+    "akai": [
+     26,
+     16
+    ],
+    "zombie": [
+     30,
+     16
+    ],
+    "crate": [
+     14,
+     14
+    ],
+    "drum": [
+     13,
+     13
+    ],
+    "lamp": [
+     16,
+     16
+    ]
+   },
+   "outside_palette": 0
+  }
+ },
+ "generation": [
+  {
+   "workflow": "C:/AI/last-light-outpost/art/ai/workflows/h3_image_edit_3ref.json",
+   "overrides": {
+    "load1.image": "C:\\AI\\last-light-outpost\\art\\ai\\raw\\style\\layout_8x.png",
+    "load2.image": "C:\\AI\\last-light-outpost\\art\\ai\\raw\\style\\akai_ref_16x.png",
+    "load3.image": "C:\\AI\\last-light-outpost\\art\\ai\\raw\\style\\zombie_ref_16x.png",
+    "sampler.seed": 2,
+    "cond.prompt": "Pixel art game sprites for a 2D side-scrolling zombie survival game, five objects standing in one row on a plain solid magenta background. Redraw <Picture 1> and keep every object at exactly the same position and size, all feet and bottoms on the same ground line. From left to right: (1) the boy keeps exactly the body proportions he has in <Picture 1>: a small head and a long body, 3.5 heads tall, not chibi, not big-headed; take only his face, clothes and colours from <Picture 2>: navy baseball cap, curly dark brown hair, white pinstripe baseball jersey with a red number 7, navy shorts, bandaged knees, red and white sneakers; three-quarter view facing right, relaxed standing pose, arms down. (2) the fog zombie from <Picture 3> in the same lurching pose with arms reaching forward: grey-green skin, torn pale grey shirt, dark blue-grey trousers. (3) a small wooden supply crate made of horizontal planks with a diagonal brace. (4) an upright red-brown painted steel oil drum, exactly as tall as in <Picture 1>, with two raised ribs, a rim on top, clean shaded paint with only a few small rust spots. (5) the lower part of a dark iron street lamp post: a heavy stepped base and the thin pole rising straight up out of the top edge of the picture. One consistent style for all five, as if drawn by the same artist: crisp pixel art, side view, a single light source from the upper left at 45 degrees, lit surfaces on the upper left and shadowed surfaces on the lower right, 3 to 4 shading steps per surface, a 1 pixel dark coloured outline around every object that is darker on the bottom and right side, muted grey-green post-apocalyptic colours with low saturation, only the boy and the oil drum a little more colourful. No ground, no floor line, no cast shadows, no background scenery, no text, no frames.",
+    "save.filename_prefix": "ai_art/style_anchor_s2"
+   },
+   "models": {
+    "unet": {
+     "unet_name": "minimax_h3_image_pruned_int8_convrot.safetensors",
+     "weight_dtype": "default"
+    },
+    "clip": {
+     "clip_name": "qwen3vl_32b_minimax_h3_int8_convrot.safetensors",
+     "type": "minimax",
+     "device": "default"
+    },
+    "vae": {
+     "vae_name": "minimax_h3_image_vae_fp16.safetensors"
+    }
+   },
+   "tag": "style anchor v2 (akai 3.5-head paste-up) seed 2",
+   "time": "2026-11-24 18:38:25",
+   "prompt_id": "0b907573-c798-4d63-8c3a-578d77adf33c",
+   "seconds": 37.6,
+   "vram_peak_mib": 15760,
+   "files": [
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\style\\s2\\style_anchor_s2_00002_.png"
+   ]
+  }
+ ]
+}

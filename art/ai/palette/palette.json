@@ -1,0 +1,46 @@
+{
+ "colours": 56,
+ "main": 48,
+ "reserved": 8,
+ "main_lstar_min": 8.2,
+ "main_lstar_max": 89.6,
+ "main_sat_max": 0.6,
+ "families": {
+  "grey": 16,
+  "green": 9,
+  "warm": 8,
+  "red": 8,
+  "blue": 7
+ },
+ "sources": {
+  "akai_ai_idle": "public/assets/sprites/akai_ai_idle.png",
+  "zombie_basic": "public/assets/sprites/zombie_basic.png",
+  "zombie_basic_palette": "art/ai/refs/zombie_basic_palette.png"
+ },
+ "prop_seeds": {
+  "crate_wood": [
+   "3a2a1e",
+   "5c4330",
+   "7f6045",
+   "a08260"
+  ],
+  "drum_rust": [
+   "3e1f19",
+   "6a3326",
+   "93492f",
+   "b0653f"
+  ],
+  "lamp_steel": [
+   "262b29",
+   "3d4542",
+   "5a6460",
+   "7e8984"
+  ]
+ },
+ "weights": {
+  "akai_ai_idle": 0.3,
+  "zombie_basic": 0.3,
+  "zombie_basic_palette": 0.15,
+  "props": 0.25
+ }
+}

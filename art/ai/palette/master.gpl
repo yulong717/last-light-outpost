@@ -1,0 +1,61 @@
+GIMP Palette
+Name: Last Light Outpost master
+Columns: 8
+# 48 main colours (index 0-47, grouped by hue family, dark -> light) + 8 reserved (48-55)
+# built by tools/art/ai/build_palette.py
+ 18  26  18	grey 01
+ 19  37  31	grey 02
+ 31  44  34	grey 03
+ 35  50  39	grey 04
+ 50  55  41	grey 05
+ 47  62  53	grey 06
+ 54  71  59	grey 07
+ 66  84  72	grey 08
+101 117 103	grey 09
+138 154 138	grey 10
+146 160 146	grey 11
+154 167 150	grey 12
+161 176 159	grey 13
+170 187 177	grey 14
+193 210 194	grey 15
+215 229 216	grey 16
+ 61  76  59	green 17
+ 77  92  76	green 18
+ 85 104  87	green 19
+ 93 110  93	green 20
+111 128 110	green 21
+119 140 122	green 22
+130 147 128	green 23
+176 197 179	green 24
+201 221 204	green 25
+ 58  42  30	warm 26
+ 92  67  48	warm 27
+127  96  69	warm 28
+171 105  71	warm 29
+162 131  96	warm 30
+215 153 114	warm 31
+232 180 149	warm 32
+242 198 164	warm 33
+ 63  31  26	red 34
+ 99  52  42	red 35
+115  60  47	red 36
+120  71  50	red 37
+153  63  65	red 38
+139  79  58	red 39
+183  78  75	red 40
+213  92  86	red 41
+ 17  24  39	blue 42
+ 29  41  72	blue 43
+ 51  69 109	blue 44
+ 66  85 126	blue 45
+ 80 100 142	blue 46
+118 111 142	blue 47
+122 140 192	blue 48
+107  26  28	reserved blood dark
+176  42  42	reserved blood
+224 112  42	reserved fire
+255 194  74	reserved fire light
+232 236 230	reserved fog white
+242 214  78	reserved hint yellow
+242 193  78	reserved ui amber
+ 10  10  12	reserved ui ink

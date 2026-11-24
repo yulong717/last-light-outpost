@@ -1,0 +1,168 @@
+{
+ "_meta_doc": "MiniMax H3 Image edit with 3 reference pictures (STYLE_ANCHOR). Same as h3_image_edit.json plus load3/scale3 -> cond.images.image_3. Picture 1 = layout (edited), Picture 2/3 = character refs.",
+ "unet": {
+  "class_type": "UNETLoader",
+  "inputs": {
+   "unet_name": "minimax_h3_image_pruned_int8_convrot.safetensors",
+   "weight_dtype": "default"
+  }
+ },
+ "clip": {
+  "class_type": "CLIPLoader",
+  "inputs": {
+   "clip_name": "qwen3vl_32b_minimax_h3_int8_convrot.safetensors",
+   "type": "minimax",
+   "device": "default"
+  }
+ },
+ "vae": {
+  "class_type": "VAELoader",
+  "inputs": {
+   "vae_name": "minimax_h3_image_vae_fp16.safetensors"
+  }
+ },
+ "load1": {
+  "class_type": "LoadImage",
+  "inputs": {
+   "image": "PLACEHOLDER.png"
+  }
+ },
+ "scale1": {
+  "class_type": "ImageScale",
+  "inputs": {
+   "image": [
+    "load1",
+    0
+   ],
+   "upscale_method": "nearest-exact",
+   "width": 1536,
+   "height": 512,
+   "crop": "disabled"
+  }
+ },
+ "load2": {
+  "class_type": "LoadImage",
+  "inputs": {
+   "image": "PLACEHOLDER.png"
+  }
+ },
+ "scale2": {
+  "class_type": "ImageScale",
+  "inputs": {
+   "image": [
+    "load2",
+    0
+   ],
+   "upscale_method": "nearest-exact",
+   "width": 1024,
+   "height": 1024,
+   "crop": "disabled"
+  }
+ },
+ "cond": {
+  "class_type": "MiniMaxH3ImageConditioning",
+  "inputs": {
+   "clip": [
+    "clip",
+    0
+   ],
+   "vae": [
+    "vae",
+    0
+   ],
+   "images.image_1": [
+    "scale1",
+    0
+   ],
+   "prompt": "",
+   "width": 1536,
+   "height": 512,
+   "images.image_2": [
+    "scale2",
+    0
+   ],
+   "images.image_3": [
+    "scale3",
+    0
+   ]
+  }
+ },
+ "neg": {
+  "class_type": "ConditioningZeroOut",
+  "inputs": {
+   "conditioning": [
+    "cond",
+    0
+   ]
+  }
+ },
+ "sampler": {
+  "class_type": "KSampler",
+  "inputs": {
+   "model": [
+    "unet",
+    0
+   ],
+   "positive": [
+    "cond",
+    0
+   ],
+   "negative": [
+    "neg",
+    0
+   ],
+   "latent_image": [
+    "cond",
+    1
+   ],
+   "seed": 1,
+   "steps": 6,
+   "cfg": 1.0,
+   "sampler_name": "euler",
+   "scheduler": "simple",
+   "denoise": 1.0
+  }
+ },
+ "decode": {
+  "class_type": "VAEDecode",
+  "inputs": {
+   "samples": [
+    "sampler",
+    0
+   ],
+   "vae": [
+    "vae",
+    0
+   ]
+  }
+ },
+ "load3": {
+  "class_type": "LoadImage",
+  "inputs": {
+   "image": "PLACEHOLDER.png"
+  }
+ },
+ "scale3": {
+  "class_type": "ImageScale",
+  "inputs": {
+   "image": [
+    "load3",
+    0
+   ],
+   "upscale_method": "nearest-exact",
+   "width": 1024,
+   "height": 1024,
+   "crop": "disabled"
+  }
+ },
+ "save": {
+  "class_type": "SaveImage",
+  "inputs": {
+   "images": [
+    "decode",
+    0
+   ],
+   "filename_prefix": "ai_art/style_anchor"
+  }
+ }
+}
