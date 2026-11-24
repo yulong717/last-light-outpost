@@ -4,15 +4,14 @@ import { registerHeadFrames } from './ProceduralArt';
 import { ZOMBIE_NECK_ROW } from './sprites';
 
 /**
- * 霧屍外觀的「執行期合成」：以 zombie_basic（H3 生成的 26 格，3.5 頭身）為底，
+ * 霧屍外觀的「執行期合成」：以 zombie_basic 或 zombie_brute（H3 生成的 26 格，3.5 頭身）為底，
  * 依原圖的區域（皮膚／上衣／褲子）重新上色、畫上制服圖樣（警用背心、反光條、迷彩…）、
  * 背包與血跡，再水平加寬做出體型差異。頭飾不烤進圖裡，而是另一張小圖疊在頭上
- * （見 HEAD_ANCHORS），這樣頭盔能被打飛、而且頭飾種類不會讓貼圖數量翻倍。
+ * （見 ZOMBIE_BASES 的 anchors），這樣頭盔能被打飛、而且頭飾種類不會讓貼圖數量翻倍。
  *
  * 完全不需要外部工具；同一組外觀只會合成一次（以 key 快取）。
  */
 
-const F = 64;
 /** 0–3 走路、4–5 撲咬、6–14 倒地；15–25 受擊、擊飛、落地、爬起（見 REACT_FRAMES） */
 const FRAMES = 26;
 const OUTLINE = 0x120d0a;
@@ -30,6 +29,8 @@ export interface BodyLook {
   widen: number;
   /** 血跡位置等細節的亂數種子 */
   seed: number;
+  /** 底圖；不填用一般霧屍 */
+  base?: ZombieBaseId;
   /** 頭髮（女性霧屍）；null 用原圖的短髮 */
   hair?: { style: HairStyle; color: number } | null;
   /** 裙子顏色：褲子上半段畫成裙子、膝蓋以下露出腿；null 一般褲子 */
@@ -38,47 +39,93 @@ export interface BodyLook {
 
 export type HairStyle = 'long' | 'ponytail' | 'bob';
 
+type Pt = { x: number; y: number };
+type Box = { x0: number; y0: number; x1: number; y1: number };
+
 /**
- * 每一格「頭頂中心」在 64×64 影格中的位置（朝右的原圖座標）。
- * 0–3 走路、4–5 撲咬、6–10 中槍後退到膝蓋一軟；11 起往後倒、12–14 已經倒地，頭飾在那之前就掉了。
+ * 霧屍底圖的規格。兩張底圖的影格順序相同（0–3 走路、4–5 撲咬、6–14 倒地、15–25 受擊到爬起），
+ * 只有影格大小、腳底列、脖子列、頭頂位置不同。
+ *
+ * anchors：每一格「頭頂中心」在影格中的位置（朝右的原圖座標）。
+ * 6–10 中槍後退到膝蓋一軟；11 起往後倒、12–14 已經倒地，頭飾在那之前就掉了。
  * 15–17 受擊、18–19 擊飛、20–21 落地、22–25 爬起；飛在空中、躺著、坐著的格子不畫頭飾（null）。
- * 2026-11 換成 H3 的 3.5 頭身霧屍（art/ai/out/zombie_m），錨點 = 頭殼皮膚最上列的中心往左上 1px。
- * 換了底圖要重量一次（tools/art 的腳本可印出每格的頭部範圍）。
+ * 錨點 = 頭殼皮膚最上列的中心往左上 1px。換了底圖要重量一次。
  */
-export const HEAD_ANCHORS: ({ x: number; y: number } | null)[] = [
-  { x: 36, y: 9 },
-  { x: 36, y: 8 },
-  { x: 36, y: 9 },
-  { x: 36, y: 8 },
-  { x: 43, y: 10 },
-  { x: 44, y: 10 },
-  { x: 37, y: 8 },
-  { x: 31, y: 6 },
-  { x: 29, y: 7 },
-  { x: 28, y: 7 },
-  { x: 26, y: 9 },
-  null,
-  null,
-  null,
-  null,
-  { x: 23, y: 7 },
-  { x: 12, y: 11 },
-  { x: 23, y: 7 },
-  null,
-  null,
-  null,
-  null,
-  null,
-  null,
-  { x: 38, y: 13 },
-  { x: 42, y: 9 },
-];
+export interface ZombieBaseSpec {
+  /** 貼圖 key（public/assets/sprites/<key>.png） */
+  key: string;
+  /** 正方形影格邊長 */
+  size: number;
+  /** 腳底列，Zombie 的 origin 用這個 */
+  foot: number;
+  /** 脖子列，爆頭時從這裡切開 */
+  neck: number;
+  /** 判定框（寬、高，未乘縮放） */
+  hit: { w: number; h: number };
+  anchors: (Pt | null)[];
+  /** 倒地格（12–14）的頭部範圍，畫長髮用（頭往後仰躺在左邊） */
+  lyingHeads: Record<number, Box>;
+}
+
+const N = null;
+const pts = (list: ([number, number] | null)[]): (Pt | null)[] => list.map((p) => (p ? { x: p[0], y: p[1] } : null));
+
+export const ZOMBIE_BASES = {
+  /** 一般霧屍：M 人台、56 高（art/ai/out/zombie_m） */
+  basic: {
+    key: 'zombie_basic',
+    size: 64,
+    foot: 62,
+    neck: ZOMBIE_NECK_ROW,
+    hit: { w: 30, h: 56 },
+    anchors: pts([
+      [36, 9], [36, 8], [36, 9], [36, 8], [43, 10], [44, 10], [37, 8], [31, 6], [29, 7], [28, 7], [26, 9],
+      N, N, N, N, [23, 7], [12, 11], [23, 7], N, N, N, N, N, N, [38, 13], [42, 9],
+    ]),
+    lyingHeads: {
+      12: { x0: 7, y0: 19, x1: 23, y1: 29 },
+      13: { x0: 3, y0: 31, x1: 19, y1: 42 },
+      14: { x0: 2, y0: 44, x1: 16, y1: 53 },
+    },
+  },
+  /** 巨屍：XL 壯人台、約 62 高、寬 1.4 倍，72×72 影格（art/ai/out/zombie_xl） */
+  brute: {
+    key: 'zombie_brute',
+    size: 72,
+    foot: 69,
+    // 駝背、頭往前伸，頭和上背重疊；切在下巴附近
+    neck: 26,
+    hit: { w: 40, h: 58 },
+    anchors: pts([
+      [47, 14], [47, 12], [47, 12], [47, 12], [43, 14], [51, 17], [52, 14], [43, 9], [43, 9], [28, 8], [28, 8],
+      N, N, N, N, [31, 8], [20, 5], [31, 8], N, N, N, N, N, N, [44, 16], [44, 14],
+    ]),
+    lyingHeads: {
+      12: { x0: 8, y0: 40, x1: 22, y1: 50 },
+      13: { x0: 9, y0: 40, x1: 23, y1: 50 },
+      14: { x0: 10, y0: 41, x1: 24, y1: 50 },
+    },
+  },
+} satisfies Record<string, ZombieBaseSpec>;
+
+export type ZombieBaseId = keyof typeof ZOMBIE_BASES;
+
+/** 合成貼圖 key → 用的底圖；斷肢貼圖（key~arm、key~crawl…）跟著原貼圖 */
+const baseByKey = new Map<string, ZombieBaseSpec>([
+  ['zombie_basic', ZOMBIE_BASES.basic],
+  ['zombie_brute', ZOMBIE_BASES.brute],
+]);
+
+export function zombieBaseOf(key: string): ZombieBaseSpec {
+  return baseByKey.get(key.split('~')[0]) ?? ZOMBIE_BASES.basic;
+}
+
+/** 一般霧屍的頭頂錨點（舊介面） */
+export const HEAD_ANCHORS = ZOMBIE_BASES.basic.anchors;
 
 /** 受擊與擊飛影格在 zombie_basic 裡的位置（舊的 15 格底圖沒有這些，要先檢查 hasReact） */
 export const REACT_FRAMES = { hit: [15, 16, 17], rise: 18, fall: 19, bounce: 20, down: 21, getup: [22, 23, 24, 25] } as const;
 
-/** 原圖的腳底列，Zombie 的 origin 用這個 */
-export const FOOT_ROW = 62;
 
 // ───────────────────────── 區域分類 ─────────────────────────
 
@@ -101,6 +148,9 @@ interface BaseData {
   /** 各區域明度範圍，用來把原本的明暗映射到新顏色 */
   vRange: Record<number, [number, number]>;
   frames: FrameInfo[];
+  /** 影格邊長 */
+  F: number;
+  spec: ZombieBaseSpec;
 }
 
 interface FrameInfo {
@@ -154,15 +204,18 @@ function classify(h: number, s: number, v: number): Region {
   return Region.Other;
 }
 
-const baseCache = new WeakMap<Phaser.Textures.TextureManager, BaseData | null>();
+const baseCache = new WeakMap<Phaser.Textures.TextureManager, Map<string, BaseData | null>>();
 
-function loadBase(scene: Phaser.Scene): BaseData | null {
+function loadBase(scene: Phaser.Scene, spec: ZombieBaseSpec = ZOMBIE_BASES.basic): BaseData | null {
   const tm = scene.textures;
-  if (baseCache.has(tm)) return baseCache.get(tm)!;
-  const tex = tm.get('zombie_basic');
+  let cache = baseCache.get(tm);
+  if (!cache) baseCache.set(tm, (cache = new Map()));
+  if (cache.has(spec.key)) return cache.get(spec.key)!;
+  const F = spec.size;
+  const tex = tm.get(spec.key);
   const img = tex.getSourceImage() as HTMLImageElement | HTMLCanvasElement;
-  if (!img || img.width < F * FRAMES) {
-    baseCache.set(tm, null);
+  if (!img || img.width < F * FRAMES || img.height < F) {
+    cache.set(spec.key, null);
     return null;
   }
   const cv = document.createElement('canvas');
@@ -187,11 +240,11 @@ function loadBase(scene: Phaser.Scene): BaseData | null {
     vr[0] = Math.min(vr[0], v);
     vr[1] = Math.max(vr[1], v);
   }
-  keepEyes(region, cv.width, cv.height);
+  keepEyes(region, cv.width, cv.height, F);
   const frames: FrameInfo[] = [];
-  for (let f = 0; f < FRAMES; f++) frames.push(frameInfo(region, cv.width, f));
-  const data: BaseData = { w: cv.width, h: cv.height, rgba, region, hsv, vRange, frames };
-  baseCache.set(tm, data);
+  for (let f = 0; f < FRAMES; f++) frames.push(frameInfo(region, cv.width, f, spec));
+  const data: BaseData = { w: cv.width, h: cv.height, rgba, region, hsv, vRange, frames, F, spec };
+  cache.set(spec.key, data);
   return data;
 }
 
@@ -199,7 +252,7 @@ function loadBase(scene: Phaser.Scene): BaseData | null {
  * 眼睛是白色的，顏色規則會把它當成上衣。上衣是一大片，眼睛只是被皮膚包住的幾個像素：
  * 連通塊很小、而且碰到皮膚的白色像素改標成 Other，保留原色。
  */
-function keepEyes(region: Uint8Array, W: number, H: number): void {
+function keepEyes(region: Uint8Array, W: number, H: number, F: number): void {
   const seen = new Uint8Array(region.length);
   const stack: number[] = [];
   for (let i = 0; i < region.length; i++) {
@@ -231,8 +284,9 @@ function keepEyes(region: Uint8Array, W: number, H: number): void {
 }
 
 /** 找出軀幹：上衣像素多的連續欄位（袖子、伸出去的手臂只有幾列，會被排除） */
-function frameInfo(region: Uint8Array, W: number, f: number): FrameInfo {
-  if (!HEAD_ANCHORS[f]) return { torso: null, pantsTop: 0 };
+function frameInfo(region: Uint8Array, W: number, f: number, spec: ZombieBaseSpec): FrameInfo {
+  const F = spec.size;
+  if (!spec.anchors[f]) return { torso: null, pantsTop: 0 };
   const cols: number[] = [];
   let pantsTop = F;
   for (let x = 0; x < F; x++) {
@@ -311,19 +365,22 @@ export function lookKey(l: BodyLook): string {
     l.seed,
     l.hair ? `${l.hair.style}${l.hair.color.toString(16)}` : '-',
     l.skirt == null ? '-' : l.skirt.toString(16),
+    ...(l.base && l.base !== 'basic' ? [l.base] : []),
   ].join('_')}`;
 }
 
 /**
  * 合成（或從快取取出）一組外觀，回傳貼圖 key。
  * 會一併建立 `${key}_walk` / `_attack` / `_death` 動畫與爆頭用的 head_N 影格。
- * 底圖沒載到（色塊佔位）時回傳 'zombie_basic'。
+ * 底圖沒載到（色塊佔位）時回傳底圖的 key。
  */
 export function composeZombie(scene: Phaser.Scene, look: BodyLook): string {
+  const spec = ZOMBIE_BASES[look.base ?? 'basic'];
   const key = lookKey(look);
   if (scene.textures.exists(key)) return key;
-  const base = loadBase(scene);
-  if (!base) return 'zombie_basic';
+  const base = loadBase(scene, spec);
+  if (!base) return spec.key;
+  const F = base.F;
 
   const W = base.w;
   const raw = document.createElement('canvas');
@@ -446,7 +503,7 @@ export function composeZombie(scene: Phaser.Scene, look: BodyLook): string {
         put(i, ramp(col, tt));
       }
     }
-    if (torso) decorate(out, W, f, torso, look);
+    if (torso) decorate(out, W, F, f, torso, look);
     if (look.hair) drawHair(out, base, W, f, look.hair);
   }
   rc.putImageData(img, 0, 0);
@@ -476,8 +533,9 @@ export function composeZombie(scene: Phaser.Scene, look: BodyLook): string {
   const tex = scene.textures.addCanvas(key, cv)!;
   for (let f = 0; f < FRAMES; f++) tex.add(f, 0, f * F, 0, F, F);
   registerAnims(scene, key);
-  registerHeadFrames(scene, key, ZOMBIE_NECK_ROW);
+  registerHeadFrames(scene, key, spec.neck, F);
   widenByKey.set(key, look.widen);
+  baseByKey.set(key, spec);
   return key;
 }
 
@@ -487,6 +545,12 @@ const widenByKey = new Map<string, number>();
 
 /** 斷肢（ZombieGore）要知道的底圖資訊：每格的區域分類、軀幹位置、加寬前的中心 */
 export interface GoreBase {
+  /** 影格邊長、腳底列、脖子列 */
+  size: number;
+  foot: number;
+  neck: number;
+  /** 某格頭頂錨點的 x（加寬前座標）；倒地格為 null */
+  headX: (f: number) => number | null;
   /** 底圖某格某點（加寬前座標）的區域：0 透明、2 上衣、3 褲子，其他是皮膚、外框等 */
   region: (f: number, x: number, y: number) => number;
   torsoRight: (f: number) => number | null;
@@ -495,15 +559,17 @@ export interface GoreBase {
   center: (f: number) => number;
 }
 
-export const GORE_REGION = { none: Region.None, shirt: Region.Shirt, pants: Region.Pants } as const;
+export const GORE_REGION = { none: Region.None, outline: Region.Outline, shirt: Region.Shirt, pants: Region.Pants } as const;
 
 const goreBaseCache = new WeakMap<BaseData, GoreBase>();
 
-export function goreBase(scene: Phaser.Scene): GoreBase | null {
-  const base = loadBase(scene);
+/** key：合成好的霧屍貼圖（決定用哪張底圖） */
+export function goreBase(scene: Phaser.Scene, key: string): GoreBase | null {
+  const base = loadBase(scene, zombieBaseOf(key));
   if (!base) return null;
   const hit = goreBaseCache.get(base);
   if (hit) return hit;
+  const F = base.F;
   const at = (f: number, x: number, y: number) => (x < 0 || x >= F || y < 0 || y >= F ? Region.None : base.region[y * base.w + f * F + x]);
   // center／pantsTop 要掃整格，而斷肢每個像素都會問一次：每格只算一次、記起來（以前每次都重掃，切一張要上百毫秒）
   const centers = new Map<number, number>();
@@ -521,6 +587,10 @@ export function goreBase(scene: Phaser.Scene): GoreBase | null {
     return top;
   };
   const gb: GoreBase = {
+    size: F,
+    foot: base.spec.foot,
+    neck: base.spec.neck,
+    headX: (f) => base.spec.anchors[f]?.x ?? null,
     region: at,
     torsoRight: (f) => base.frames[f]?.torso?.r ?? null,
     pantsTop,
@@ -536,7 +606,7 @@ export function goreBase(scene: Phaser.Scene): GoreBase | null {
 
 /** 這張貼圖是用哪個加寬倍率合成的；不是合成出來的（zombie_basic 原圖）回傳 1，其他貼圖回傳 null */
 export function widenOf(key: string): number | null {
-  if (key === 'zombie_basic') return 1;
+  if (key === ZOMBIE_BASES.basic.key || key === ZOMBIE_BASES.brute.key) return 1;
   return widenByKey.get(key) ?? null;
 }
 
@@ -551,6 +621,7 @@ function skinFromBase(base: BaseData, i: number): [number, number, number] {
 }
 
 function frameCenter(base: BaseData, f: number): number {
+  const F = base.F;
   let l = F;
   let r = 0;
   for (let y = 0; y < F; y++) {
@@ -568,6 +639,7 @@ function frameCenter(base: BaseData, f: number): number {
 function decorate(
   out: Uint8ClampedArray,
   W: number,
+  F: number,
   f: number,
   torso: { l: number; r: number; top: number; bottom: number },
   look: BodyLook,
@@ -611,16 +683,9 @@ function decorate(
   }
 }
 
-/** 倒地格的頭部範圍（頭往後仰躺在左邊） */
-const LYING_HEADS: Record<number, { x0: number; y0: number; x1: number; y1: number }> = {
-  12: { x0: 7, y0: 19, x1: 23, y1: 29 },
-  13: { x0: 3, y0: 31, x1: 19, y1: 42 },
-  14: { x0: 2, y0: 44, x1: 16, y1: 53 },
-};
-
 /**
  * 長髮：把頭頂（臉以外）的像素染成髮色，再在後腦（原圖朝右，所以是左邊）往下垂一段。
- * 位置跟著 HEAD_ANCHORS，所以每格都對得上；倒地格只染後腦。
+ * 位置跟著底圖的頭頂錨點，所以每格都對得上；倒地格只染後腦。
  */
 function drawHair(
   out: Uint8ClampedArray,
@@ -629,6 +694,7 @@ function drawHair(
   f: number,
   hair: { style: HairStyle; color: number },
 ): void {
+  const F = base.F;
   const at = (x: number, y: number) => (y * W + f * F + x) * 4;
   const opaque = (x: number, y: number) => x >= 0 && x < F && y >= 0 && y < F && out[at(x, y) + 3] > 0;
   const set = (x: number, y: number, c: [number, number, number] | number) => {
@@ -641,9 +707,9 @@ function drawHair(
     out[i + 3] = 255;
   };
   const shade = (k: number) => ramp(hair.color, k);
-  const a = HEAD_ANCHORS[f];
+  const a = base.spec.anchors[f];
   if (!a) {
-    const b = LYING_HEADS[f];
+    const b = base.spec.lyingHeads[f];
     if (!b) return;
     const cut = b.x0 + (b.x1 - b.x0) * 0.42;
     for (let y = b.y0; y <= b.y1; y++) {

@@ -1,10 +1,10 @@
 import Phaser from 'phaser';
 import { GORE_REGION, goreBase, widenOf, type GoreBase } from './ZombieComposer';
 import { registerHeadFrames } from './ProceduralArt';
-import { ZOMBIE_NECK_ROW } from './sprites';
 
 /**
- * 霧屍斷肢的執行期貼圖：拿合成好的霧屍貼圖（zb_* 或 zombie_basic）再切一次。
+ * 霧屍斷肢的執行期貼圖：拿合成好的霧屍貼圖（zb_*、zombie_basic、zombie_brute）再切一次。
+ * 影格大小、脖子列跟著底圖（一般霧屍 64、巨屍 72，見 ZOMBIE_BASES）。
  *
  * - `${key}~arm`：斷手。站姿各格把伸在身體前面的前臂挖掉，斷口塗成暗紅。影格編號和原圖相同。
  * - `${key}~crawl`：斷腳爬行。拿倒地、撐起上身的兩格（21、22），切掉腿、左右翻轉成頭朝前，
@@ -19,7 +19,6 @@ import { ZOMBIE_NECK_ROW } from './sprites';
  * 每幀只用幾毫秒、或趁瀏覽器空檔慢慢切好；真的來不及時才在當下一次做完（同一個產生器接著跑，不會重做）。
  */
 
-const F = 64;
 /** 有伸出前臂、可以挖掉的影格：走路、攻擊、中槍後退、受擊、站起最後一格 */
 const ARM_FRAMES = new Set([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 15, 17, 25]);
 /** 爬行用的兩格（底圖的落地、撐起上身） */
@@ -46,7 +45,7 @@ export function crawlInfoOf(key: string): CrawlInfo | undefined {
 
 /** 能不能斷肢：只有一般人形霧屍的合成貼圖可以 */
 export function canDismember(scene: Phaser.Scene, key: string): boolean {
-  return widenOf(key) !== null && !!goreBase(scene) && scene.textures.get(key).has('25');
+  return widenOf(key) !== null && !!goreBase(scene, key) && scene.textures.get(key).has('25');
 }
 
 // ───────────────────────── 背景預切 ─────────────────────────
@@ -158,6 +157,7 @@ function pixels(scene: Phaser.Scene, key: string): ImageData {
 /** 合成時每格以身體中心水平加寬過；輸出的第 X 欄對回底圖的第幾欄 */
 function srcX(base: GoreBase, widen: number, f: number, X: number): number {
   if (Math.abs(widen - 1) < 0.01) return X;
+  const F = base.size;
   const cxm = base.center(f);
   const w = Math.round(F * widen);
   const dx = Math.round(cxm - cxm * widen);
@@ -165,11 +165,12 @@ function srcX(base: GoreBase, widen: number, f: number, X: number): number {
 }
 
 /** 底圖某格的前臂遮罩（加寬前座標）：軀幹右緣 +5 欄以外、脖子以下、褲子以上的非上衣像素，取 ≥ 8 點的連通塊 */
-const armCache = new WeakMap<Phaser.Textures.TextureManager, Map<number, Uint8Array>>();
-function armMask(scene: Phaser.Scene, base: GoreBase, f: number): Uint8Array | null {
+const armCache = new WeakMap<GoreBase, Map<number, Uint8Array>>();
+function armMask(base: GoreBase, f: number): Uint8Array | null {
   if (!ARM_FRAMES.has(f)) return null;
-  let cache = armCache.get(scene.textures);
-  if (!cache) armCache.set(scene.textures, (cache = new Map()));
+  const F = base.size;
+  let cache = armCache.get(base);
+  if (!cache) armCache.set(base, (cache = new Map()));
   const hit = cache.get(f);
   if (hit) return hit;
   const m = new Uint8Array(F * F);
@@ -177,7 +178,7 @@ function armMask(scene: Phaser.Scene, base: GoreBase, f: number): Uint8Array | n
   if (r !== null) {
     const pt = base.pantsTop(f);
     const cand = new Uint8Array(F * F);
-    for (let y = ZOMBIE_NECK_ROW + 2; y <= Math.min(F - 1, pt + 1); y++) {
+    for (let y = base.neck + 2; y <= Math.min(F - 1, pt + 1); y++) {
       for (let x = r + 5; x < F; x++) {
         const g = base.region(f, x, y);
         if (g !== GORE_REGION.none && g !== GORE_REGION.shirt) cand[y * F + x] = 1;
@@ -210,6 +211,20 @@ function armMask(scene: Phaser.Scene, base: GoreBase, f: number): Uint8Array | n
       }
       if (comp.length >= 8) for (const j of comp) m[j] = 1;
     }
+    // 手臂抬得比脖子列高時（巨屍駝背），上緣幾列沒一起挖掉會留下一條斷口色的細線：
+    // 臉的右邊（頭頂錨點 +8 欄以外）往上補 3 列，其他地方只補外框
+    const hx = base.headX(f);
+    for (let y = F - 1; y > 0; y--) {
+      for (let x = r + 5; x < F; x++) {
+        if (!m[y * F + x]) continue;
+        const pastFace = hx !== null && x > hx + 8;
+        for (let k = 1; k <= 3; k++) {
+          const g = base.region(f, x, y - k);
+          if (g === GORE_REGION.none || g === GORE_REGION.shirt || (!pastFace && g !== GORE_REGION.outline)) break;
+          m[(y - k) * F + x] = 1;
+        }
+      }
+    }
   }
   cache.set(f, m);
   return m;
@@ -229,7 +244,7 @@ function registerAnims(scene: Phaser.Scene, key: string, crawl: boolean): void {
 }
 
 /** 挖掉的像素旁邊還在的像素塗成斷口的暗紅 */
-function paintStump(d: Uint8ClampedArray, W: number, removed: Uint8Array, x0: number, x1: number): void {
+function paintStump(d: Uint8ClampedArray, W: number, F: number, removed: Uint8Array, x0: number, x1: number): void {
   for (let y = 0; y < F; y++) {
     for (let x = x0; x < x1; x++) {
       const i = y * W + x;
@@ -265,9 +280,10 @@ export function armlessTexture(scene: Phaser.Scene, key: string): string | null 
 function* buildArmless(scene: Phaser.Scene, key: string): Job {
   const out = `${key}~arm`;
   if (scene.textures.exists(out)) return out;
-  const base = goreBase(scene);
+  const base = goreBase(scene, key);
   const widen = widenOf(key);
   if (!base || widen === null) return null;
+  const F = base.size;
   const img = pixels(scene, key);
   const W = img.width;
   const frames = Math.floor(W / F);
@@ -277,7 +293,7 @@ function* buildArmless(scene: Phaser.Scene, key: string): Job {
   for (let f = 0; f < frames; f++) {
     // 每格的前臂遮罩第一次要算連通塊（之後所有外觀共用快取），前後各讓一次
     if (ARM_FRAMES.has(f)) yield;
-    const m = armMask(scene, base, f);
+    const m = armMask(base, f);
     if (!m) continue;
     yield;
     for (let y = 0; y < F; y++) {
@@ -290,7 +306,7 @@ function* buildArmless(scene: Phaser.Scene, key: string): Job {
         removed[i] = 1;
       }
     }
-    paintStump(d, W, removed, f * F, f * F + F);
+    paintStump(d, W, F, removed, f * F, f * F + F);
   }
   yield;
   // 分段執行期間可能已被別人做好（理論上不會，保險）
@@ -302,7 +318,7 @@ function* buildArmless(scene: Phaser.Scene, key: string): Job {
   const tex = scene.textures.addCanvas(out, cv)!;
   for (let f = 0; f < frames; f++) tex.add(f, 0, f * F, 0, F, F);
   registerAnims(scene, out, false);
-  registerHeadFrames(scene, out, ZOMBIE_NECK_ROW);
+  registerHeadFrames(scene, out, base.neck, F);
   return out;
 }
 
@@ -323,9 +339,10 @@ function* buildCrawl(scene: Phaser.Scene, key: string, armless: boolean): Job {
   if (!srcKey) return null;
   const out = `${srcKey}~crawl`;
   if (scene.textures.exists(out)) return out;
-  const base = goreBase(scene);
+  const base = goreBase(scene, key);
   const widen = widenOf(key);
   if (!base || widen === null) return null;
+  const F = base.size;
   const img = pixels(scene, srcKey);
   const W = img.width;
   const d = img.data;
@@ -420,9 +437,10 @@ export function goreParts(scene: Phaser.Scene, key: string): string | null {
 function* buildParts(scene: Phaser.Scene, key: string): Job {
   const out = `${key}~parts`;
   if (scene.textures.exists(out)) return out;
-  const base = goreBase(scene);
+  const base = goreBase(scene, key);
   const widen = widenOf(key);
   if (!base || widen === null) return null;
+  const F = base.size;
   const img = pixels(scene, key);
   const W = img.width;
   const d = img.data;
@@ -444,18 +462,20 @@ function* buildParts(scene: Phaser.Scene, key: string): Job {
     bx.b = Math.max(bx.b, y);
   };
   yield;
-  const m = armMask(scene, base, 0)!;
+  const m = armMask(base, 0)!;
   const pt = base.pantsTop(0);
   yield;
   // 以身體中心為軸加寬，中心位置不變
   const mid = Math.round(base.center(0));
+  // 頭的碎片只取頭頂錨點左右 11 欄內（巨屍駝背，脖子列以上還有上背和背包）
+  const hx = base.headX(0);
   for (let y = 0; y < F; y++) {
     for (let X = 0; X < F; X++) {
       if (d[(y * W + X) * 4 + 3] === 0) continue;
       const sx = srcX(base, widen, 0, X);
       if (sx >= 0 && sx < F && m[y * F + sx]) put(0, X, y);
       else if (y >= pt + 3 && X < mid) put(1, X, y);
-      else if (y < ZOMBIE_NECK_ROW) put(2, X, y);
+      else if (y < base.neck && (hx === null || Math.abs(sx - hx) <= 11)) put(2, X, y);
     }
   }
   yield;

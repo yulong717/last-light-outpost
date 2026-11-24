@@ -4,8 +4,8 @@ import { PLACEHOLDER_COLORS } from '../config';
 import { ENEMIES } from '../data/enemies';
 import { createBarricadeTexture, registerHeadFrames } from '../art/ProceduralArt';
 import { createBuildingTextures } from '../art/BuildingArt';
-import { createGearTexture } from '../art/ZombieComposer';
-import { ZOMBIE_NECK_ROW, ZOMBIE_SHEETS } from '../art/sprites';
+import { createGearTexture, zombieBaseOf } from '../art/ZombieComposer';
+import { ZOMBIE_SHEETS } from '../art/sprites';
 import { createFxTextures } from '../fx/FxTextures';
 import { createPropTextures } from '../art/PropArt';
 import { createHeroTextures } from '../art/HeroArt';
@@ -56,9 +56,10 @@ export class BootScene extends Phaser.Scene {
       }
     }
     this.load.spritesheet('player_reload', 'assets/sprites/player_reload.png', { frameWidth: 64, frameHeight: 64 });
-    // 霧屍：PixelLab 走路圖經程式換色、加寬、做出攻擊影格的三種變體
+    // 霧屍底圖：一般霧屍 64×64、巨屍 72×72（H3 生成的 26 格，見 ZOMBIE_BASES）；跑屍是舊的 15 格
     for (const key of ZOMBIE_SHEETS) {
-      this.load.spritesheet(key, `assets/sprites/${key}.png`, { frameWidth: 64, frameHeight: 64 });
+      const size = zombieBaseOf(key).key === key ? zombieBaseOf(key).size : 64;
+      this.load.spritesheet(key, `assets/sprites/${key}.png`, { frameWidth: size, frameHeight: size });
     }
   }
 
@@ -128,7 +129,9 @@ export class BootScene extends Phaser.Scene {
           frameRate: 16,
         });
       }
-      registerHeadFrames(this, key, ZOMBIE_NECK_ROW);
+      const base = zombieBaseOf(key);
+      if (base.key === key) registerHeadFrames(this, key, base.neck, base.size);
+      else registerHeadFrames(this, key, 22);
     }
     this.scene.start('Menu');
   }
