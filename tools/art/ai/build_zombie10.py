@@ -24,6 +24,7 @@ from __future__ import annotations
 import argparse
 import json
 import shutil
+from collections import Counter
 import subprocess
 import sys
 from pathlib import Path
@@ -299,24 +300,24 @@ def region_islands(img: Image.Image, max_px: int = 6) -> tuple[Image.Image, int]
             around = [r for r in reg[ring] if r not in ("outline", "other")]
             if not around:
                 continue
-            other = max(set(around), key=around.count)
+            other = Counter(around).most_common(1)[0][0]
             if other == name or around.count(other) < 0.6 * len(around):
                 continue
             cols = [tuple(c) for c in a[ring & (reg == other)][:, :3]]
             # per pixel: the most common colour of `other` among its 8 neighbours (keeps shading), else overall
-            glob = max(set(cols), key=cols.count)
+            glob = Counter(cols).most_common(1)[0][0]
             for y, x in zip(*np.where(m)):
                 nb = [tuple(a[yy, xx, :3]) for yy in range(y - 1, y + 2) for xx in range(x - 1, x + 2)
                       if 0 <= yy < a.shape[0] and 0 <= xx < a.shape[1] and reg[yy, xx] == other]
-                a[y, x, :3] = max(set(nb), key=nb.count) if nb else glob
+                a[y, x, :3] = Counter(nb).most_common(1)[0][0] if nb else glob
             reg[m] = other
             fixed += int(m.sum())
     return Image.fromarray(a, "RGBA"), fixed
 
 
-def walk_frames(s: int, rp, key: Image.Image, key_h8: int):
-    d = RAW / f"walk_s{s}"
-    frames = sorted(d.glob("zombie10_walk_*.png"))
+def walk_frames(s: int, rp, key: Image.Image, key_h8: int, d: Path | None = None, pattern: str = "zombie10_walk_*.png"):
+    d = d or RAW / f"walk_s{s}"
+    frames = sorted(d.glob(pattern))
     info = gait_pick(frames)
     picked = [frames[i % len(frames)] for i in info["picked"]]
     k0 = key_magenta(Image.open(frames[0]))

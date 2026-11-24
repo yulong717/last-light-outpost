@@ -1,0 +1,378 @@
+{
+ "A_s1": {
+  "seconds": 42.6,
+  "vram_peak_mib": 15556,
+  "period": 27,
+  "out_spread": [
+   31,
+   25,
+   14,
+   21,
+   32,
+   25,
+   15,
+   20
+  ],
+  "heights": [
+   56,
+   57,
+   57,
+   57,
+   57,
+   57,
+   57,
+   57
+  ],
+  "head_dy": [
+   0,
+   -1,
+   -1,
+   -1,
+   -1,
+   -1,
+   -1,
+   -1
+  ],
+  "colours": [
+   27,
+   16
+  ],
+  "region_px_fixed": 240,
+  "outside_palette": 0,
+  "pass": {
+   "head": true,
+   "gait": true,
+   "region": true
+  },
+  "gait_score": 14
+ },
+ "A_s2": {
+  "seconds": 30.4,
+  "vram_peak_mib": 15332,
+  "period": 17,
+  "out_spread": [
+   21,
+   18,
+   12,
+   20,
+   31,
+   26,
+   23,
+   23
+  ],
+  "heights": [
+   57,
+   57,
+   57,
+   57,
+   56,
+   57,
+   57,
+   57
+  ],
+  "head_dy": [
+   -1,
+   -1,
+   -1,
+   -1,
+   0,
+   -1,
+   -1,
+   -1
+  ],
+  "colours": [
+   26,
+   16
+  ],
+  "region_px_fixed": 256,
+  "outside_palette": 0,
+  "pass": {
+   "head": true,
+   "gait": false,
+   "region": true
+  },
+  "gait_score": -23
+ },
+ "A_s3": {
+  "seconds": 30.5,
+  "vram_peak_mib": 15332,
+  "period": 32,
+  "out_spread": [
+   30,
+   23,
+   14,
+   22,
+   32,
+   23,
+   13,
+   24
+  ],
+  "heights": [
+   56,
+   57,
+   57,
+   57,
+   56,
+   57,
+   57,
+   57
+  ],
+  "head_dy": [
+   0,
+   -1,
+   -1,
+   -1,
+   0,
+   -1,
+   -1,
+   -1
+  ],
+  "colours": [
+   27,
+   16
+  ],
+  "region_px_fixed": 287,
+  "outside_palette": 0,
+  "pass": {
+   "head": true,
+   "gait": true,
+   "region": true
+  },
+  "gait_score": 13
+ },
+ "A_s4": {
+  "seconds": 30.6,
+  "vram_peak_mib": 15332,
+  "period": 34,
+  "out_spread": [
+   31,
+   26,
+   17,
+   18,
+   35,
+   28,
+   17,
+   31
+  ],
+  "heights": [
+   56,
+   56,
+   56,
+   56,
+   56,
+   56,
+   56,
+   56
+  ],
+  "head_dy": [
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0
+  ],
+  "colours": [
+   26,
+   16
+  ],
+  "region_px_fixed": 235,
+  "outside_palette": 0,
+  "pass": {
+   "head": true,
+   "gait": false,
+   "region": true
+  },
+  "gait_score": 10
+ },
+ "D_s1": {
+  "seconds": 20.4,
+  "vram_peak_mib": 15508,
+  "period": 36,
+  "out_spread": [
+   34,
+   21,
+   19,
+   28,
+   34,
+   25,
+   15,
+   29
+  ],
+  "heights": [
+   57,
+   56,
+   57,
+   57,
+   57,
+   56,
+   56,
+   56
+  ],
+  "head_dy": [
+   -1,
+   0,
+   -1,
+   -1,
+   -1,
+   0,
+   0,
+   0
+  ],
+  "colours": [
+   25,
+   16
+  ],
+  "region_px_fixed": 234,
+  "outside_palette": 0,
+  "pass": {
+   "head": true,
+   "gait": false,
+   "region": true
+  },
+  "gait_score": 11
+ },
+ "D_s2": {
+  "seconds": 18.2,
+  "vram_peak_mib": 15332,
+  "period": 25,
+  "out_spread": [
+   32,
+   26,
+   20,
+   20,
+   19,
+   18,
+   15,
+   22
+  ],
+  "heights": [
+   57,
+   57,
+   56,
+   56,
+   57,
+   56,
+   56,
+   56
+  ],
+  "head_dy": [
+   -1,
+   -1,
+   0,
+   0,
+   -1,
+   0,
+   0,
+   0
+  ],
+  "colours": [
+   26,
+   16
+  ],
+  "region_px_fixed": 244,
+  "outside_palette": 0,
+  "pass": {
+   "head": true,
+   "gait": false,
+   "region": true
+  },
+  "gait_score": -19
+ },
+ "D_s3": {
+  "seconds": 18.2,
+  "vram_peak_mib": 15332,
+  "period": 16,
+  "out_spread": [
+   24,
+   19,
+   15,
+   24,
+   31,
+   29,
+   24,
+   24
+  ],
+  "heights": [
+   56,
+   56,
+   56,
+   56,
+   56,
+   56,
+   56,
+   56
+  ],
+  "head_dy": [
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0
+  ],
+  "colours": [
+   25,
+   16
+  ],
+  "region_px_fixed": 188,
+  "outside_palette": 0,
+  "pass": {
+   "head": true,
+   "gait": false,
+   "region": true
+  },
+  "gait_score": -16
+ },
+ "D_s4": {
+  "seconds": 18.2,
+  "vram_peak_mib": 15332,
+  "period": 16,
+  "out_spread": [
+   17,
+   17,
+   15,
+   25,
+   33,
+   25,
+   24,
+   24
+  ],
+  "heights": [
+   56,
+   56,
+   56,
+   56,
+   57,
+   56,
+   56,
+   56
+  ],
+  "head_dy": [
+   0,
+   0,
+   0,
+   0,
+   -1,
+   0,
+   0,
+   0
+  ],
+  "colours": [
+   24,
+   16
+  ],
+  "region_px_fixed": 275,
+  "outside_palette": 0,
+  "pass": {
+   "head": true,
+   "gait": false,
+   "region": true
+  },
+  "gait_score": -32
+ }
+}
