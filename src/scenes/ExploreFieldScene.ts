@@ -38,7 +38,7 @@ import { PropSystem, type Interaction } from '../scenery/PropSystem';
 import { fieldScenery } from '../scenery/locations';
 import type { PlacedProp, SceneryResult } from '../scenery/SceneryBuilder';
 import type { PrologueStage, StageHint } from '../data/prologue';
-import { applyHiRes, setViewZoom } from '../render/RenderScale';
+import { addUiCamera, setViewZoom, splitUiObjects } from '../render/RenderScale';
 
 export interface FieldResult {
   /** clean：潛入全程沒被發現；win：達成目標；failed：保護目標陣亡；down：主角倒下 */
@@ -59,9 +59,13 @@ const FIELD_W = 960;
 /** 單軸模式鏡頭拉近的倍率：上下不留大片空白，人和場景放大 */
 const SINGLE_ZOOM = 1.5;
 /** 單軸模式畫面中心的 y（世界座標）：上緣切在天花板下、下緣留一點地板 */
-const SINGLE_VIEW_CY = 208;
-/** HUD、提示、畫面邊緣特效：畫在不拉近的鏡頭上（scrollFactor 0 且 depth ≥ 這個值） */
-const UI_DEPTH = 85;
+const SINGLE_VIEW_CY = 226;
+/**
+ * 單軸模式的縱深壓縮：整片背景（牆、立面、天空）往下推，後牆貼近走道，
+ * 前面再加一排近景剪影——像窄走廊、窄巷，和 2.5D 的寬闊場地分得出來。
+ */
+const SINGLE_DEPTH_SHIFT = 46;
+
 /** 潛入：霧屍基本視野 */
 const VISION = 120;
 const VISION_DY = 30;
@@ -117,6 +121,8 @@ export class ExploreFieldScene extends Phaser.Scene {
   private exitX = FIELD_W - 34;
   /** 單軸：所有人都在同一條線上 */
   private single = false;
+  /** 牆腳（背景地平線）的 y：單軸模式往下推 SINGLE_DEPTH_SHIFT */
+  private groundY = GROUND_Y;
   private walkDot?: Phaser.GameObjects.Rectangle;
   private scenery!: SceneryResult;
   private props!: PropSystem;
@@ -194,6 +200,7 @@ export class ExploreFieldScene extends Phaser.Scene {
     this.worldW = this.stage?.worldW ?? (this.spec.walk ? WALK.worldW : FIELD_W);
     this.exitX = this.worldW - 34;
     this.single = this.spec.axis === 'single' || !!this.spec.walk;
+    this.groundY = GROUND_Y + (this.single ? SINGLE_DEPTH_SHIFT : 0);
     setSingleLane(this.single);
     // 單軸只在這個場景有效：結束就還原，夜晚防守照舊是 2.5D
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => setSingleLane(false));
@@ -218,8 +225,7 @@ export class ExploreFieldScene extends Phaser.Scene {
       setViewZoom(cam, SINGLE_ZOOM);
       cam.startFollow(this.player.sprite, true, 0.12, 1, 0, SINGLE_LANE_Y - SINGLE_VIEW_CY);
       cam.setDeadzone(100, 0);
-      this.uiCam = this.cameras.add(0, 0, cam.width, cam.height);
-      applyHiRes(this.uiCam);
+      this.uiCam = addUiCamera(this);
       this.uiCam.fadeIn(250, 0, 0, 0);
     } else {
       cam.startFollow(this.player.sprite, true, 0.12, 0);
@@ -287,12 +293,17 @@ export class ExploreFieldScene extends Phaser.Scene {
   private drawBackdrop(): void {
     const keep: [number, number][] = [[0, 110]];
     if (this.spec.goal === 'reach') keep.push([this.exitX - 50, this.worldW]);
+    const before = this.children.list.length;
     this.scenery = fieldScenery(this, this.exp.zone.id, this.eventId, this.worldW, keep, this.spec.walk ? WALK.extras : 4);
-    if (this.single) this.clearLane();
+    if (this.single) {
+      this.compressDepth(before);
+      this.clearLane();
+      this.drawForeground();
+    }
     if (this.spec.walk) this.drawWalkSign();
     // 出口（潛入目標）：一扇亮著綠光的門
     else if (this.spec.goal === 'reach') {
-      const y = GROUND_Y + 1;
+      const y = this.groundY + 1;
       // 頂樓的樓梯間小屋本身就有門
       if (this.stage?.id !== 'roof') this.add.image(this.exitX, y, propKey('door'), 1).setOrigin(0.5, 1).setDepth(5);
       const glow = this.add.rectangle(this.exitX, y - 24, 30, 52, 0x9ad17a, 0.14).setDepth(6);
@@ -302,8 +313,67 @@ export class ExploreFieldScene extends Phaser.Scene {
     // 序章：牆上漆著樓層的大字
     if (this.stage && this.stage.id !== 'roof') {
       // 漆在綠色牆裙上（鏡頭拉近後上方會被 HUD 擋住）
-      pixelText(this, 190, GROUND_Y - 17, this.stage.floor, 14, '#d8d0b8').setOrigin(0.5).setDepth(-50).setAlpha(0.6);
+      pixelText(this, 30, this.groundY - 17, this.stage.floor, 14, '#d8d0b8').setOrigin(0.5).setDepth(-50).setAlpha(0.6);
     }
+  }
+
+  /** 單軸：背景整片往下推，擺件跟著移（貼牆的跟牆走、地上的排到走道正後方） */
+  private compressDepth(from: number): void {
+    const dy = SINGLE_DEPTH_SHIFT;
+    const list = this.children.list;
+    for (let i = from; i < list.length; i++) {
+      const o = list[i] as Phaser.GameObjects.GameObject & { y?: number };
+      if (typeof o.y === 'number') o.y += dy;
+    }
+    for (const pr of this.scenery.props) {
+      if (pr.wall) pr.y += dy;
+      // 地上的擺件：排在牆腳和走道之間那一窄條
+      else pr.y = Math.min(SINGLE_LANE_Y - 8, Math.max(this.groundY + 14, pr.y + dy));
+    }
+  }
+
+  /**
+   * 單軸的近景：走道前方一排暗色剪影（課桌椅、欄杆、雜物），比走道捲得快一點，
+   * 畫在角色腳下方，不擋身體。
+   */
+  private drawForeground(): void {
+    const key = `fg-${this.eventId ?? this.exp.zone.id}-${Math.floor(Math.random() * 1e9)}`;
+    const sf = 1.18;
+    const w = Math.ceil(this.worldW * sf + GAME_WIDTH);
+    const top = SINGLE_LANE_Y + 22;
+    const h = GAME_HEIGHT - top;
+    const g = this.make.graphics({}, false);
+    g.fillStyle(0x07080a, 1).fillRect(0, 14, w, h);
+    g.fillStyle(0x07080a, 0.6).fillRect(0, 10, w, 4);
+    const indoor = this.scenery.setting === 'int';
+    for (let x = this.rng.int(0, 60); x < w; x += this.rng.int(70, 150)) {
+      const kind = this.rng.int(0, 2);
+      if (indoor) {
+        if (kind === 0) {
+          // 課桌（桌面＋桌腳）
+          g.fillStyle(0x0c0e11, 1).fillRect(x, 0, 46, 5).fillRect(x + 4, 5, 4, 14).fillRect(x + 38, 5, 4, 14);
+        } else if (kind === 1) {
+          // 椅背
+          g.fillStyle(0x0c0e11, 1).fillRect(x, 2, 22, 4).fillRect(x + 2, 6, 3, 12).fillRect(x + 17, 6, 3, 12);
+        } else {
+          // 倒下的紙箱、書包
+          g.fillStyle(0x0b0c0e, 1).fillRect(x, 6, 30, 10);
+        }
+      } else if (kind === 0) {
+        // 欄杆柱
+        g.fillStyle(0x0c0e11, 1).fillRect(x, -6, 5, 22).fillRect(x - 30, -4, 70, 3);
+      } else if (kind === 1) {
+        // 垃圾袋
+        g.fillStyle(0x0b0c0e, 1).fillEllipse(x + 14, 12, 34, 20);
+      } else {
+        // 路緣、碎石
+        g.fillStyle(0x0c0e11, 1).fillRect(x, 8, 52, 8);
+      }
+    }
+    g.generateTexture(key, w, h + 6);
+    g.destroy();
+    this.add.image(0, top - 6, key).setOrigin(0).setScrollFactor(sf, 1).setDepth(depthForY(GAME_HEIGHT) + 5);
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.textures.exists(key) && this.textures.remove(key));
   }
 
   /**
@@ -313,7 +383,7 @@ export class ExploreFieldScene extends Phaser.Scene {
   private clearLane(): void {
     for (const pr of this.scenery.props) {
       if (pr.wall) continue;
-      if (Math.abs(pr.y - SINGLE_LANE_Y) < 26) pr.y = LANE_TOP + 4 + Math.round(this.rng.next() * 8);
+      if (Math.abs(pr.y - SINGLE_LANE_Y) < 8) pr.y = SINGLE_LANE_Y - 8;
     }
     const g = this.add.graphics().setDepth(2);
     g.fillStyle(0x000000, 0.16).fillRect(0, SINGLE_LANE_Y - 6, this.worldW, 12);
@@ -979,14 +1049,7 @@ export class ExploreFieldScene extends Phaser.Scene {
 
   /** 單軸模式：HUD 類物件只給不縮放的鏡頭畫，其他（世界、背景、霧）只給拉近的主鏡頭畫 */
   private splitCameras(): void {
-    const ui = this.uiCam;
-    if (!ui) return;
-    const main = this.cameras.main;
-    for (const o of this.children.list) {
-      const g = o as Phaser.GameObjects.GameObject & { scrollFactorX?: number; depth?: number };
-      const isUi = g.scrollFactorX === 0 && (g.depth ?? 0) >= UI_DEPTH;
-      g.cameraFilter = isUi ? main.id : ui.id;
-    }
+    if (this.uiCam) splitUiObjects(this, this.uiCam);
   }
 
   private context(): ZombieContext {

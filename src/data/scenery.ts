@@ -8,7 +8,7 @@
 export type Setting = 'ext' | 'int';
 
 /** 室外的主建築立面 */
-export type FacadeStyle = 'gas' | 'market' | 'homes' | 'hospital' | 'police' | 'military' | 'street' | 'school' | 'parking' | 'rooftop';
+export type FacadeStyle = 'gas' | 'market' | 'homes' | 'hospital' | 'police' | 'military' | 'street' | 'school' | 'parking' | 'rooftop' | 'alley';
 /** 室內的牆面風格 */
 export type InteriorStyle = 'garage' | 'store' | 'house' | 'ward' | 'precinct' | 'bunker' | 'warehouse' | 'lobby' | 'classroom';
 export type FarStyle = 'city' | 'hills' | 'industrial';
@@ -549,11 +549,18 @@ export interface OutpostMapDef {
   /** 特色（選單上的小字） */
   perks: string[];
   theme: string;
+  /** 覆寫主題的建築立面 */
+  facade?: FacadeStyle;
   /** 戰場上的固定擺件（x 是世界座標，戰場寬 1280；建築槽位在 120～400，別擋到） */
   pieces: Piece[];
   /** 每天白天重新補上的油桶與物資箱位置 */
   barrels: number[];
   crates: number[];
+  /**
+   * 單軸據點（窄巷）：大家都在同一條線上，鏡頭拉近；只有一個入口。
+   * waves：夜晚霧屍數量倍率；runners：平民霧屍換成跑者的比例；slots：開放的建築槽位（不填 = 全部）。
+   */
+  single?: { waves: number; runners: number; slots: string[] };
 }
 
 export const OUTPOST_MAPS: OutpostMapDef[] = [
@@ -609,6 +616,24 @@ export const OUTPOST_MAPS: OutpostMapDef[] = [
     ],
     barrels: [620],
     crates: [540, 900, 1120],
+  },
+  {
+    id: 'alley',
+    name: '後巷鐵捲門',
+    blurb: '兩棟樓中間的窄巷，盡頭是一扇拉下一半的鐵捲門。只有一個入口，霧屍只能排成一列擠進來。',
+    perks: ['單軸：只有一個入口，好守', '霧屍量多、跑得快，打起來爽快'],
+    theme: 'street',
+    facade: 'alley',
+    pieces: [
+      { prop: 'dumpster', x: 620, lane: 'back' },
+      { prop: 'trashbags', x: 700, lane: 'back' },
+      { prop: 'trashbags', x: 980, lane: 'back' },
+      { prop: 'lamppost', x: 520, lane: 'wall' },
+      { prop: 'lamppost', x: 1000, lane: 'wall' },
+    ],
+    barrels: [820],
+    crates: [],
+    single: { waves: 1.45, runners: 0.35, slots: ['tower-far', 'tower-near', 'front-2', 'mid-2'] },
   },
 ];
 
