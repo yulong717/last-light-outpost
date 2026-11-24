@@ -39,7 +39,9 @@ export type ProfessionAbility =
   /** 每隔一段時間替附近霧屍回血 */
   | 'heal_aura'
   /** 血量低於一半時暴走：更快、出手更頻繁 */
-  | 'enrage';
+  | 'enrage'
+  /** 狂奔屍：靠近時停下嘶吼蓄力，接著直線衝刺撞上來（見 SPRINT） */
+  | 'sprint';
 
 /** 身體種類：人形霧屍，或三種動物（各有自己的圖與行為） */
 export type BodyKind = 'human' | 'dog' | 'crow' | 'bear';
@@ -129,7 +131,7 @@ export const PROFESSIONS: Record<string, ProfessionDef> = {
     name: '平民霧屍',
     blurb: '最常見的屍群，數量就是牠們的武器。',
     hp: 30,
-    speed: 18,
+    speed: 23,
     damage: 5,
     attackInterval: 1.0,
     scale: 1,
@@ -148,7 +150,7 @@ export const PROFESSIONS: Record<string, ProfessionDef> = {
     name: '慢跑者',
     blurb: '跑得飛快但很脆，別讓牠們摸到你身邊。',
     hp: 18,
-    speed: 44,
+    speed: 50,
     damage: 3,
     attackInterval: 0.6,
     scale: 0.9,
@@ -167,12 +169,41 @@ export const PROFESSIONS: Record<string, ProfessionDef> = {
     threat: 1.5,
     scrap: 3,
   },
+  sprinter: {
+    id: 'sprinter',
+    name: '狂奔屍',
+    blurb: '聽到尖嘯就要注意！牠會蹲低蓄力後直線衝過來，趁蓄力時爆頭或重擊可以打斷。',
+    hp: 34,
+    speed: 26,
+    damage: 7,
+    attackInterval: 0.8,
+    scale: 0.98,
+    widen: 0.94,
+    ability: 'sprint',
+    hats: { none: 6, beanie: 1, bandana: 1 },
+    look: {
+      skins: [
+        [350, 1.5, 0.9],
+        [10, 1.3, 0.85],
+      ],
+      shirts: [0x8a1e1e, 0x5a1a1a, 0x2b2b2b, 0x6a3a2a],
+      pants: [0x202020, 0x2a2a35],
+      shirt: 'tank',
+      blood: [2, 3],
+    },
+    femaleChance: 0.4,
+    builds: { thin: 5, average: 3 },
+    unlockDay: 1,
+    weight: 2.5,
+    threat: 2.5,
+    scrap: 4,
+  },
   brute: {
     id: 'brute',
     name: '腫脹霧屍',
     blurb: '皮厚血多，倒下時會爆出腐液，離牠遠一點再開槍。',
     hp: 140,
-    speed: 10,
+    speed: 13,
     damage: 15,
     attackInterval: 1.6,
     scale: 1.3,
@@ -205,7 +236,7 @@ export const PROFESSIONS: Record<string, ProfessionDef> = {
     name: '工地霧屍',
     blurb: '戴工程帽擋爆頭，手上的鐵鎚拆路障特別快。',
     hp: 45,
-    speed: 16,
+    speed: 20,
     damage: 7,
     attackInterval: 1.2,
     scale: 1.02,
@@ -225,7 +256,7 @@ export const PROFESSIONS: Record<string, ProfessionDef> = {
     name: '警察霧屍',
     blurb: '防彈背心讓打身體幾乎沒用，瞄頭！鎮暴頭盔要先打飛。',
     hp: 40,
-    speed: 20,
+    speed: 23,
     damage: 6,
     attackInterval: 1.0,
     scale: 1,
@@ -244,7 +275,7 @@ export const PROFESSIONS: Record<string, ProfessionDef> = {
     name: '護理師霧屍',
     blurb: '會替身邊的霧屍「療傷」，優先解決牠。',
     hp: 28,
-    speed: 22,
+    speed: 25,
     damage: 4,
     attackInterval: 0.9,
     scale: 0.96,
@@ -264,7 +295,7 @@ export const PROFESSIONS: Record<string, ProfessionDef> = {
     name: '消防員霧屍',
     blurb: '厚重防火衣減傷又不怕火，打不退、推不動。',
     hp: 90,
-    speed: 14,
+    speed: 17,
     damage: 8,
     attackInterval: 1.3,
     scale: 1.08,
@@ -288,7 +319,7 @@ export const PROFESSIONS: Record<string, ProfessionDef> = {
     name: '囚犯霧屍',
     blurb: '受傷過半就會暴走，衝刺速度與攻速大增。',
     hp: 50,
-    speed: 20,
+    speed: 23,
     damage: 8,
     attackInterval: 0.9,
     scale: 1.02,
@@ -307,7 +338,7 @@ export const PROFESSIONS: Record<string, ProfessionDef> = {
     name: '士兵霧屍',
     blurb: '頭盔加防彈衣的重裝屍。準備穿甲彈或近戰重擊。',
     hp: 80,
-    speed: 16,
+    speed: 19,
     damage: 10,
     attackInterval: 1.1,
     scale: 1.05,
@@ -408,6 +439,14 @@ Object.assign(PROFESSIONS, ANIMALS);
 export const CROW = { cruiseAlt: 70, strikeAlt: 20, diveSpeed: 110, retreatTime: 1.1 };
 /** 屍犬撲咬：距離、冷卻、速度、傷害倍率 */
 export const POUNCE = { range: 56, cooldown: 2.2, speed: 170, time: 0.32, damageMul: 1.5, aggro: 200 };
+/**
+ * 狂奔屍的衝刺：
+ * - range：目標（主角／夥伴／路障）進入這個距離就開始蓄力
+ * - windup：嘶吼＋蹲低蓄力的秒數（玩家的反應時間；期間被硬直會被打斷）
+ * - speed／maxTime：衝刺速度（像素／秒）與最長時間；方向在蓄力結束那一刻鎖定，可以閃開
+ * - impactMul：撞上的第一下傷害倍率；recover：撞完喘氣的秒數；cooldown：下次衝刺前的冷卻
+ */
+export const SPRINT = { range: 210, minRange: 44, windup: 0.85, speed: 200, maxTime: 1.2, impactMul: 1.8, recover: 0.9, cooldown: 3.5 };
 /** 屍熊衝撞：離擋路線多遠開始衝、速度倍率、第一下傷害倍率 */
 export const CHARGE = { from: 130, speedMul: 2.4, impactMul: 2 };
 
@@ -554,6 +593,11 @@ export const HEAL_AURA = { interval: 3, radius: 64, amount: 10 };
 
 /** 囚犯暴走 */
 export const ENRAGE = { below: 0.5, speedMul: 1.8, attackIntervalMul: 0.6, tint: 0xff8a7a };
+
+/** 天數越大霧屍走得越快：每天 +3%，最多 +30%（狂奔屍的衝刺速度不受影響，維持可反應） */
+export function paceMul(day: number): number {
+  return Math.min(1.3, 1 + 0.03 * Math.max(0, day - 1));
+}
 
 /** 每隻霧屍得到變異的機率：依天數上升 */
 export function mutationChance(day: number): number {
