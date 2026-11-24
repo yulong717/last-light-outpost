@@ -64,7 +64,10 @@ class AudioManagerImpl {
   private intensity = 0;
   private cricketTimer: number | null = null;
   private listeners: ((s: AudioSettings) => void)[] = [];
-  private warmQueue: string[] = [];
+  private warmQueue: [string, number][] = [];
+  private warming = false;
+  /** 換成真實錄音的音效：不再用程式生成 */
+  private overridden = new Set<string>();
 
   constructor() {
     this.loadSettings();
@@ -165,8 +168,14 @@ class AudioManagerImpl {
     };
     Object.values(this.buses).forEach((g) => g.connect(this.master));
     this.applyVolumes();
-    // 解鎖後利用空檔預先算好所有音效，之後第一次播放就不會卡
-    this.warmQueue = Object.keys(SFX);
+    // 解鎖後利用空檔預先算好所有音效，之後第一次播放就不會卡。
+    // 戰鬥中一定會用到的（揮擊、命中、死亡、槍聲）排前面；一次只算一個變體，不會一口氣卡住好幾幀
+    const names = Object.keys(SFX);
+    const hot = (n: string) => (/^(melee|flesh|zombie_|headshot|shot|barricade_|ui)/.test(n) ? 0 : 1);
+    names.sort((a, b) => hot(a) - hot(b));
+    // 先把每種音效的第一個變體算好，再回頭補其他變體
+    const maxV = Math.max(...names.map((n) => SFX[n].variants));
+    for (let v = 0; v < maxV; v++) for (const n of names) if (v < SFX[n].variants) this.warmQueue.push([n, v]);
     this.warmUp();
     this.loadOverrides();
     if (this.mood !== 'off') this.startMood(this.mood);
@@ -174,10 +183,24 @@ class AudioManagerImpl {
   }
 
   private warmUp(): void {
-    const name = this.warmQueue.shift();
-    if (!name) return;
-    this.getBuffers(name);
-    setTimeout(() => this.warmUp(), 0);
+    if (this.warming) return;
+    this.warming = true;
+    const ric = (window as unknown as { requestIdleCallback?: (cb: (d: { timeRemaining(): number }) => void, o?: { timeout: number }) => number }).requestIdleCallback;
+    const step = (budget: number) => {
+      const end = performance.now() + budget;
+      // 至少算一個，之後在預算內能算幾個算幾個
+      do {
+        const next = this.warmQueue.shift();
+        if (!next) {
+          this.warming = false;
+          return;
+        }
+        this.renderVariant(next[0], next[1]);
+      } while (performance.now() < end);
+      if (ric) ric((d) => step(Math.max(1, d.timeRemaining() - 2)), { timeout: 200 });
+      else setTimeout(() => step(4), 20);
+    };
+    step(4);
   }
 
   private loadOverrides(): void {
@@ -186,7 +209,10 @@ class AudioManagerImpl {
     for (const [name, urls] of Object.entries(SAMPLE_OVERRIDES)) {
       if (!urls?.length) continue;
       Promise.all(urls.map((u) => fetch(u).then((r) => r.arrayBuffer()).then((ab) => ctx.decodeAudioData(ab))))
-        .then((bufs) => this.buffers.set(name, bufs))
+        .then((bufs) => {
+          this.buffers.set(name, bufs);
+          this.overridden.add(name);
+        })
         .catch(() => {
           // 載入失敗就繼續用程式生成的版本
         });
@@ -201,16 +227,25 @@ class AudioManagerImpl {
     return buf;
   }
 
-  private getBuffers(name: string): AudioBuffer[] {
+  /** 算出某個音效的第 v 個變體（已經算過就直接回傳） */
+  private renderVariant(name: string, v: number): AudioBuffer | undefined {
+    const def = SFX[name];
+    if (!def || !this.ctx) return undefined;
     let list = this.buffers.get(name);
-    if (!list) {
-      const def = SFX[name];
-      const fs = this.ctx!.sampleRate;
-      list = [];
-      for (let v = 0; v < def.variants; v++) list.push(this.toBuffer(renderSfx(name, v, fs), fs));
-      this.buffers.set(name, list);
-    }
-    return list;
+    if (!list) this.buffers.set(name, (list = []));
+    if (this.overridden.has(name)) return list[v % list.length];
+    if (!list[v]) list[v] = this.toBuffer(renderSfx(name, v, this.ctx.sampleRate), this.ctx.sampleRate);
+    return list[v];
+  }
+
+  /**
+   * 挑一個已經算好的變體。還沒預熱到的音效只當場算一個變體（以前會一次算完全部變體，
+   * 打擊瞬間第一次播某個音效時手機會頓一下），其他變體交給背景慢慢補。
+   */
+  private pickBuffer(name: string): AudioBuffer | undefined {
+    const ready = (this.buffers.get(name) ?? []).filter(Boolean);
+    if (ready.length) return ready[Math.floor(Math.random() * ready.length)];
+    return this.renderVariant(name, Math.floor(Math.random() * SFX[name].variants));
   }
 
   // ── 播放音效 ─────────────────────────────────────────
@@ -232,9 +267,10 @@ class AudioManagerImpl {
     if (nowMs - (this.lastPlay.get(name) ?? -1e9) < def.minGapMs) return;
     this.lastPlay.set(name, nowMs);
 
-    const list = this.getBuffers(name);
+    const buffer = this.pickBuffer(name);
+    if (!buffer) return;
     const src = ctx.createBufferSource();
-    src.buffer = list[Math.floor(Math.random() * list.length)];
+    src.buffer = buffer;
     const semis = (Math.random() * 2 - 1) * def.pitch + (opts.semitones ?? 0);
     src.playbackRate.value = 2 ** (semis / 12);
 

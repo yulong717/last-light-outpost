@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { composeZombie, type BodyLook } from '../art/ZombieComposer';
+import { warmGore } from '../art/ZombieGore';
 import { ANIMAL_PALETTES, composeAnimal } from '../art/AnimalArt';
 import { Zombie } from '../entities/Zombie';
 import type { EnemyDef } from '../data/enemies';
@@ -132,7 +133,7 @@ export function prewarmLooks(scene: Phaser.Scene, professionIds: Iterable<string
       if (female && (p.femaleChance ?? 0.45) <= 0) continue;
       // 女性比例低的職業先合成少一點，其餘夜裡再補
       const want = female ? Math.ceil(LOOKS_PER_PROFESSION * Math.min(1, (p.femaleChance ?? 0.45) * 2)) : LOOKS_PER_PROFESSION;
-      for (let i = lookPool.get(`${id}:${female ? 'f' : 'm'}`)?.length ?? 0; i < want; i++) rollLook(scene, p, female);
+      for (let i = lookPool.get(`${id}:${female ? 'f' : 'm'}`)?.length ?? 0; i < want; i++) warmGore(scene, rollLook(scene, p, female));
     }
   }
 }

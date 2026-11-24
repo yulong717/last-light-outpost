@@ -6,7 +6,7 @@ import { ANIMAL_FRAMES } from '../art/AnimalArt';
 import { Fx } from '../fx/Fx';
 import { ZOMBIE_NECK_ROW } from '../art/sprites';
 import { FOOT_ROW, GEAR_TEXTURE, HAT_ART, HEAD_ANCHORS, REACT_FRAMES } from '../art/ZombieComposer';
-import { armlessTexture, canDismember, crawlInfoOf, crawlTexture, goreParts } from '../art/ZombieGore';
+import { armlessTexture, canDismember, crawlInfoOf, crawlTexture, goreParts, warmGore } from '../art/ZombieGore';
 import { GameEvents } from '../systems/GameEvents';
 import { armorAfter, type DamageInfo } from '../combat/Damage';
 import type { ZombieSpec } from '../systems/ZombieFactory';
@@ -181,6 +181,8 @@ export class Zombie extends Phaser.GameObjects.Sprite {
     this.footY = clampLaneY(y);
     this.laneY = this.footY;
     this.baseKey = def.texture;
+    // 斷肢／爆頭碎塊的貼圖趁空檔先切好，第一次打斷手、爆頭時才不會卡住（手機上很明顯）
+    if (spec.body === 'human') warmGore(scene, this.baseKey, true);
     this.walkKey = `${def.texture}_walk`;
     this.attackKey = `${def.texture}_attack`;
     // 走路圖的腳底在 64 格中的第 62 列；動物各自的腳底列見 ANIMAL_FRAMES
