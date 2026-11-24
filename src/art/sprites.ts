@@ -2,4 +2,4 @@
 export const ZOMBIE_SHEETS = ['zombie_basic', 'zombie_runner', 'zombie_brute'] as const;
 
 /** 霧屍影格中脖子所在列，爆頭時從這裡切開 */
-export const ZOMBIE_NECK_ROW = 19;
+export const ZOMBIE_NECK_ROW = 22;
