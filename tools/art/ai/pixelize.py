@@ -294,12 +294,14 @@ def _keys(a: np.ndarray) -> np.ndarray:
 
 
 def limit_colours(img: Image.Image, max_c: int, region: np.ndarray | None = None,
-                  protect: list[str] | None = None, uncounted: list[str] | None = None
-                  ) -> tuple[Image.Image, list[int]]:
+                  protect: list[str] | None = None, uncounted: list[str] | None = None,
+                  group=None) -> tuple[Image.Image, list[int]]:
     """Reduce the colours inside `region` (bool mask, default all) to <= max_c: repeatedly merge the
     colour whose merge costs least (pixels x OKLab distance^2) into its nearest remaining one. Never merged away: the darkest colour
     (outline) and `protect` hex colours (e.g. hero identity red / stripe blue).
     `uncounted` hex colours do not count towards max_c (character rule: <=16 + identity colours).
+    `group`: optional function (r, g, b) -> label; colours only merge within the same label
+    (zombie regions: shirt / pants / skin / outline must not bleed into each other).
     Returns (image, [colours before, colours after]) - both counts exclude `uncounted`."""
     a = np.array(img.convert("RGBA"))
     op = a[..., 3] > 0
@@ -318,6 +320,7 @@ def limit_colours(img: Image.Image, max_c: int, region: np.ndarray | None = None
     for h in protect or []:
         keep |= set(np.where(u == int(h, 16))[0].tolist())
     alive = list(range(len(u)))
+    grp = None if group is None else [group(int(r), int(g), int(b)) for r, g, b in rgb]
     cnt = dict(enumerate(c.tolist()))
     remap = {i: i for i in alive}
     while len(alive) - n_free > max_c:
@@ -327,7 +330,13 @@ def limit_colours(img: Image.Image, max_c: int, region: np.ndarray | None = None
         # drop the colour whose merge costs least: pixels x squared OKLab distance to its nearest
         # survivor (close shades merge first; a small but distinct colour, e.g. hair, survives)
         def near(j):
-            return min((o for o in alive if o != j), key=lambda o: float(((lab[j] - lab[o]) ** 2).sum()))
+            pool = [o for o in alive if o != j and (grp is None or grp[o] == grp[j])]
+            if not pool:
+                return None
+            return min(pool, key=lambda o: float(((lab[j] - lab[o]) ** 2).sum()))
+        cand = [j for j in cand if near(j) is not None]
+        if not cand:
+            break
         i = min(cand, key=lambda j: cnt[j] * float(((lab[j] - lab[near(j)]) ** 2).sum()))
         k = near(i)
         alive.remove(i)

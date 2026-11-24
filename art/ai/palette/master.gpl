@@ -1,7 +1,7 @@
 GIMP Palette
 Name: Last Light Outpost master
 Columns: 8
-# 48 main colours (index 0-47, grouped by hue family, dark -> light) + 10 reserved (48-57)
+# 54 main colours: 0-47 k-means (grouped by hue family, dark -> light), 48-50 danger red (interactive / dangerous objects only, saturation <= 0.75), 51-53 neutral cloth grey; 54-63 reserved (UI/FX 8 + hero identity 2)
 # built by tools/art/ai/build_palette.py
  25  24  15	grey 01
  16  27  19	grey 02
@@ -51,6 +51,12 @@ Columns: 8
  66  85 126	blue 46
  80 100 142	blue 47
 118 111 142	blue 48
+110  28  28	danger red dark
+168  48  42	danger red
+216  74  58	danger red light
+151 155 150	cloth grey dark
+179 183 178	cloth grey
+205 209 204	cloth grey light
 107  26  28	reserved blood dark
 176  42  42	reserved blood
 224 112  42	reserved fire

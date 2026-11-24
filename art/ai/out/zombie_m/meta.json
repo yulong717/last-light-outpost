@@ -1,0 +1,415 @@
+{
+ "stand": {
+  "seed": 3,
+  "prompt": "Redraw <Picture 1> as a clean pixel art game sprite for a 2D side-scrolling zombie game: dress the grey mannequin as the fog zombie from <Picture 2>: grey-green rotting skin, sunken dark eyes, bald head with a few stray hairs, a torn ragged plain light grey shirt (neutral grey, not greenish), dark blue-grey trousers, dark worn shoes. Keep exactly the mannequin's position, total height, small head (3.5 heads tall, not chibi), body width and three-quarter view facing right with the torso turned slightly toward the camera. Slightly hunched standing pose, arms hanging forward limply, feet on the same ground line. Nothing on the head, no hat. Draw it in exactly the pixel art style of <Picture 3>, as if by the same artist: a single light source from the upper left at 45 degrees, lit surfaces on the upper left and shadowed surfaces on the lower right, 3 to 4 shading steps, a 1 pixel near-black outline, muted grey-green colours. Plain solid magenta background, no ground, no floor line, no cast shadow, no text.",
+  "references": {
+   "Picture 1": "art/ai/mannequins/M/stand34_64.png x16 (M mannequin, 3/4)",
+   "Picture 2": "public/assets/sprites/zombie_basic.png frame 0 x16",
+   "Picture 3": "art/ai/style/anchor.png x5"
+  },
+  "workflow": "art/ai/workflows/h3_image_edit_3ref.json (1024x1024)",
+  "seeds": {
+   "1": {
+    "colours": [
+     29,
+     16
+    ],
+    "island_px_fixed": 2,
+    "measure": {
+     "height": 58,
+     "head": 17,
+     "width": 28,
+     "top": 4,
+     "bottom": 61
+    },
+    "regions": {
+     "outline": 373,
+     "skin": 231,
+     "other": 34,
+     "shirt": 201,
+     "pants": 159
+    },
+    "outside_palette": 0
+   },
+   "2": {
+    "colours": [
+     24,
+     16
+    ],
+    "island_px_fixed": 3,
+    "measure": {
+     "height": 58,
+     "head": 17,
+     "width": 27,
+     "top": 4,
+     "bottom": 61
+    },
+    "regions": {
+     "outline": 358,
+     "skin": 263,
+     "shirt": 199,
+     "pants": 160,
+     "other": 21
+    },
+    "outside_palette": 0
+   },
+   "3": {
+    "colours": [
+     25,
+     16
+    ],
+    "island_px_fixed": 12,
+    "measure": {
+     "height": 57,
+     "head": 16,
+     "width": 28,
+     "top": 5,
+     "bottom": 61
+    },
+    "regions": {
+     "outline": 342,
+     "skin": 211,
+     "other": 20,
+     "shirt": 238,
+     "pants": 185
+    },
+    "outside_palette": 0
+   },
+   "4": {
+    "colours": [
+     29,
+     16
+    ],
+    "island_px_fixed": 5,
+    "measure": {
+     "height": 58,
+     "head": 17,
+     "width": 27,
+     "top": 4,
+     "bottom": 61
+    },
+    "regions": {
+     "outline": 329,
+     "skin": 270,
+     "shirt": 217,
+     "pants": 182,
+     "other": 2
+    },
+    "outside_palette": 0
+   }
+  },
+  "generation": {
+   "workflow": "C:/AI/last-light-outpost/art/ai/workflows/h3_image_edit_3ref.json",
+   "overrides": {
+    "load1.image": "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie9\\ref_mannequin_M.png",
+    "load2.image": "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie9\\ref_zombie_16x.png",
+    "load3.image": "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie9\\ref_anchor_1024.png",
+    "scale1.width": 1024,
+    "scale1.height": 1024,
+    "cond.width": 1024,
+    "cond.height": 1024,
+    "sampler.seed": 3,
+    "cond.prompt": "Redraw <Picture 1> as a clean pixel art game sprite for a 2D side-scrolling zombie game: dress the grey mannequin as the fog zombie from <Picture 2>: grey-green rotting skin, sunken dark eyes, bald head with a few stray hairs, a torn ragged plain light grey shirt (neutral grey, not greenish), dark blue-grey trousers, dark worn shoes. Keep exactly the mannequin's position, total height, small head (3.5 heads tall, not chibi), body width and three-quarter view facing right with the torso turned slightly toward the camera. Slightly hunched standing pose, arms hanging forward limply, feet on the same ground line. Nothing on the head, no hat. Draw it in exactly the pixel art style of <Picture 3>, as if by the same artist: a single light source from the upper left at 45 degrees, lit surfaces on the upper left and shadowed surfaces on the lower right, 3 to 4 shading steps, a 1 pixel near-black outline, muted grey-green colours. Plain solid magenta background, no ground, no floor line, no cast shadow, no text.",
+    "save.filename_prefix": "ai_art/zombie9_stand_s3"
+   },
+   "models": {
+    "unet": {
+     "unet_name": "minimax_h3_image_pruned_int8_convrot.safetensors",
+     "weight_dtype": "default"
+    },
+    "clip": {
+     "clip_name": "qwen3vl_32b_minimax_h3_int8_convrot.safetensors",
+     "type": "minimax",
+     "device": "default"
+    },
+    "vae": {
+     "vae_name": "minimax_h3_image_vae_fp16.safetensors"
+    }
+   },
+   "tag": "r9 zombie stand seed 3",
+   "time": "2026-11-24 19:56:12",
+   "prompt_id": "3cb0e2fa-3b1c-4ede-b7a3-d8ee48b5de8c",
+   "seconds": 21.6,
+   "vram_peak_mib": 15388,
+   "files": [
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie9\\stand_s3\\zombie9_stand_s3_00001_.png"
+   ]
+  }
+ },
+ "post": "grid phase -> key magenta -> k_centroid -> foot y=61 -> region-locked quantize (raw region -> master.gpl colours of that region; kmeans 48 + cloth 3) -> edge pixels = near-black outline -> islands <=2px -> <=16 colours merged within regions jointly over all frames",
+ "regions": "outline v<0.11 | shirt s<0.07 & v>0.58 | pants hue 165-230 & s>0.15 | skin hue 70-165 & s>=0.07",
+ "walk": {
+  "seed": 3,
+  "prompt": "Pixel art game sprite animation of the fog zombie from <Picture 1>: keep its grey-green skin, small head, torn light grey shirt, dark blue-grey trousers, dark shoes, colours and near-black outlines exactly. Three-quarter view facing right, fixed camera, no zoom, no pan, full body visible at all times. The background stays plain solid magenta in every frame. It shambles forward in place on a treadmill with a slow limping zombie walk: hunched, head hanging forward, arms dangling forward and swaying, legs clearly alternating, knees bending, dragging steps, feet staying on the ground line. Two full steps. Seamless loop. No effects. Flat colors.",
+  "first_last": "stand.png x8 on magenta (stand_key_512.png)",
+  "workflow": "art/ai/workflows/h3_video_i2v.json 512x512, 56 frames",
+  "seeds": {
+   "1": {
+    "period": 25,
+    "start": 11,
+    "closure": 0.028938645219417344,
+    "motion": 0.10454125202454541,
+    "mode": "loop",
+    "picked": [
+     11,
+     14,
+     17,
+     20,
+     23,
+     27,
+     30,
+     33
+    ],
+    "colours": [
+     29,
+     16
+    ],
+    "island_px_fixed": 43,
+    "scale": 1.0,
+    "heights": [
+     56,
+     56,
+     56,
+     57,
+     56,
+     56,
+     57,
+     57
+    ],
+    "regions": {
+     "outline": 2692,
+     "skin": 1298,
+     "pants": 1126,
+     "other": 151,
+     "shirt": 2000
+    },
+    "outside_palette": 0
+   },
+   "2": {
+    "period": 47,
+    "start": 6,
+    "closure": 0.004298539298924367,
+    "motion": 0.11099676960957312,
+    "mode": "loop",
+    "picked": [
+     6,
+     12,
+     18,
+     24,
+     30,
+     35,
+     41,
+     47
+    ],
+    "colours": [
+     32,
+     16
+    ],
+    "island_px_fixed": 45,
+    "scale": 1.0,
+    "heights": [
+     57,
+     56,
+     56,
+     56,
+     57,
+     56,
+     57,
+     56
+    ],
+    "regions": {
+     "outline": 2708,
+     "skin": 1330,
+     "other": 150,
+     "shirt": 1934,
+     "pants": 1188
+    },
+    "outside_palette": 0
+   },
+   "3": {
+    "period": 34,
+    "start": 17,
+    "closure": 0.019445612867191073,
+    "motion": 0.15587145101569783,
+    "mode": "loop",
+    "picked": [
+     17,
+     21,
+     25,
+     30,
+     34,
+     38,
+     43,
+     47
+    ],
+    "colours": [
+     34,
+     16
+    ],
+    "island_px_fixed": 36,
+    "scale": 1.0,
+    "heights": [
+     56,
+     57,
+     56,
+     55,
+     56,
+     55,
+     55,
+     55
+    ],
+    "regions": {
+     "outline": 2735,
+     "skin": 1393,
+     "other": 141,
+     "shirt": 1890,
+     "pants": 1201
+    },
+    "outside_palette": 0
+   },
+   "4": {
+    "period": 26,
+    "start": 29,
+    "closure": 0.004004203818898252,
+    "motion": 0.13897665007994112,
+    "mode": "loop",
+    "picked": [
+     29,
+     32,
+     35,
+     39,
+     42,
+     45,
+     49,
+     52
+    ],
+    "colours": [
+     35,
+     16
+    ],
+    "island_px_fixed": 14,
+    "scale": 1.0,
+    "heights": [
+     56,
+     56,
+     55,
+     56,
+     57,
+     56,
+     55,
+     56
+    ],
+    "regions": {
+     "outline": 2665,
+     "skin": 1352,
+     "other": 159,
+     "shirt": 1830,
+     "pants": 1185
+    },
+    "outside_palette": 0
+   }
+  },
+  "generation": {
+   "workflow": "C:/AI/last-light-outpost/art/ai/workflows/h3_video_i2v.json",
+   "overrides": {
+    "first.image": "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie9\\stand_key_512.png",
+    "last.image": "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie9\\stand_key_512.png",
+    "scale_first.width": 512,
+    "scale_first.height": 512,
+    "scale_last.width": 512,
+    "scale_last.height": 512,
+    "cond.width": 512,
+    "cond.height": 512,
+    "cond.length": 56,
+    "noise.noise_seed": 3,
+    "cond.prompt": "Pixel art game sprite animation of the fog zombie from <Picture 1>: keep its grey-green skin, small head, torn light grey shirt, dark blue-grey trousers, dark shoes, colours and near-black outlines exactly. Three-quarter view facing right, fixed camera, no zoom, no pan, full body visible at all times. The background stays plain solid magenta in every frame. It shambles forward in place on a treadmill with a slow limping zombie walk: hunched, head hanging forward, arms dangling forward and swaying, legs clearly alternating, knees bending, dragging steps, feet staying on the ground line. Two full steps. Seamless loop. No effects. Flat colors.",
+    "save.filename_prefix": "ai_art/zombie9_walk_s3"
+   },
+   "models": {
+    "unet": {
+     "unet_name": "minimax_h3_fl2va_pruned_int8_convrot.safetensors",
+     "weight_dtype": "default"
+    },
+    "lora": {
+     "model": [
+      "unet",
+      0
+     ],
+     "lora_name": "minimax_h3_fl2v_turbo_8step_v1.0_comfyui_bf16.safetensors",
+     "strength_model": 1.0
+    },
+    "clip": {
+     "clip_name": "qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors",
+     "type": "minimax",
+     "device": "default"
+    },
+    "vae": {
+     "vae_name": "minimax_h3_video_vae_int8_convrot.safetensors"
+    }
+   },
+   "tag": "r9 zombie walk seed 3",
+   "time": "2026-11-24 20:05:26",
+   "prompt_id": "fe6c4e88-2f2a-4f9d-9642-91864c398164",
+   "seconds": 30.3,
+   "vram_peak_mib": 15364,
+   "files": [
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie9\\walk_s3\\zombie9_walk_s3_00001_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie9\\walk_s3\\zombie9_walk_s3_00002_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie9\\walk_s3\\zombie9_walk_s3_00003_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie9\\walk_s3\\zombie9_walk_s3_00004_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie9\\walk_s3\\zombie9_walk_s3_00005_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie9\\walk_s3\\zombie9_walk_s3_00006_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie9\\walk_s3\\zombie9_walk_s3_00007_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie9\\walk_s3\\zombie9_walk_s3_00008_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie9\\walk_s3\\zombie9_walk_s3_00009_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie9\\walk_s3\\zombie9_walk_s3_00010_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie9\\walk_s3\\zombie9_walk_s3_00011_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie9\\walk_s3\\zombie9_walk_s3_00012_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie9\\walk_s3\\zombie9_walk_s3_00013_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie9\\walk_s3\\zombie9_walk_s3_00014_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie9\\walk_s3\\zombie9_walk_s3_00015_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie9\\walk_s3\\zombie9_walk_s3_00016_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie9\\walk_s3\\zombie9_walk_s3_00017_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie9\\walk_s3\\zombie9_walk_s3_00018_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie9\\walk_s3\\zombie9_walk_s3_00019_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie9\\walk_s3\\zombie9_walk_s3_00020_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie9\\walk_s3\\zombie9_walk_s3_00021_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie9\\walk_s3\\zombie9_walk_s3_00022_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie9\\walk_s3\\zombie9_walk_s3_00023_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie9\\walk_s3\\zombie9_walk_s3_00024_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie9\\walk_s3\\zombie9_walk_s3_00025_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie9\\walk_s3\\zombie9_walk_s3_00026_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie9\\walk_s3\\zombie9_walk_s3_00027_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie9\\walk_s3\\zombie9_walk_s3_00028_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie9\\walk_s3\\zombie9_walk_s3_00029_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie9\\walk_s3\\zombie9_walk_s3_00030_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie9\\walk_s3\\zombie9_walk_s3_00031_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie9\\walk_s3\\zombie9_walk_s3_00032_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie9\\walk_s3\\zombie9_walk_s3_00033_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie9\\walk_s3\\zombie9_walk_s3_00034_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie9\\walk_s3\\zombie9_walk_s3_00035_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie9\\walk_s3\\zombie9_walk_s3_00036_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie9\\walk_s3\\zombie9_walk_s3_00037_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie9\\walk_s3\\zombie9_walk_s3_00038_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie9\\walk_s3\\zombie9_walk_s3_00039_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie9\\walk_s3\\zombie9_walk_s3_00040_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie9\\walk_s3\\zombie9_walk_s3_00041_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie9\\walk_s3\\zombie9_walk_s3_00042_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie9\\walk_s3\\zombie9_walk_s3_00043_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie9\\walk_s3\\zombie9_walk_s3_00044_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie9\\walk_s3\\zombie9_walk_s3_00045_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie9\\walk_s3\\zombie9_walk_s3_00046_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie9\\walk_s3\\zombie9_walk_s3_00047_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie9\\walk_s3\\zombie9_walk_s3_00048_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie9\\walk_s3\\zombie9_walk_s3_00049_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie9\\walk_s3\\zombie9_walk_s3_00050_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie9\\walk_s3\\zombie9_walk_s3_00051_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie9\\walk_s3\\zombie9_walk_s3_00052_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie9\\walk_s3\\zombie9_walk_s3_00053_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie9\\walk_s3\\zombie9_walk_s3_00054_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie9\\walk_s3\\zombie9_walk_s3_00055_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie9\\walk_s3\\zombie9_walk_s3_00056_.png"
+   ]
+  }
+ }
+}

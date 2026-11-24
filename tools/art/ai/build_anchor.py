@@ -22,7 +22,7 @@ import numpy as np
 from PIL import Image, ImageDraw
 
 sys.path.insert(0, str(Path(__file__).parent))
-from build_palette import IDENTITY, check, load_gpl, lstar  # noqa: E402
+from build_palette import IDENTITY, check, load_gpl, lstar, part  # noqa: E402
 from pixelize import cleanup, despill, limit_colours, quantize, remove_islands, srgb_to_oklab  # noqa: E402
 from sprite_utils import k_centroid, key_magenta  # noqa: E402
 
@@ -85,12 +85,32 @@ PROMPT_DRUM8 = PROMPT_DRUM.replace(
     "no small specks or noise; it must not look like a brown drum. ")
 assert PROMPT_DRUM8 != PROMPT_DRUM and "crimson" in PROMPT_DRUM8 and "covers most" in PROMPT_DRUM8
 
-# variant -> (raw dir prefix, prompt, slot shown in its sheet)
+# round 9 review: arms hanging at the sides with forearms and hands visible (layout_akai9 shows the pose)
+PROMPT_AKAI9 = PROMPT_AKAI.replace(
+    "(1) the boy keeps exactly the body proportions he has in <Picture 1>:",
+    "(1) the boy keeps exactly the body proportions and the pose he has in <Picture 1>:").replace(
+    "relaxed standing pose, arms down.",
+    "relaxed standing pose with both arms hanging naturally straight down at his sides, his bare forearms and "
+    "hands clearly visible in skin colour below the short sleeves, hands beside his thighs, not crossed, not "
+    "behind his back.")
+assert PROMPT_AKAI9 != PROMPT_AKAI and "forearms" in PROMPT_AKAI9
+# round 9 review: danger-red drum with explicit cylinder shading
+PROMPT_DRUM9 = PROMPT_DRUM8.replace(
+    "the red paint covers most of the drum, with a few large flat brown rust patches, simple shapes, "
+    "no small specks or noise; it must not look like a brown drum. ",
+    "the red paint covers most of the drum, with a few large flat brown rust patches, simple shapes, no small "
+    "specks or noise; clear cylinder shading: one bright lit vertical column along its left side, one dark shaded "
+    "vertical column along its right side, and a bright highlight line along the top rim. ")
+assert PROMPT_DRUM9 != PROMPT_DRUM8 and "lit vertical column" in PROMPT_DRUM9
+
+# variant -> (raw dir prefix, prompt, slot shown in its sheet, layout file)
 VARIANTS = {
-    "base": ("s", PROMPT, None),
-    "drum": ("drum_s", PROMPT_DRUM, "drum"),
-    "akai8": ("akai8_s", PROMPT_AKAI, "akai"),
-    "drum8": ("drum8_s", PROMPT_DRUM8, "drum"),
+    "base": ("s", PROMPT, None, "layout_8x.png"),
+    "drum": ("drum_s", PROMPT_DRUM, "drum", "layout_8x.png"),
+    "akai8": ("akai8_s", PROMPT_AKAI, "akai", "layout_8x.png"),
+    "drum8": ("drum8_s", PROMPT_DRUM8, "drum", "layout_8x.png"),
+    "akai9": ("akai9_s", PROMPT_AKAI9, "akai", "layout_akai9_8x.png"),
+    "drum9": ("drum9_s", PROMPT_DRUM9, "drum", "layout_8x.png"),
 }
 
 
@@ -202,14 +222,43 @@ def layout():
     print("layout ->", RAW / "layout_8x.png")
 
 
+def layout_akai9():
+    """Round 9: Akai slot = three-quarter M mannequin (stand34, arms hanging at the sides) with the head of the
+    3.5-head Akai paste-up on top, so H3 keeps the arms-down pose; the other slots as layout_8x."""
+    base = Image.open(RAW / "layout_8x.png").convert("RGBA")
+    mann = Image.open(ROOT / "art/ai/mannequins/M/stand34_512.png").convert("RGBA")  # 8x, 56 tall, foot y=61
+    akai = Image.open(ROOT / "public/assets/sprites/akai_ai_idle.png").convert("RGBA").crop((0, 0, 64, 64))
+    a35 = akai_35(akai)
+    ys, xs = np.where(np.array(mann)[..., 3] > 0)
+    mcx = int(np.median(xs))
+    out = base.copy()
+    out.paste(Image.new("RGBA", (38 * S, H * S), (255, 0, 255, 255)), (0, 0))
+    dx = 20 * S - mcx
+    out.alpha_composite(mann, (dx, 0))
+    head = a35.crop((0, 0, 64 * S, (FOOT + 1 - 40) * S))  # top 16 rows of the figure = the head
+    hb = np.array(head)
+    hys, hxs = np.where(hb[..., 3] > 0)
+    # put the head's centre over the mannequin's head centre
+    mhead = np.array(mann)[: (FOOT + 1 - 40) * S]
+    mys, mxs = np.where(mhead[..., 3] > 0)
+    hx = int(np.median(mxs)) + dx - int(np.median(hxs))
+    # clear the mannequin head, then paste Akai's head
+    cl = np.array(out)
+    cl[: (FOOT + 1 - 40) * S, : 38 * S] = [255, 0, 255, 255]
+    out = Image.fromarray(cl, "RGBA")
+    out.alpha_composite(head, (hx, 0))
+    out.convert("RGB").save(RAW / "layout_akai9_8x.png")
+    print("layout ->", RAW / "layout_akai9_8x.png")
+
+
 # ---------------------------------------------------------------- gen
 
-def gen(seeds: list[int], prompt: str, tag: str, prefix: str = "s"):
+def gen(seeds: list[int], prompt: str, tag: str, prefix: str = "s", layout_file: str = "layout_8x.png"):
     py = ROOT / ".venv-art/Scripts/python.exe"
     for s in seeds:
         out = RAW / f"{prefix}{s}"
         cmd = [str(py), "-I", str(ROOT / "tools/art/ai/run_comfy.py"), str(ROOT / "art/ai/workflows/h3_image_edit_3ref.json"),
-               "--image", f"load1={RAW / 'layout_8x.png'}", "--image", f"load2={RAW / 'akai_ref_16x.png'}",
+               "--image", f"load1={RAW / layout_file}", "--image", f"load2={RAW / 'akai_ref_16x.png'}",
                "--image", f"load3={RAW / 'zombie_ref_16x.png'}",
                "--set", f"sampler.seed={s}", "--set", f"cond.prompt={prompt}",
                "--set", f"save.filename_prefix=ai_art/style_anchor_{prefix}{s}", "--out", str(out), "--tag", f"{tag} seed {s}"]
@@ -331,12 +380,17 @@ def post_one(raw: Path, pal: np.ndarray) -> tuple[Image.Image, Image.Image]:
     return small, Image.fromarray(out, "RGBA")
 
 
+DANGER_SLOTS = {"drum"}  # round 9: danger red only for interactive / dangerous objects
+
+
 def slot_palette(pal: np.ndarray, name: str) -> np.ndarray:
-    main = pal[:48]
+    """48 k-means colours + neutral cloth greys for everyone; danger red for the drum; identity for Akai."""
+    parts = [part("kmeans"), part("cloth")]
+    if name in DANGER_SLOTS:
+        parts.append(part("danger"))
     if name == "akai":
-        ident = np.array([[int(h[i:i + 2], 16) for i in (0, 2, 4)] for h in IDENTITY], np.uint8)
-        return np.concatenate([main, ident])
-    return main
+        parts.append(part("identity"))
+    return np.concatenate(parts)
 
 
 # round 8 review: objects <= 10 colours; characters <= 16, hero identity colours not counted
@@ -365,7 +419,74 @@ def tidy(img: Image.Image) -> tuple[Image.Image, dict]:
         img, cc = limit_colours(img, cap, reg, IDENTITY, uncounted=IDENTITY)
         img, n2 = remove_islands(img, ISLAND_PX, reg, IDENTITY)
         stats[name] = {"colours": cc, "cap": cap, "island_px_fixed": n1 + n2}
+        if name in CYLINDERS:
+            img, stats[name]["cylinder_px"] = shade_cylinder(img, name)
     return img, stats
+
+
+CYLINDERS = {"drum"}  # round 9 review: lit column left, dark column right, highlight on the top rim
+
+
+def shade_cylinder(img: Image.Image, name: str, step: float = 0.12) -> tuple[Image.Image, int]:
+    """Enforce cylinder shading on a slot using only the colours the object already has (count unchanged):
+    per row, the first interior pixel (right after the left outline) -> one step lighter, the last interior
+    pixel -> one step darker; the first interior row under the top outline -> one step lighter (rim highlight).
+    'One step' = the object's own colour of the same hue family (within 35 deg; greys with greys) whose OKLab L is
+    closest to L +/- step."""
+    x0, x1 = next(x for n, x, _ in SLOTS if n == name)
+    a = np.array(img)
+    blk = a[:, x0:x1]
+    op = blk[..., 3] > 0
+    keys = blk[..., 0].astype(np.int64) * 65536 + blk[..., 1].astype(np.int64) * 256 + blk[..., 2]
+    u = np.unique(keys[op])
+    rgb = np.stack([(u >> 16) & 255, (u >> 8) & 255, u & 255], 1).astype(np.uint8)
+    lab = srgb_to_oklab(rgb)
+    hue = np.degrees(np.arctan2(lab[:, 2], lab[:, 1]))
+    chroma = np.hypot(lab[:, 1], lab[:, 2])
+    outline = lab[:, 0] < 0.30
+    idx = {int(k): i for i, k in enumerate(u)}
+
+    def shifted_colour(k: int, d: float):
+        i = idx[k]
+        if outline[i]:
+            return None
+        same = [j for j in range(len(u)) if j != i and not outline[j] and
+                ((chroma[i] < 0.03 and chroma[j] < 0.03) or
+                 (chroma[i] >= 0.03 and chroma[j] >= 0.03 and abs((hue[i] - hue[j] + 180) % 360 - 180) < 35))]
+        same = [j for j in same if (lab[j, 0] - lab[i, 0]) * d > 0.02]
+        if not same:
+            return None
+        j = min(same, key=lambda j: abs(lab[j, 0] - (lab[i, 0] + d)))
+        return rgb[j]
+
+    out = blk.copy()
+    n = 0
+    ys = np.where(op.any(1))[0]
+    top, bot = ys.min(), ys.max()
+    for y in range(top + 1, bot):
+        xs = np.where(op[y])[0]
+        if len(xs) < 5:
+            continue
+        inner = [x for x in xs if not outline[idx[int(keys[y, x])]]]
+        if len(inner) < 3:
+            continue
+        for x, d in ((inner[0], step), (inner[-1], -step)):
+            c = shifted_colour(int(keys[y, x]), d)
+            if c is not None:
+                out[y, x, :3] = c
+                n += 1
+    # rim highlight: first row under the top outline that has interior pixels
+    for y in range(top, bot):
+        xs = [x for x in np.where(op[y])[0] if not outline[idx[int(keys[y, x])]]]
+        if len(xs) >= 3:
+            for x in xs[1:-1]:
+                c = shifted_colour(int(keys[y, x]), step)
+                if c is not None:
+                    out[y, x, :3] = c
+                    n += 1
+            break
+    a[:, x0:x1] = out
+    return Image.fromarray(a, "RGBA"), n
 
 
 def sheet(rows: list[tuple[str, Image.Image]], scale: int = 4) -> Image.Image:
@@ -422,7 +543,7 @@ def post(seeds: list[int] | None, prefix: str = "s"):
     elif prefix == "drum_s":
         drum_sheet(summary, prefix).save(OUTD / "drum_seeds_x4.png")
     else:
-        slot_sheet(summary, prefix, slot).save(OUTD / f"{prefix.rstrip('_s')}_seeds_x4.png")
+        slot_sheet(summary, prefix, slot).save(OUTD / f"{prefix[:-2]}_seeds_x4.png")
     (RAW / f"post_summary_{prefix}.json").write_text(json.dumps(summary, indent=1), encoding="utf-8")
     print(json.dumps(summary, indent=1))
 
@@ -543,7 +664,7 @@ def pick(seed: int, drum: int | None = None, splice: dict | None = None):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("cmd", choices=["layout", "gen", "post", "pick"])
+    ap.add_argument("cmd", choices=["layout", "layout_akai9", "gen", "post", "pick"])
     ap.add_argument("seed", nargs="?", type=int)
     ap.add_argument("--seeds", nargs="*", type=int, default=[1, 2, 3, 4])
     ap.add_argument("--prompt-file", type=Path)
@@ -556,10 +677,13 @@ def main():
     a = ap.parse_args()
     if a.cmd == "layout":
         layout()
+    elif a.cmd == "layout_akai9":
+        layout_akai9()
     elif a.cmd == "gen":
         prompt = a.prompt_file.read_text(encoding="utf-8").strip() if a.prompt_file else (
             VARIANTS[a.variant][1] if a.variant else (PROMPT_DRUM if a.drum else PROMPT))
-        gen(a.seeds, prompt, a.tag, VARIANTS[a.variant][0] if a.variant else ("drum_s" if a.drum else "s"))
+        gen(a.seeds, prompt, a.tag, VARIANTS[a.variant][0] if a.variant else ("drum_s" if a.drum else "s"),
+            VARIANTS[a.variant][3] if a.variant else "layout_8x.png")
     elif a.cmd == "post":
         post(a.seeds if a.seeds != [1, 2, 3, 4] else None,
              VARIANTS[a.variant][0] if a.variant else ("drum_s" if a.drum else "s"))

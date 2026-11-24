@@ -48,6 +48,13 @@ RESERVED = [  # name, hex
     ("hero jersey red", "ee333a"), ("hero stripe blue", "7a8cc0"),
 ]
 IDENTITY = ["ee333a", "7a8cc0"]  # never merged / removed by post-processing
+# round 9 review: main colours appended after the 48 k-means colours (indices 0-47 unchanged)
+DANGER = [("danger red dark", "6e1c1c"), ("danger red", "a8302a"), ("danger red light", "d84a3a")]
+DANGER_SAT_MAX = 0.75  # only for interactive / dangerous objects (oil drum, fuse box, ...)
+# round 9: neutral cloth greys for the zombie shirt region (ZombieComposer: s < 0.07 and v > 0.58);
+# the 48 k-means greys were tinted grey-green (s 0.08-0.11) so only one of them qualified as shirt
+CLOTH = [("cloth grey dark", "979b96"), ("cloth grey", "b3b7b2"), ("cloth grey light", "cdd1cc")]
+N_MAIN = 48 + len(DANGER) + len(CLOTH)  # 54
 K = 48
 LSTAR_MIN, LSTAR_MAX = 8.0, 90.0
 SAT_MAX = 0.6
@@ -156,11 +163,16 @@ def build():
     idx, fam = ramp_order(centres)
     main = [(f"{fam[i]} {n + 1:02d}", centres[i]) for n, i in enumerate(idx)]
     res = [(f"reserved {n}", hx(h)) for n, h in RESERVED]
-    entries = main + res
+    extra = [(n, hx(h)) for n, h in DANGER + CLOTH]
+    for n, c in extra:
+        assert hsv_sat(c[None])[0] <= DANGER_SAT_MAX + 1e-6 and LSTAR_MIN <= lstar(c[None])[0] <= LSTAR_MAX, n
+    entries = main + extra + res
 
     OUT.mkdir(parents=True, exist_ok=True)
     lines = ["GIMP Palette", "Name: Last Light Outpost master", "Columns: 8",
-             "# 48 main colours (index 0-47, grouped by hue family, dark -> light) + 10 reserved (48-57)",
+             "# 54 main colours: 0-47 k-means (grouped by hue family, dark -> light), 48-50 danger red "
+             "(interactive / dangerous objects only, saturation <= 0.75), 51-53 neutral cloth grey; "
+             "54-63 reserved (UI/FX 8 + hero identity 2)",
              "# built by tools/art/ai/build_palette.py"]
     for name, c in entries:
         lines.append(f"{c[0]:3d} {c[1]:3d} {c[2]:3d}\t{name}")
@@ -174,13 +186,14 @@ def build():
     for i, (_, c) in enumerate(entries):
         x, y = (i % cols_n) * cell, (i // cols_n) * (cell + lab_h)
         d.rectangle([x, y, x + cell - 1, y + cell - 1], fill=tuple(int(v) for v in c))
-        d.text((x + 1, y + cell - 1), f"{i}", fill=(220, 220, 220) if i < 48 else (255, 200, 80))
+        d.text((x + 1, y + cell - 1), f"{i}", fill=(220, 220, 220) if i < 48 else (120, 230, 255) if i < N_MAIN else (255, 200, 80))
     sw.save(OUT / "palette_swatch.png")
     sw.resize((sw.width * 4, sw.height * 4), Image.NEAREST).save(OUT / "palette_swatch_x4.png")
 
     arr = np.array([c for _, c in entries])
     stats = {
-        "colours": len(entries), "main": K, "reserved": len(RESERVED),
+        "colours": len(entries), "main": N_MAIN, "main_kmeans": K, "danger": [h for _, h in DANGER],
+        "cloth": [h for _, h in CLOTH], "reserved": len(RESERVED),
         "main_lstar_min": round(float(lstar(arr[:K]).min()), 1),
         "main_lstar_max": round(float(lstar(arr[:K]).max()), 1),
         "main_sat_max": round(float(hsv_sat(arr[:K]).max()), 2),
@@ -191,6 +204,15 @@ def build():
     }
     (OUT / "palette.json").write_text(json.dumps(stats, indent=1, ensure_ascii=False), encoding="utf-8")
     print(json.dumps(stats, ensure_ascii=False))
+
+
+def part(name: str) -> np.ndarray:
+    """Named slices of master.gpl: kmeans (0-47), danger, cloth, identity."""
+    if name == "kmeans":
+        return load_gpl()[:48]
+    src = {"danger": DANGER, "cloth": CLOTH,
+           "identity": [(h, h) for h in IDENTITY]}[name]
+    return np.array([hx(h) for _, h in src], np.uint8)
 
 
 def load_gpl(path: Path = OUT / "master.gpl") -> np.ndarray:

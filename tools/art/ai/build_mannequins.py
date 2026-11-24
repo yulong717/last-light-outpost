@@ -1,6 +1,6 @@
 """Faceless S/M/L/XL mannequins standing (AI_ART_PIPELINE §4.2), anchor.png as style ref.
 
-Round 7: pure side view (art/ai/mannequins/<size>/side_stand_*.png, kept for reference).
+Round 7: pure side view (side_stand_*.png; deleted in round 9, only the r7_*_seeds sheets remain).
 Round 8: three-quarter view like Akai (all humanoids), XL split into XL_fat / XL_strong,
 characters <= 16 colours -> art/ai/mannequins/<size>/stand34_*.png.
 

@@ -1,6 +1,17 @@
 {
- "colours": 58,
- "main": 48,
+ "colours": 64,
+ "main": 54,
+ "main_kmeans": 48,
+ "danger": [
+  "6e1c1c",
+  "a8302a",
+  "d84a3a"
+ ],
+ "cloth": [
+  "979b96",
+  "b3b7b2",
+  "cdd1cc"
+ ],
  "reserved": 10,
  "main_lstar_min": 8.1,
  "main_lstar_max": 89.6,
