@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { uiButton, uiPanel } from '../explore/ui';
 import { GAME_HEIGHT, GAME_WIDTH } from '../config';
 import { AudioManager } from '../audio/AudioManager';
 import {
@@ -147,7 +148,7 @@ export class ArmoryScene extends Phaser.Scene {
     const dim = this.add.rectangle(0, 0, GAME_WIDTH, GAME_HEIGHT, 0x000000, 0.55).setOrigin(0).setInteractive();
     this.root.add(dim);
     this.rects.push(registerUIRect({ x: 0, y: 0, w: GAME_WIDTH, h: GAME_HEIGHT }));
-    this.root.add(this.add.rectangle(PX, PY, PW, PH, 0x0d0f14, 0.96).setOrigin(0).setStrokeStyle(1, 0xf5d76e, 0.6));
+    this.root.add(uiPanel(this, PX, PY, PW, PH));
 
     this.text(PX + 10, PY + 7, '軍械庫', 11, '#f5d76e');
     this.text(PX + 70, PY + 9, `廢料 ${st.scrap}　第 ${st.day} 天`, 8, '#e8e8e8');
@@ -455,22 +456,9 @@ export class ArmoryScene extends Phaser.Scene {
     return t;
   }
 
-  private button(x: number, y: number, w: number, h: number, label: string, enabled: boolean, onPress: () => void, fill = 0x2a2f3a): void {
-    const bg = this.add
-      .rectangle(x, y, w, h, enabled ? fill : 0x1a1c22, 0.95)
-      .setOrigin(0)
-      .setStrokeStyle(1, 0xffffff, enabled ? 0.5 : 0.15);
-    this.root.add(bg);
-    this.root.add(pixelText(this, x + w / 2, y + h / 2, label, 8, enabled ? '#ffffff' : '#6b7280').setOrigin(0.5));
-    if (!enabled) return;
-    bg.setInteractive({ useHandCursor: true });
-    bg.on('pointerover', () => bg.setFillStyle(0x4a5262, 0.95));
-    bg.on('pointerout', () => bg.setFillStyle(fill, 0.95));
-    bg.on('pointerdown', (_p: unknown, _x: number, _y: number, e: Phaser.Types.Input.EventData) => {
-      e.stopPropagation();
-      AudioManager.ui('tap');
-      // 動作會重建整個面板，等這次點擊處理完再做
-      this.time.delayedCall(0, onPress);
-    });
+  private button(x: number, y: number, w: number, h: number, label: string, enabled: boolean, onPress: () => void, fill?: number): void {
+    // 動作會重建整個面板：uiButton 會等這次點擊處理完再做
+    this.root.add(uiButton(this, x, y, w, h, label, onPress, { enabled, fill }));
   }
+
 }

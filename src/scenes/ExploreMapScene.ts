@@ -6,7 +6,7 @@ import { ensureCityMap, ensureZoneIcons, ZONE_ICON_KEY, zoneIconFrame } from '..
 import { COMPANION_ROLES, crewReady, type CrewMember } from '../data/companions';
 import { EXPLORE_TIME, INTEL, SUPPLIES, ZONES, type SupplyId, type ZoneDef } from '../data/explore';
 import { Expedition } from '../explore/Expedition';
-import { stars, uiButton, uiPanel } from '../explore/ui';
+import { stars, uiButton, uiPanel, uiTopBar } from '../explore/ui';
 import { GameState } from '../state/GameState';
 import { pixelText } from '../utils/text';
 import type { DefenseSceneData } from './DefenseScene';
@@ -43,7 +43,7 @@ export class ExploreMapScene extends Phaser.Scene {
     this.drawMap();
 
     // 上方資訊列
-    this.add.rectangle(0, 0, GAME_WIDTH, 26, 0x000000, 0.6).setOrigin(0);
+    uiTopBar(this, 26);
     pixelText(this, 8, 6, `第 ${st.day} 天・白天　城市地圖`, 9, '#f5d76e');
     const slots = '●'.repeat(st.dayTime) + '○'.repeat(Math.max(0, EXPLORE_TIME.slotsPerDay - st.dayTime));
     pixelText(this, 190, 6, `剩餘時段 ${slots}`, 9, st.dayTime > 0 ? '#e8e8e8' : '#ff8a80');
