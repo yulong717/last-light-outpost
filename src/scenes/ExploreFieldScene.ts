@@ -38,6 +38,7 @@ import { PropSystem, type Interaction } from '../scenery/PropSystem';
 import { fieldScenery } from '../scenery/locations';
 import type { PlacedProp, SceneryResult } from '../scenery/SceneryBuilder';
 import type { PrologueStage, StageHint } from '../data/prologue';
+import { applyHiRes, setViewZoom } from '../render/RenderScale';
 
 export interface FieldResult {
   /** clean：潛入全程沒被發現；win：達成目標；failed：保護目標陣亡；down：主角倒下 */
@@ -55,6 +56,12 @@ export interface ExploreFieldData {
 }
 
 const FIELD_W = 960;
+/** 單軸模式鏡頭拉近的倍率：上下不留大片空白，人和場景放大 */
+const SINGLE_ZOOM = 1.5;
+/** 單軸模式畫面中心的 y（世界座標）：上緣切在天花板下、下緣留一點地板 */
+const SINGLE_VIEW_CY = 208;
+/** HUD、提示、畫面邊緣特效：畫在不拉近的鏡頭上（scrollFactor 0 且 depth ≥ 這個值） */
+const UI_DEPTH = 85;
 /** 潛入：霧屍基本視野 */
 const VISION = 120;
 const VISION_DY = 30;
@@ -102,6 +109,8 @@ export class ExploreFieldScene extends Phaser.Scene {
   private hintText?: Phaser.GameObjects.Text;
   private hintBg?: Phaser.GameObjects.Rectangle;
   private hintsShown = new Set<StageHint>();
+  /** 單軸模式：主鏡頭拉近，HUD 改由這個不縮放的鏡頭畫 */
+  private uiCam?: Phaser.Cameras.Scene2D.Camera;
   private hintTimer = 0;
   /** 關卡寬度與出口位置（沿街前進比較長） */
   private worldW = FIELD_W;
@@ -203,8 +212,19 @@ export class ExploreFieldScene extends Phaser.Scene {
     this.rig = new WeaponRig(this, heroRigColors(GameState.data.hero ?? 'soldier'));
     this.rig.setWeapon(GameState.data.armory.loadout[0] ?? 'm1911');
     const cam = this.cameras.main;
-    cam.startFollow(this.player.sprite, true, 0.12, 0);
-    cam.setDeadzone(140, GAME_HEIGHT);
+    this.uiCam = undefined;
+    if (this.single) {
+      // 單軸：大家都在同一條線上，上下的空間用不到，鏡頭拉近讓人和場景放大
+      setViewZoom(cam, SINGLE_ZOOM);
+      cam.startFollow(this.player.sprite, true, 0.12, 1, 0, SINGLE_LANE_Y - SINGLE_VIEW_CY);
+      cam.setDeadzone(100, 0);
+      this.uiCam = this.cameras.add(0, 0, cam.width, cam.height);
+      applyHiRes(this.uiCam);
+      this.uiCam.fadeIn(250, 0, 0, 0);
+    } else {
+      cam.startFollow(this.player.sprite, true, 0.12, 0);
+      cam.setDeadzone(140, GAME_HEIGHT);
+    }
     cam.fadeIn(250, 0, 0, 0);
 
     const armory = GameState.data.armory;
@@ -250,6 +270,7 @@ export class ExploreFieldScene extends Phaser.Scene {
     }
     this.buildHud();
     this.fireHints((w) => w === 'start');
+    this.splitCameras();
 
     this.input.keyboard?.on('keydown-H', this.medkit, this);
     this.input.keyboard?.on('keydown-F', this.interact, this);
@@ -280,7 +301,8 @@ export class ExploreFieldScene extends Phaser.Scene {
     }
     // 序章：牆上漆著樓層的大字
     if (this.stage && this.stage.id !== 'roof') {
-      pixelText(this, 200, GROUND_Y - 96, this.stage.floor, 14, '#2a3a30').setOrigin(0.5).setDepth(-50).setAlpha(0.7);
+      // 漆在綠色牆裙上（鏡頭拉近後上方會被 HUD 擋住）
+      pixelText(this, 190, GROUND_Y - 17, this.stage.floor, 14, '#d8d0b8').setOrigin(0.5).setDepth(-50).setAlpha(0.6);
     }
   }
 
@@ -951,7 +973,20 @@ export class ExploreFieldScene extends Phaser.Scene {
     }
     this.refreshHud();
     this.updateHints(realDt);
+    this.splitCameras();
     this.checkEnd();
+  }
+
+  /** 單軸模式：HUD 類物件只給不縮放的鏡頭畫，其他（世界、背景、霧）只給拉近的主鏡頭畫 */
+  private splitCameras(): void {
+    const ui = this.uiCam;
+    if (!ui) return;
+    const main = this.cameras.main;
+    for (const o of this.children.list) {
+      const g = o as Phaser.GameObjects.GameObject & { scrollFactorX?: number; depth?: number };
+      const isUi = g.scrollFactorX === 0 && (g.depth ?? 0) >= UI_DEPTH;
+      g.cameraFilter = isUi ? main.id : ui.id;
+    }
   }
 
   private context(): ZombieContext {
@@ -1121,6 +1156,7 @@ export class ExploreFieldScene extends Phaser.Scene {
     // 限時目標達成時，場上的霧屍退回霧裡
     for (const z of this.zombies) this.tweens.add({ targets: z, alpha: 0, duration: 600 });
     this.time.delayedCall(1300, () => {
+      this.uiCam?.fadeOut(250, 0, 0, 0);
       this.cameras.main.fadeOut(250, 0, 0, 0);
       this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => {
         const cb = this.onDone;

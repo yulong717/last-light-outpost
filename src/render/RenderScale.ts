@@ -49,12 +49,12 @@ export function applyHiRes(cam: Phaser.Cameras.Scene2D.Camera): void {
   const c = cam as HiResCamera;
   if (c.__hiRes) return;
   c.__hiRes = true;
-  const z = RENDER_SCALE;
-  cam.setZoom(z);
+  cam.setZoom(RENDER_SCALE);
 
   // Phaser 版的 scroll（以中心縮放）＝ 對外的 scroll（左上角）－ shift
-  const shiftX = () => (cam.width / 2) * (1 - 1 / z);
-  const shiftY = () => (cam.height / 2) * (1 - 1 / z);
+  // 倍率每幀讀 cam.zoom：單軸模式會再拉近（setViewZoom），一樣以左上角為縮放中心
+  const shiftX = () => (cam.width / 2) * (1 - 1 / cam.zoom);
+  const shiftY = () => (cam.height / 2) * (1 - 1 / cam.zoom);
   let innerX = cam.scrollX - shiftX();
   let innerY = cam.scrollY - shiftY();
   let outerX = cam.scrollX;
@@ -72,9 +72,17 @@ export function applyHiRes(cam: Phaser.Cameras.Scene2D.Camera): void {
     outerY = cam.scrollY = innerY + shiftY();
     // 原本的矩陣是 T(origin)·S(z)·T(-origin)·震動；改成 S(z)·震動（以左上角為縮放中心）
     const m = (cam as unknown as CamMatrix).matrix;
-    m.e += (cam.width / 2) * (z - 1);
-    m.f += (cam.height / 2) * (z - 1);
+    m.e += (cam.width / 2) * (cam.zoom - 1);
+    m.f += (cam.height / 2) * (cam.zoom - 1);
   };
+}
+
+/**
+ * 鏡頭再拉近 k 倍（1 = 原本的 640×360 視野）。看到的世界範圍變成 640/k × 360/k，
+ * scrollX/scrollY 仍是畫面左上角的世界座標。HUD 要另外放在沒有拉近的鏡頭上。
+ */
+export function setViewZoom(cam: Phaser.Cameras.Scene2D.Camera, k: number): void {
+  cam.setZoom(RENDER_SCALE * k);
 }
 
 /**
