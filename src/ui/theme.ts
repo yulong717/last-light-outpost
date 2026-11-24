@@ -291,18 +291,6 @@ const ICONS: Record<string, string[]> = {
     '..kbbk....',
     '..kkkk....',
   ],
-  grenade: [
-    '...kkk...',
-    '..kSkSk..',
-    '...kkkkk.',
-    '..kmmmk..',
-    '.kmMmMmk.',
-    '.kmmmmmk.',
-    '.kMmMmMk.',
-    '.kmmmmmk.',
-    '..kMmMk..',
-    '...kkk...',
-  ],
   medkit: [
     '...kkk...',
     '..kk.kk..',

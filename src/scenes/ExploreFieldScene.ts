@@ -12,7 +12,7 @@ import { Player } from '../entities/Player';
 import { WeaponRig } from '../entities/WeaponRig';
 import { Zombie, type ZombieContext, type ZombieTarget } from '../entities/Zombie';
 import { Expedition } from '../explore/Expedition';
-import { throwGrenade, useMedkit } from '../explore/Supplies';
+import { useMedkit } from '../explore/Supplies';
 import { CameraFeel } from '../feel/CameraFeel';
 import { Crosshair } from '../feel/Crosshair';
 import { FEEL } from '../feel/FeelConfig';
@@ -229,11 +229,9 @@ export class ExploreFieldScene extends Phaser.Scene {
     else this.setupFight(count);
     this.buildHud();
 
-    this.input.keyboard?.on('keydown-G', this.grenade, this);
     this.input.keyboard?.on('keydown-H', this.medkit, this);
     this.input.keyboard?.on('keydown-F', this.interact, this);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
-      this.input.keyboard?.off('keydown-G', this.grenade, this);
       this.input.keyboard?.off('keydown-H', this.medkit, this);
       this.input.keyboard?.off('keydown-F', this.interact, this);
       this.unregister.forEach((fn) => fn());
@@ -607,15 +605,15 @@ export class ExploreFieldScene extends Phaser.Scene {
       ? touch
         ? '只能左右移動・路邊的箱子可以打開'
         : this.spec.walk
-          ? 'A／D 左右移動・往右走到下一站・F 互動（翻箱、開門）・G 手榴彈・H 醫療包'
-          : 'A／D 左右移動・前後都會有霧屍・G 手榴彈・H 醫療包'
+          ? 'A／D 左右移動・往右走到下一站・F 互動（翻箱、開門）・H 醫療包'
+          : 'A／D 左右移動・前後都會有霧屍・H 醫療包'
       : this.spec.mode === 'stealth'
         ? touch
           ? '躲進陰影・從背後按近戰暗殺'
-          : 'WASD 移動・躲進陰影或掩體後・從背後按 E 暗殺・F 互動・G 手榴彈・H 醫療包'
+          : 'WASD 移動・躲進陰影或掩體後・從背後按 E 暗殺・F 互動・H 醫療包'
         : touch
           ? ''
-          : 'F 互動（封門・斷電）・射擊油桶引爆・G 手榴彈・H 醫療包';
+          : 'F 互動（封門・斷電）・射擊油桶引爆・H 醫療包';
     fix(pixelText(this, GAME_WIDTH / 2, GAME_HEIGHT - 14, help, 7, '#90a4ae').setOrigin(0.5));
     this.interactHint = pixelText(this, 0, 0, '', 8, '#90caf9').setOrigin(0.5).setDepth(70).setStroke('#000000', 3).setVisible(false);
     this.hiddenHint = pixelText(this, 0, 0, '', 7, '#9ad17a').setOrigin(0.5).setDepth(70).setStroke('#000000', 3).setVisible(false);
@@ -630,8 +628,7 @@ export class ExploreFieldScene extends Phaser.Scene {
         holdAction('melee', true);
       }, () => holdAction('melee', false));
       if (!this.spec.meleeOnly) this.stanceLabel = this.touchButton(GAME_WIDTH - 76, GAME_HEIGHT - 114, '持刀', () => queueAction('stance'));
-      this.touchButton(GAME_WIDTH - 76, GAME_HEIGHT - 76, '手雷', () => this.grenade());
-      this.touchButton(GAME_WIDTH - 114, GAME_HEIGHT - 38, '醫療', () => this.medkit());
+      this.touchButton(GAME_WIDTH - 76, GAME_HEIGHT - 76, '醫療', () => this.medkit());
       this.touchButton(GAME_WIDTH - 38, GAME_HEIGHT - 114, '互動', () => this.interact());
       if (GameState.data.hero === 'soldier') this.touchButton(GAME_WIDTH - 114, GAME_HEIGHT - 76, '擊倒', () => (heroTouch.skill = true));
     }
@@ -670,7 +667,7 @@ export class ExploreFieldScene extends Phaser.Scene {
       this.melee.stance ? `近戰：${this.melee.def.name}${pips}` : `${w.def.name}  ${w.ammo}/${w.def.magazine}  ${res === Infinity ? '∞' : res}${this.weapons.reloading ? '  換彈中…' : ''}`,
     );
     const s = GameState.data.supplies;
-    const parts = [`手雷 ${s.grenade}`, `醫療 ${s.medkit}`];
+    const parts = [`醫療 ${s.medkit}`];
     if (this.spec.seconds && this.spec.mode === 'fight') parts.unshift(`剩 ${Math.max(0, Math.ceil(this.spec.seconds - this.elapsed))} 秒`);
     else if (this.alerted) parts.unshift(`剩 ${this.zombies.length + this.toSpawn} 隻`);
     const hh = this.heroSys?.hud();
@@ -685,16 +682,6 @@ export class ExploreFieldScene extends Phaser.Scene {
   private interact(): void {
     if (this.ended || !this.interaction) return;
     this.props.interact(this.interaction);
-  }
-
-  private grenade(): void {
-    if (this.ended) return;
-    const inp = this.input2.state;
-    const ok = throwGrenade(this, this.player, inp.aimX, inp.aimY, () => this.zombies, (n) => (this.kills += n));
-    if (ok) {
-      this.exp.addNoise(20);
-      this.raiseAlarm();
-    }
   }
 
   private medkit(): void {
