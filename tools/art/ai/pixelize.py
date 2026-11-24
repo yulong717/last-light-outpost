@@ -193,11 +193,14 @@ def palette_from_image(base: Path, dirs: list[Path], extra: int, out: Path, min_
     return pal
 
 
-def quantize(img: Image.Image, pal: np.ndarray) -> Image.Image:
+def quantize(img: Image.Image, pal: np.ndarray, hue_weight: float = 1.0) -> Image.Image:
+    """Nearest palette colour in OKLab. hue_weight > 1 scales a/b so a saturated colour stays in its
+    hue family (red paint -> the palette's reds, not a brown of similar lightness)."""
     a = np.array(img.convert("RGBA"))
     op = a[..., 3] > 0
-    lab = srgb_to_oklab(a[..., :3].reshape(-1, 3))
-    plab = srgb_to_oklab(pal)
+    w = np.array([1.0, hue_weight, hue_weight])
+    lab = srgb_to_oklab(a[..., :3].reshape(-1, 3)) * w
+    plab = srgb_to_oklab(pal) * w
     d = ((lab[:, None, :] - plab[None, :, :]) ** 2).sum(-1)
     idx = d.argmin(1).reshape(a.shape[:2])
     out = np.zeros_like(a)
@@ -291,18 +294,23 @@ def _keys(a: np.ndarray) -> np.ndarray:
 
 
 def limit_colours(img: Image.Image, max_c: int, region: np.ndarray | None = None,
-                  protect: list[str] | None = None) -> tuple[Image.Image, list[int]]:
+                  protect: list[str] | None = None, uncounted: list[str] | None = None
+                  ) -> tuple[Image.Image, list[int]]:
     """Reduce the colours inside `region` (bool mask, default all) to <= max_c: repeatedly merge the
     colour whose merge costs least (pixels x OKLab distance^2) into its nearest remaining one. Never merged away: the darkest colour
-    (outline) and `protect` hex colours (e.g. hero identity red / stripe blue)."""
+    (outline) and `protect` hex colours (e.g. hero identity red / stripe blue).
+    `uncounted` hex colours do not count towards max_c (character rule: <=16 + identity colours).
+    Returns (image, [colours before, colours after]) - both counts exclude `uncounted`."""
     a = np.array(img.convert("RGBA"))
     op = a[..., 3] > 0
     if region is not None:
         op &= region
     keys = _keys(a)
     u, c = np.unique(keys[op], return_counts=True)
-    if len(u) <= max_c:
-        return Image.fromarray(a, "RGBA"), [len(u), len(u)]
+    free = {int(h, 16) for h in uncounted or []}
+    n_free = sum(1 for k in u if int(k) in free)
+    if len(u) - n_free <= max_c:
+        return Image.fromarray(a, "RGBA"), [len(u) - n_free, len(u) - n_free]
     rgb = np.stack([(u >> 16) & 255, (u >> 8) & 255, u & 255], 1).astype(np.uint8)
     lab = srgb_to_oklab(rgb)
     keep = {int(np.argmin(lab[:, 0]))}
@@ -312,7 +320,7 @@ def limit_colours(img: Image.Image, max_c: int, region: np.ndarray | None = None
     alive = list(range(len(u)))
     cnt = dict(enumerate(c.tolist()))
     remap = {i: i for i in alive}
-    while len(alive) > max_c:
+    while len(alive) - n_free > max_c:
         cand = [j for j in alive if j not in keep]
         if not cand:
             break
@@ -330,7 +338,7 @@ def limit_colours(img: Image.Image, max_c: int, region: np.ndarray | None = None
     for src, dst in remap.items():
         if src != dst:
             a[op & (keys == u[src]), :3] = rgb[dst]
-    return Image.fromarray(a, "RGBA"), [len(u), len(alive)]
+    return Image.fromarray(a, "RGBA"), [len(u) - n_free, len(alive) - n_free]
 
 
 def remove_islands(img: Image.Image, max_px: int = 2, region: np.ndarray | None = None,

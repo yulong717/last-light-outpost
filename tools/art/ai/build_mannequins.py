@@ -1,12 +1,17 @@
-"""Round 7: faceless S/M/L/XL mannequins, side-view standing (AI_ART_PIPELINE §4.2), anchor.png as style ref.
+"""Faceless S/M/L/XL mannequins standing (AI_ART_PIPELINE §4.2), anchor.png as style ref.
+
+Round 7: pure side view (art/ai/mannequins/<size>/side_stand_*.png, kept for reference).
+Round 8: three-quarter view like Akai (all humanoids), XL split into XL_fat / XL_strong,
+characters <= 16 colours -> art/ai/mannequins/<size>/stand34_*.png.
 
   python tools/art/ai/build_mannequins.py refs                 # proportion refs (1024, 16x) + anchor ref
   python tools/art/ai/build_mannequins.py gen [--sizes S M L XL] [--seeds 1 2 3 4]
   python tools/art/ai/build_mannequins.py post                 # 64x64 on master.gpl, measure, 4-seed sheets
-  python tools/art/ai/build_mannequins.py pick S=2 M=1 L=3 XL=4
+  python tools/art/ai/build_mannequins.py pick S=2 M=1 L=3 XL_fat=4 XL_strong=1
 
 Spec (§4.2): height 48/56/60/62, head 14/16/17/18, XL 1.4x as wide as M. Foot row y=61, centre x=32.
-Source of the proportions: art/ai/mannequins/M/profile/stand_512.png (56 px, head 16, neck row 22).
+Source of the proportions (round 8): art/ai/mannequins/M/stand_512.png, the round-2 three-quarter M
+mannequin (56 px, head 16, neck row 22, 28 px wide).
 """
 from __future__ import annotations
 
@@ -25,27 +30,33 @@ from pixelize import cleanup, despill, limit_colours, quantize, remove_islands  
 from sprite_utils import k_centroid, key_magenta  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[3]
-RAW = ROOT / "art/ai/raw/mannequins"
+RAW = ROOT / "art/ai/raw/mannequins8"
 OUT = ROOT / "art/ai/mannequins"
 PY = ROOT / ".venv-art/Scripts/python.exe"
-SRC = ROOT / "art/ai/mannequins/M/profile/stand_512.png"
+SRC = ROOT / "art/ai/mannequins/M/stand_512.png"  # three-quarter view
 SRC_NECK_64 = 22          # narrowest neck row of the M profile (64 px space)
 SRC_BODY_64 = 61 - 22 + 1  # body rows below the neck: 40
 G = 16                     # generation scale: 1024 / 64
 FOOT = 61
-MAX_COLOURS = 10
+MAX_COLOURS = 16  # round 8: characters (humanoids) <= 16 colours; objects stay <= 10
+OUT_NAME = "stand34"
 SIZES = {  # height, head, width factor vs M (body), prompt extra
     "S": (48, 14, None, "a small, slim child-sized body"),
     "M": (56, 16, None, "an average adult body"),
     "L": (60, 17, None, "a tall, slightly broader adult body"),
-    "XL": (62, 18, 1.4, "a very heavy, broad, big-bellied body, 1.4 times as wide as an average adult"),
+    "XL_fat": (62, 18, 1.4, "a very heavy, broad, big-bellied body, 1.4 times as wide as an average adult"),
+    "XL_strong": (62, 18, 1.4, "a huge, powerfully muscular body: very broad shoulders and a thick deep chest, the "
+                               "waist clearly narrower than the shoulders, a flat stomach with no belly, thick arms and "
+                               "legs, 1.4 times as wide as an average adult at the shoulders"),
 }
+REF_OF = {"XL_fat": "XL", "XL_strong": "XL"}  # both XL bodies start from the same 1.4x proportion ref
 
 PROMPT = (
     "Redraw <Picture 1> as a clean pixel art game sprite for a 2D side-scrolling game: a faceless grey "
     "artist's mannequin with {extra}; no face, no eyes, no mouth, no hair, no clothes, no shoes, smooth plain "
-    "head. Pure side view facing right, standing upright and relaxed, arms hanging straight down at the sides, "
-    "legs straight. Keep exactly the same position, total height, head size and body width as in <Picture 1>, "
+    "head. Three-quarter view like the boy in <Picture 2>: the body faces right with the torso turned slightly "
+    "toward the camera, so the chest and both shoulders are visible; standing upright and relaxed, arms hanging "
+    "down at the sides, legs straight. Keep exactly the same position, total height, head size and body width as in <Picture 1>, "
     "feet on the same ground line. Draw it in exactly the pixel art style of <Picture 2>, as if by the same artist: "
     "a single light source from the upper left at 45 degrees, lit surfaces on the upper left and shadowed surfaces "
     "on the lower right, 3 to 4 shading steps, a 1 pixel dark coloured outline that is darker on the bottom and right "
@@ -59,6 +70,10 @@ def refs():
     RAW.mkdir(parents=True, exist_ok=True)
     m_w = None
     for size, (h, head, wf, _) in SIZES.items():
+        if size in REF_OF:
+            size = REF_OF[size]
+            if (RAW / f"ref_{size}.png").exists():
+                continue
         body = h - head
         bs = body / SRC_BODY_64
         body_width = 1.0 if wf is None else wf / bs  # XL: final body width = 1.4 x M
@@ -76,7 +91,7 @@ def refs():
 
 def sheet_refs():
     tiles = []
-    for size in SIZES:
+    for size in dict.fromkeys(REF_OF.get(k, k) for k in SIZES):
         im = Image.open(RAW / f"ref_{size}.png").convert("RGB").resize((256, 256), Image.NEAREST)
         tiles.append((size, im))
     out = Image.new("RGB", (256 * len(tiles), 270), (20, 20, 20))
@@ -95,7 +110,7 @@ def gen(sizes: list[str], seeds: list[int], tag: str):
         for s in seeds:
             out = RAW / f"{size}_s{s}"
             cmd = [str(PY), "-I", str(ROOT / "tools/art/ai/run_comfy.py"), str(ROOT / "art/ai/workflows/h3_image_edit.json"),
-                   "--image", f"load1={RAW / f'ref_{size}.png'}", "--image", f"load2={RAW / 'anchor_ref_1024.png'}",
+                   "--image", f"load1={RAW / f'ref_{REF_OF.get(size, size)}.png'}", "--image", f"load2={RAW / 'anchor_ref_1024.png'}",
                    "--set", f"sampler.seed={s}", "--set", f"cond.prompt={PROMPT.format(extra=extra)}",
                    "--set", f"save.filename_prefix=ai_art/mannequin_{size}_s{s}", "--out", str(out),
                    "--tag", f"{tag} {size} seed {s}"]
@@ -144,8 +159,11 @@ def measure(img: Image.Image) -> dict:
     top, bot = int(ys.min()), int(ys.max())
     h = bot - top + 1
     widths = a.sum(1)
-    lo, hi = top + int(h * 0.15), top + int(h * 0.45)
-    neck = lo + int(np.argmin(widths[lo:hi + 1]))
+    # neck = last row of the narrow band below the head (width <= narrowest + 1) in the 25-45% window;
+    # the head as specified runs from the top to that row (make_mannequin_ref cuts just below it)
+    lo, hi = top + int(h * 0.25), top + int(h * 0.45)
+    w = widths[lo:hi + 1]
+    neck = lo + int(np.where(w <= w.min() + 1)[0].max()) + 1
     torso = a[top + int(h * 0.45): top + int(h * 0.65)].sum(1)
     return {"height": h, "head": neck - top, "neck_row": neck, "top": top, "bottom": bot,
             "width": int(xs.max() - xs.min() + 1), "torso_width": int(np.median(torso))}
@@ -196,13 +214,14 @@ def post():
     summary = {}
     for size, spec in SIZES.items():
         rows = []
-        for d in sorted(RAW.glob(f"{size}_s*")):
+        for d in sorted(p for p in RAW.glob(f"{size}_s*") if p.name.split("_s")[-1].isdigit()):
             raws = sorted(d.glob("mannequin_*.png"))
             if not raws:
                 continue
-            s = int(d.name.split("_s")[1])
+            s = int(d.name.split("_s")[-1])
             small, clean, info = post_one(raws[-1], pal)
             clean.save(d / "stand_64.png")
+            small.save(d / "stand_64_unquant.png")
             m = measure(clean)
             chk = check(d / "stand_64.png", load_gpl())
             info.update(measure=m, light_ul_minus_lr=light(clean), outside_palette=chk["outside_palette"])
@@ -221,7 +240,7 @@ def post():
             lab = f"h{m['height']} head{m['head']} w{m['torso_width']} {info['colours'][1]}c"
             dd.text((x + 3, W1 + 15), lab, fill=(255, 255, 255))
             out.paste(tile(clean, sc, m, spec), (x, W1 + 28))
-        out.save(OUT / f"r7_{size}_seeds_x4.png")
+        out.save(OUT / f"r8_{size}_seeds_x4.png")
     (RAW / "post_summary.json").write_text(json.dumps(summary, indent=1), encoding="utf-8")
     for size, v in summary.items():
         for s, info in v.items():
@@ -235,20 +254,21 @@ def pick(choice: dict[str, int]):
     summary = json.loads((RAW / "post_summary.json").read_text(encoding="utf-8"))
     tiles, meta = [], {"spec": {k: {"height": v[0], "head": v[1], "width_vs_M": v[2]} for k, v in SIZES.items()},
                        "workflow": "art/ai/workflows/h3_image_edit.json",
-                       "references": {"Picture 1": "art/ai/raw/mannequins/ref_<size>.png: M profile stand_512 cut at the "
-                                                   "neck, head/body rescaled by make_mannequin_ref.py (1024, 16x)",
+                       "references": {"Picture 1": "art/ai/raw/mannequins8/ref_<size>.png: three-quarter M stand_512 cut "
+                                                   "at the neck, head/body rescaled by make_mannequin_ref.py (1024, 16x); "
+                                                   "XL_fat and XL_strong share ref_XL",
                                       "Picture 2": "art/ai/style/anchor.png x5 centred on 1024 magenta"},
                        "palette": "art/ai/palette/master.gpl (main 48 only)",
                        "post": "grid phase (16) -> key -> k_centroid /16 -> largest blob -> foot y=61 -> quantize -> "
-                               "cleanup (selout outline) -> quantize -> islands <=2px -> <=10 colours -> islands",
+                               "cleanup (selout outline) -> quantize -> islands <=2px -> <=16 colours -> islands",
                        "prompt": PROMPT, "picked": {}, "seeds": summary}
     for size, s in choice.items():
         src = RAW / f"{size}_s{s}"
         dst = OUT / size
         dst.mkdir(parents=True, exist_ok=True)
         img = Image.open(src / "stand_64.png")
-        img.save(dst / "side_stand_64.png")
-        img.resize((512, 512), Image.NEAREST).save(dst / "side_stand_512.png")
+        img.save(dst / f"{OUT_NAME}_64.png")
+        img.resize((512, 512), Image.NEAREST).save(dst / f"{OUT_NAME}_512.png")
         meta["picked"][size] = {"seed": s, "generation": json.loads((src / "meta.json").read_text(encoding="utf-8"))[-1]}
         tiles.append((size, img, summary[size][str(s)]["measure"]))
     sc = 4
@@ -256,17 +276,17 @@ def pick(choice: dict[str, int]):
     d = ImageDraw.Draw(out)
     for i, (size, img, m) in enumerate(tiles):
         out.paste(tile(img, sc, m, SIZES[size]), (i * 64 * sc, 14))
-        d.text((i * 64 * sc + 3, 1), f"{size}: h{m['height']} head{m['head']} torso{m['torso_width']}", fill=(255, 255, 255))
-    out.save(OUT / "r7_lineup_x4.png")
+        d.text((i * 64 * sc + 3, 1), f"{size}: h{m['height']} w{m['width']} torso{m['torso_width']}", fill=(255, 255, 255))
+    out.save(OUT / "r8_lineup_x4.png")
     # all four on one strip next to the anchor's Akai for scale
-    strip = Image.new("RGBA", (64 * 5, 64), (0, 0, 0, 0))
+    strip = Image.new("RGBA", (64 * (len(tiles) + 1), 64), (0, 0, 0, 0))
     strip.alpha_composite(Image.open(ROOT / "art/ai/style/anchor.png").convert("RGBA").crop((0, 0, 38, 64)), (13, 0))
     for i, (_, img, _) in enumerate(tiles):
         strip.alpha_composite(img.convert("RGBA"), (64 * (i + 1), 0))
     bg = Image.new("RGBA", strip.size, (255, 0, 255, 255))
     bg.alpha_composite(strip)
-    bg.convert("RGB").resize((strip.width * 4, 256), Image.NEAREST).save(OUT / "r7_with_akai_x4.png")
-    (OUT / "r7_meta.json").write_text(json.dumps(meta, indent=1, ensure_ascii=False), encoding="utf-8")
+    bg.convert("RGB").resize((strip.width * 4, 256), Image.NEAREST).save(OUT / "r8_with_akai_x4.png")
+    (OUT / "r8_meta.json").write_text(json.dumps(meta, indent=1, ensure_ascii=False), encoding="utf-8")
     print("picked", choice)
 
 
@@ -276,7 +296,7 @@ def main():
     ap.add_argument("choice", nargs="*")
     ap.add_argument("--sizes", nargs="*", default=list(SIZES))
     ap.add_argument("--seeds", nargs="*", type=int, default=[1, 2, 3, 4])
-    ap.add_argument("--tag", default="r7 mannequin")
+    ap.add_argument("--tag", default="r8 mannequin 3/4")
     a = ap.parse_args()
     if a.cmd == "refs":
         refs()

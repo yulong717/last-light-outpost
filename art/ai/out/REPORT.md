@@ -56,6 +56,111 @@ VRAM 峰值為 `nvidia-smi` 整卡用量（含桌面）。全程沒有 OOM。
 - 疊圖：`templates_contact.png`、`overlay_check.png`。
 - 失敗：`walk_pass_a`（過渡姿勢）兩個 seed 都畫成大步，沒有收腿；之後改提示詞重做。灰色人台的近腳／遠腳不易區分，contact_a / contact_b 看起來差不多。
 
+## 第八輪（STYLE_ANCHOR 續）：3/4 側面人台、XL 胖／壯、阿凱與油桶重跑
+
+> 接第七輪（STYLE_ANCHOR 續）審圖（S／M／L 通過），和下面的「第八輪（MELEE_WEAPONS）」是不同兩輪。
+
+### 1. 色數規則與阿凱重跑
+
+**規則**：物件 ≤10 色；角色（阿凱、霧屍、人台）≤16 色，主角識別色另計、不佔名額。
+- `limit_colours` 新增 `uncounted` 參數，識別色不算進上限。
+- 樣板圖依物件類型套用上限，見 `build_anchor.py` 的 `CHARACTERS`。
+
+**阿凱重跑**（`akai8`，4 個 seed，只取阿凱那一段合成）：
+- 提示詞加上：
+  - 頭髮要「clearly brown, not black」
+  - 球衣條紋要「clearly visible thin vertical blue pinstripes evenly spaced across the whole jersey」
+- 4 張都恢復了棕髮和條紋（`akai8_seeds_x4.png`：上排是縮小 ÷8 的原圖，下排是後處理結果）。
+- **選 seed 2**：28×56，條紋最均勻。seed 3 高 58，超出 ±1。
+- 色數：16 色＋識別色 2 色，共 18 色。
+
+### 2. 油桶：紅漆桶身＋大片鏽斑
+
+**改法**（`drum8`，4 個 seed，`drum8_seeds_x4.png`）：
+- 提示詞改成「bright crimson red paint (the same red as the boy's number 7) covers most of the drum, a few large flat brown rust patches … must not look like a brown drum」。
+- 油桶量化時色相權重 ×2（`quantize(..., hue_weight=2)`）：紅漆會落在主色的紅色系（`793632`／`b74e4b`／`d55c56`），不會被拉到明度相近的咖啡色。
+
+**結果**：4 張都是紅色桶身。
+- seed 1 高 33、seed 2 高 45，超出 28–31，淘汰。
+- **選 seed 3**：21×31，大片斜向鏽斑，三道桶箍清楚。
+
+**注意**：
+- 主色裡最紅的是 `b74e4b`／`d55c56`（第六輪聚類出來的），所以油桶看起來偏鮭魚紅，不是鮮紅。如果要更鮮的紅，需要在主色加一個高彩度的紅（或把油桶紅列進保留色）。
+- 油桶的左上受光量測接近 0（+0.00）：紅漆和鏽斑的明暗分布比較平均，看圖亮面不明顯。
+
+![第七輪 vs 第八輪](../style/anchor_r7_vs_r8_x5.png)
+
+| 物件 | 尺寸 | 色數 | 上限 |
+| --- | --- | --- | --- |
+| 阿凱（akai8 s2） | 28×56 | 16＋識別色 2 | 16＋識別色 |
+| 霧屍（s2） | 51×56 | 16 | 16 |
+| 木箱（s2） | 22×19 | 10 | 10 |
+| 油桶（drum8 s3） | 21×31 | 10 | 10 |
+| 路燈（s2） | 15×62 | 10 | 10 |
+
+整張共 34 色，0 色超出 master.gpl。腳底都在 y=61。
+
+### 3. 人台改 3/4 側面、XL 拆胖／壯
+
+輸出：`art/ai/mannequins/{S,M,L,XL_fat,XL_strong}/stand34_64.png`（另附 `_512`），參數記錄在 `r8_meta.json`。第七輪的純側面版 `side_stand_*.png` 和 `XL/` 保留不刪，供參考。
+
+![五個人台與阿凱](../mannequins/r8_with_akai_x4.png)
+
+做法：
+- **Picture 1**：來源改成第二輪的 3/4 側面 M 人台 `M/stand_512.png`（寬 28）。在頸部（y=22）切開，用 `make_mannequin_ref.py` 縮放頭和身體。XL-胖和 XL-壯共用同一張 1.4 倍寬的參考圖，體型差異交給提示詞。
+- **Picture 2**：`anchor.png` 放大 5 倍。
+- **提示詞**：「three-quarter view like the boy in Picture 2: body faces right, torso turned slightly toward the camera, chest and both shoulders visible」。
+  - XL-壯另外描述：寬肩厚胸、腰明顯比肩窄、平腹無肚子、手腿粗。
+- **色數**：角色 ≤16 色，只用 48 主色。
+- **頭高量法修正**：改成取「頸部窄段的最後一列」。舊量法用在 3/4 參考圖上會量到 13，新量法量 4 張參考圖都正好是 14／16／17／18。
+
+| 體型 | 規格（高／頭） | 選定 | 實測高 | 實測頭 | 寬 | 寬／M | 色數 | 受光差 |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| S | 48／14 | seed 2 | 48 | 14 | 23 | 0.85 | 16 | +0.07 |
+| M | 56／16，寬 24–28 | seed 2 | 56 | 16 | **27** | 1.00 | 16 | +0.04 |
+| L | 60／17 | seed 3 | 60 | 17 | 29 | 1.07 | 16 | +0.07 |
+| XL-胖 | 62／18，寬 1.4× | seed 2 | 62 | 18 | 37 | 1.37 | 16 | +0.05 |
+| XL-壯 | 62／18，肩寬 1.4× | seed 3 | 62 | 17 | 38 | 1.41 | 16 | +0.06 |
+
+每個體型 4 個 seed 的對照表（上排 ÷16 原圖，下排後處理結果；綠線腳底、白線規格頭頂、黃線規格頭底）：
+
+![S](../mannequins/r8_S_seeds_x4.png)
+![M](../mannequins/r8_M_seeds_x4.png)
+![L](../mannequins/r8_L_seeds_x4.png)
+![XL-胖](../mannequins/r8_XL_fat_seeds_x4.png)
+![XL-壯](../mannequins/r8_XL_strong_seeds_x4.png)
+
+- **高度**：20 張全部命中規格。H3 照 Picture 1 的位置畫，腳底不用位移。
+- **選圖理由**：
+  - S seed 2 頭 14；seed 3 量到 15。
+  - M seed 3 的頭頂多了一塊淺色帽狀色塊，所以選 seed 2。
+  - L seed 3 的受光最清楚。
+  - XL-胖 seed 2 肚子圓、亮面在左上。
+  - XL-壯 seed 3 肩最寬、腰收得最明顯。4 個 seed 都沒有畫肚子；腹部是肌肉分塊，量出來的軀幹寬度和胖版差不多（34 vs 34），但看圖輪廓是倒三角。
+- **XL-壯的頭量到 17**（規格 18）：粗壯的斜方肌把頸部窄段往上推，量法少算一列。參考圖本身是 18。
+- **XL 頭頂碰到上緣**（y=0）：同第七輪，之後做持武器或跳躍時改用 64×72 畫布。
+- 5 張全部 16 色，0 色超出 master.gpl。
+
+### 4. `docs/ART_STYLE_SPEC.md`
+
+- **視角**：人形（主角、隊員、霧屍、人台）3/4 側面，身體朝右、軀幹微轉向鏡頭；物件與動物純側面。
+- **頭身**：加註 M 人台 3/4 側面寬約 24–28 px。
+- **色數**：物件 ≤10 色；角色（人形、動物）≤16 色，識別色另計。驗收條也一併改。
+- **XL 拆成 XL-胖、XL-壯**：
+  - XL-胖：大肚子，用在 fatman、胖型巨屍。
+  - XL-壯：寬肩厚胸、無肚子，用在 bruiser 型、壯型巨屍。
+  - 隊員和巨屍的尺寸表同步改。
+
+### 驗收
+
+- [x] 色數規則：物件 ≤10、角色 ≤16＋識別色（樣板圖和人台都套用）
+- [x] 阿凱棕髮和條紋恢復，56 高
+- [x] 油桶紅漆＋大片鏽斑，21×31（28–31 內），用的是主色的紅
+- [x] S／M／L／XL 改 3/4 側面，M 寬 27（24–28 內），身高、頭高不變
+- [x] XL 拆成胖、壯，各 4 個 seed
+- [x] ART_STYLE_SPEC 已更新
+- [ ] 油桶紅偏鮭魚色、亮面不明顯，請審圖決定要不要在主色加高彩度紅
+
 ## 第七輪（STYLE_ANCHOR 續）：S／M／L／XL 無臉人台＋樣板圖修正
 
 > 接第六輪（STYLE_ANCHOR）審圖意見，和下面的「第七輪（MELEE_WEAPONS）」是不同兩輪。

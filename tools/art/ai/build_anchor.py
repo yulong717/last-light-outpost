@@ -70,6 +70,29 @@ PROMPT_DRUM = PROMPT.replace(
     "large flat rust patches, simple shapes, no small specks or noise. ")
 assert PROMPT_DRUM != PROMPT
 
+# round 8 review: Akai re-run for brown hair + visible pinstripes (only his slot is used)
+PROMPT_AKAI = PROMPT.replace(
+    "curly dark brown hair, white pinstripe baseball jersey with a red number 7,",
+    "curly chestnut-brown hair that is clearly brown, not black, showing under the cap; a white baseball jersey "
+    "with clearly visible thin vertical blue pinstripes evenly spaced across the whole jersey, and a red number 7;")
+assert PROMPT_AKAI != PROMPT
+# round 8 review: red painted drum with big rust patches, not an all-brown drum
+PROMPT_DRUM8 = PROMPT_DRUM.replace(
+    "(4) an upright red-brown painted steel oil drum,",
+    "(4) an upright steel oil drum painted bright crimson red (the same red as the boy's number 7),").replace(
+    "large flat rust patches, simple shapes, no small specks or noise. ",
+    "the red paint covers most of the drum, with a few large flat brown rust patches, simple shapes, "
+    "no small specks or noise; it must not look like a brown drum. ")
+assert PROMPT_DRUM8 != PROMPT_DRUM and "crimson" in PROMPT_DRUM8 and "covers most" in PROMPT_DRUM8
+
+# variant -> (raw dir prefix, prompt, slot shown in its sheet)
+VARIANTS = {
+    "base": ("s", PROMPT, None),
+    "drum": ("drum_s", PROMPT_DRUM, "drum"),
+    "akai8": ("akai8_s", PROMPT_AKAI, "akai"),
+    "drum8": ("drum8_s", PROMPT_DRUM8, "drum"),
+}
+
 
 # ---------------------------------------------------------------- layout
 
@@ -300,9 +323,10 @@ def post_one(raw: Path, pal: np.ndarray) -> tuple[Image.Image, Image.Image]:
     for name, (x0, x1), _ in SLOTS:
         sp = slot_palette(pal, name)
         crop = small.crop((x0, 0, x1, H))
-        q = quantize(crop, sp)
+        hw = HUE_WEIGHT.get(name, 1.0)
+        q = quantize(crop, sp, hw)
         c = cleanup(q, sp, outline=True)
-        c = quantize(c, sp)  # cleanup may average; snap again
+        c = quantize(c, sp, hw)  # cleanup may average; snap again
         out[:, x0:x1] = np.array(c)
     return small, Image.fromarray(out, "RGBA")
 
@@ -315,7 +339,11 @@ def slot_palette(pal: np.ndarray, name: str) -> np.ndarray:
     return main
 
 
-MAX_COLOURS = 10  # round 7 review: each object <= 10 colours (spec allows 16)
+# round 8 review: objects <= 10 colours; characters <= 16, hero identity colours not counted
+CHARACTERS = {"akai", "zombie"}
+MAX_OBJECT, MAX_CHARACTER = 10, 16
+# round 8: drum red paint must land on the palette's reds, not a brown of similar lightness
+HUE_WEIGHT = {"drum": 2.0}
 ISLAND_PX = 2      # round 7 review: single-colour patches of <= 2 px are noise
 
 
@@ -327,15 +355,16 @@ def slot_mask(name: str) -> np.ndarray:
 
 
 def tidy(img: Image.Image) -> tuple[Image.Image, dict]:
-    """Per object: remove <=2 px islands, cap at 10 colours, remove islands the merge created.
-    Hero identity colours (jersey red, stripe blue) and the darkest colour are protected."""
+    """Per slot: remove <=2 px islands, cap colours (objects 10, characters 16 + identity colours),
+    remove islands the merge created. Identity colours and the darkest colour are protected."""
     stats = {}
     for name, _, _ in SLOTS:
         reg = slot_mask(name)
         img, n1 = remove_islands(img, ISLAND_PX, reg, IDENTITY)
-        img, cc = limit_colours(img, MAX_COLOURS, reg, IDENTITY)
+        cap = MAX_CHARACTER if name in CHARACTERS else MAX_OBJECT
+        img, cc = limit_colours(img, cap, reg, IDENTITY, uncounted=IDENTITY)
         img, n2 = remove_islands(img, ISLAND_PX, reg, IDENTITY)
-        stats[name] = {"colours": cc, "island_px_fixed": n1 + n2}
+        stats[name] = {"colours": cc, "cap": cap, "island_px_fixed": n1 + n2}
     return img, stats
 
 
@@ -386,11 +415,14 @@ def post(seeds: list[int] | None, prefix: str = "s"):
         rows.append((f"seed {s}  raw/8", small))
         rows.append((f"seed {s}  master.gpl  {chk['colours']}c  h={h}", clean))
     OUTD.mkdir(parents=True, exist_ok=True)
+    slot = next((v[2] for v in VARIANTS.values() if v[0] == prefix), None)
     if prefix == "s":
         sheet(rows).save(RAW / "seeds_detail_x4.png")
         sheet([r for r in rows if "master" in r[0]]).save(OUTD / "anchor_seeds_x4.png")
-    else:
+    elif prefix == "drum_s":
         drum_sheet(summary, prefix).save(OUTD / "drum_seeds_x4.png")
+    else:
+        slot_sheet(summary, prefix, slot).save(OUTD / f"{prefix.rstrip('_s')}_seeds_x4.png")
     (RAW / f"post_summary_{prefix}.json").write_text(json.dumps(summary, indent=1), encoding="utf-8")
     print(json.dumps(summary, indent=1))
 
@@ -419,13 +451,48 @@ def drum_sheet(summary: dict, prefix: str, scale: int = 6) -> Image.Image:
     return out
 
 
-def pick(seed: int, drum: int | None = None):
+def slot_sheet(summary: dict, prefix: str, slot: str, scale: int = 6) -> Image.Image:
+    """One slot of every seed of a variant side by side: 64-px result (6x) over its unquantized /8 source."""
+    x0, x1 = next(x for n, x, _ in SLOTS if n == slot)
+    top = 0 if slot == "akai" else 24
+    cw, ch = x1 - x0, H - top
+    cols = []
+    for s, v in summary.items():
+        d = RAW / f"{prefix}{s}"
+        pair = []
+        for f in ("anchor_64_unquant.png", "anchor_64.png"):
+            im = Image.open(d / f).convert("RGBA").crop((x0, top, x1, H))
+            bg = Image.new("RGBA", im.size, (255, 0, 255, 255))
+            bg.alpha_composite(im)
+            t = bg.convert("RGB").resize((cw * scale, ch * scale), Image.NEAREST)
+            dd = ImageDraw.Draw(t)
+            dd.line([(0, (FOOT + 1 - top) * scale), (t.width, (FOOT + 1 - top) * scale)], fill=(0, 255, 0))
+            pair.append(t)
+        m = v["measure"][slot]
+        cols.append((f"s{s} {m['w']}x{m['h']} {v['colours_per_object'][slot]['colours'][1]}c", pair))
+    out = Image.new("RGB", (len(cols) * (cw * scale + 8), 2 * ch * scale + 30), (20, 20, 20))
+    d = ImageDraw.Draw(out)
+    for i, (lab, (raw, fin)) in enumerate(cols):
+        x = i * (cw * scale + 8)
+        d.text((x + 2, 1), lab + "  (top: /8, bottom: final)", fill=(255, 255, 255))
+        out.paste(raw, (x, 14))
+        out.paste(fin, (x, ch * scale + 28))
+    return out
+
+
+def pick(seed: int, drum: int | None = None, splice: dict | None = None):
     src = RAW / f"s{seed}"
     OUTD.mkdir(parents=True, exist_ok=True)
     img = Image.open(src / "anchor_64.png").convert("RGBA")
     if drum is not None:  # splice the re-run drum slot into the chosen anchor
         x0, x1 = next(x for n, x, _ in SLOTS if n == "drum")
         d = Image.open(RAW / f"drum_s{drum}" / "anchor_64.png").convert("RGBA")
+        a, b = np.array(img), np.array(d)
+        a[:, x0:x1] = b[:, x0:x1]
+        img = Image.fromarray(a, "RGBA")
+    for slot, (variant, vs) in (splice or {}).items():  # round 8: e.g. akai from akai8 seed 3
+        x0, x1 = next(x for n, x, _ in SLOTS if n == slot)
+        d = Image.open(RAW / f"{VARIANTS[variant][0]}{vs}" / "anchor_64.png").convert("RGBA")
         a, b = np.array(img), np.array(d)
         a[:, x0:x1] = b[:, x0:x1]
         img = Image.fromarray(a, "RGBA")
@@ -457,6 +524,19 @@ def pick(seed: int, drum: int | None = None):
         meta["drum_generation"] = json.loads((RAW / f"drum_s{drum}" / "meta.json").read_text(encoding="utf-8"))
         meta["drum_prompt_change"] = ("clean shaded paint with only a few small rust spots -> "
                                       "large flat rust patches, simple shapes, no small specks or noise")
+    if splice:
+        meta["splice"] = {}
+        for slot, (variant, vs) in splice.items():
+            pre = VARIANTS[variant][0]
+            meta["splice"][slot] = {
+                "variant": variant, "seed": vs, "prompt": VARIANTS[variant][1],
+                "seeds": json.loads((RAW / f"post_summary_{pre}.json").read_text(encoding="utf-8")),
+                "generation": json.loads((RAW / f"{pre}{vs}" / "meta.json").read_text(encoding="utf-8")),
+            }
+    meta["post"] = meta["post"].replace(
+        "<=10 colours (merge cheapest: pixels x distance^2)",
+        "objects <=10 / characters <=16 colours, identity colours not counted (merge cheapest: pixels x "
+        "distance^2, hue x2); drum quantized with hue weight 2")
     (OUTD / "meta.json").write_text(json.dumps(meta, indent=1, ensure_ascii=False), encoding="utf-8")
     print("picked", seed)
 
@@ -470,17 +550,26 @@ def main():
     ap.add_argument("--tag", default="style anchor")
     ap.add_argument("--drum", action="store_true", help="gen/post: drum re-run (PROMPT_DRUM, raw/style/drum_s*)")
     ap.add_argument("--drum-seed", type=int, help="pick: take the drum slot from this drum re-run seed")
+    ap.add_argument("--variant", choices=list(VARIANTS), help="gen/post: which prompt variant (overrides --drum)")
+    ap.add_argument("--splice", nargs="*", default=[], metavar="SLOT=VARIANT:SEED",
+                    help="pick: replace a slot with another variant's seed, e.g. akai=akai8:3 drum=drum8:2")
     a = ap.parse_args()
     if a.cmd == "layout":
         layout()
     elif a.cmd == "gen":
         prompt = a.prompt_file.read_text(encoding="utf-8").strip() if a.prompt_file else (
-            PROMPT_DRUM if a.drum else PROMPT)
-        gen(a.seeds, prompt, a.tag, "drum_s" if a.drum else "s")
+            VARIANTS[a.variant][1] if a.variant else (PROMPT_DRUM if a.drum else PROMPT))
+        gen(a.seeds, prompt, a.tag, VARIANTS[a.variant][0] if a.variant else ("drum_s" if a.drum else "s"))
     elif a.cmd == "post":
-        post(a.seeds if a.seeds != [1, 2, 3, 4] else None, "drum_s" if a.drum else "s")
+        post(a.seeds if a.seeds != [1, 2, 3, 4] else None,
+             VARIANTS[a.variant][0] if a.variant else ("drum_s" if a.drum else "s"))
     else:
-        pick(a.seed, a.drum_seed)
+        sp = {}
+        for spec in a.splice:
+            slot, rest = spec.split("=")
+            v, vs = rest.split(":")
+            sp[slot] = (v, int(vs))
+        pick(a.seed, a.drum_seed, sp)
 
 
 if __name__ == "__main__":
