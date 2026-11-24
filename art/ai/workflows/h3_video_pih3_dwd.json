@@ -1,0 +1,20 @@
+{
+  "_meta_doc": "pi-H3 DWD first+last frame video, API format. Based on Lakonik/ComfyUI-piFlow workflows/pi-H3-DWD.json (commit 4355cc4, 2026-11-23): subgraphs flattened, audio branch removed, sparse attention (BlockSparseAttention sol-attn, INT8) bypassed = dense attention (the piFlow docs say the built-in Sol-Attn visibly degrades pi-H3), image scaling nearest-exact. Needs ComfyUI-piFlow (Load LakonLab Adapter, pi-Flow Scheduler, DWD Decode). 4 steps: adapter.adapter_name=pi_h3_4step_dwd_adapter_int8_convrot.safetensors, sched.steps=4, sched.max_raw_t=0.96. 2 steps: pi_h3_2step_..., steps 2, max_raw_t 0.93. final_step_size_scale 0.6, sigma shift 12/3, sampler euler.",
+  "unet": {"class_type": "UNETLoader", "inputs": {"unet_name": "minimax_h3_fl2va_pruned_int8_convrot.safetensors", "weight_dtype": "default"}},
+  "adapter": {"class_type": "Load LakonLab Adapter", "inputs": {"model": ["unet", 0], "adapter_name": "pi_h3_4step_dwd_adapter_int8_convrot.safetensors", "adapter_strength": 1.0}},
+  "shift": {"class_type": "MiniMaxH3SigmaShift", "inputs": {"model": ["adapter", 0], "shift_video": 12.0, "shift_audio": 3.0}},
+  "clip": {"class_type": "CLIPLoader", "inputs": {"clip_name": "qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors", "type": "minimax", "device": "default"}},
+  "vae": {"class_type": "VAELoader", "inputs": {"vae_name": "minimax_h3_video_vae_int8_convrot.safetensors"}},
+  "first": {"class_type": "LoadImage", "inputs": {"image": "PLACEHOLDER.png"}},
+  "last": {"class_type": "LoadImage", "inputs": {"image": "PLACEHOLDER.png"}},
+  "scale_first": {"class_type": "ImageScale", "inputs": {"image": ["first", 0], "upscale_method": "nearest-exact", "width": 512, "height": 512, "crop": "disabled"}},
+  "scale_last": {"class_type": "ImageScale", "inputs": {"image": ["last", 0], "upscale_method": "nearest-exact", "width": 512, "height": 512, "crop": "disabled"}},
+  "cond": {"class_type": "MiniMaxH3ImageToVideo", "inputs": {"clip": ["clip", 0], "vae": ["vae", 0], "first_frame": ["scale_first", 0], "last_frame": ["scale_last", 0], "prompt": "", "width": 512, "height": 512, "length": 56}},
+  "noise": {"class_type": "RandomNoise", "inputs": {"noise_seed": 1}},
+  "ksampler": {"class_type": "KSamplerSelect", "inputs": {"sampler_name": "euler"}},
+  "sched": {"class_type": "pi-Flow Scheduler", "inputs": {"model": ["shift", 0], "steps": 4, "min_raw_t": 0.0, "max_raw_t": 0.96, "final_step_size_scale": 0.6}},
+  "guider": {"class_type": "BasicGuider", "inputs": {"model": ["shift", 0], "conditioning": ["cond", 0]}},
+  "sample": {"class_type": "SamplerCustomAdvanced", "inputs": {"noise": ["noise", 0], "guider": ["guider", 0], "sampler": ["ksampler", 0], "sigmas": ["sched", 0], "latent_image": ["cond", 1]}},
+  "decode": {"class_type": "DWD Decode", "inputs": {"samples": ["sample", 0]}},
+  "save": {"class_type": "SaveImage", "inputs": {"images": ["decode", 0], "filename_prefix": "ai_art/pih3"}}
+}

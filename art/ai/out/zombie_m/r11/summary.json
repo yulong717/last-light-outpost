@@ -374,5 +374,381 @@
    "region": true
   },
   "gait_score": -32
+ },
+ "B4_s1": {
+  "seconds": 46.8,
+  "vram_peak_mib": 15000,
+  "period": 16,
+  "out_spread": [
+   34,
+   24,
+   18,
+   18,
+   18,
+   18,
+   14,
+   25
+  ],
+  "heights": [
+   56,
+   56,
+   56,
+   56,
+   56,
+   56,
+   56,
+   56
+  ],
+  "head_dy": [
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0
+  ],
+  "colours": [
+   27,
+   16
+  ],
+  "region_px_fixed": 179,
+  "outside_palette": 0,
+  "pass": {
+   "head": true,
+   "gait": false,
+   "region": true
+  },
+  "gait_score": -20
+ },
+ "B4_s2": {
+  "seconds": 14.2,
+  "vram_peak_mib": 15016,
+  "period": 23,
+  "out_spread": [
+   27,
+   26,
+   23,
+   23,
+   22,
+   17,
+   14,
+   21
+  ],
+  "heights": [
+   56,
+   57,
+   57,
+   57,
+   57,
+   57,
+   57,
+   57
+  ],
+  "head_dy": [
+   0,
+   -1,
+   -1,
+   -1,
+   -1,
+   -1,
+   -1,
+   -1
+  ],
+  "colours": [
+   29,
+   16
+  ],
+  "region_px_fixed": 196,
+  "outside_palette": 0,
+  "pass": {
+   "head": true,
+   "gait": false,
+   "region": true
+  },
+  "gait_score": -15
+ },
+ "B4_s3": {
+  "seconds": 13.6,
+  "vram_peak_mib": 14992,
+  "period": 26,
+  "out_spread": [
+   26,
+   27,
+   27,
+   27,
+   25,
+   20,
+   13,
+   22
+  ],
+  "heights": [
+   56,
+   56,
+   56,
+   56,
+   56,
+   56,
+   56,
+   56
+  ],
+  "head_dy": [
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0
+  ],
+  "colours": [
+   28,
+   16
+  ],
+  "region_px_fixed": 193,
+  "outside_palette": 0,
+  "pass": {
+   "head": true,
+   "gait": false,
+   "region": true
+  },
+  "gait_score": -17
+ },
+ "B4_s4": {
+  "seconds": 13.6,
+  "vram_peak_mib": 14992,
+  "period": 23,
+  "out_spread": [
+   32,
+   25,
+   21,
+   21,
+   21,
+   17,
+   15,
+   21
+  ],
+  "heights": [
+   56,
+   56,
+   56,
+   56,
+   56,
+   56,
+   56,
+   56
+  ],
+  "head_dy": [
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0
+  ],
+  "colours": [
+   29,
+   16
+  ],
+  "region_px_fixed": 218,
+  "outside_palette": 0,
+  "pass": {
+   "head": true,
+   "gait": false,
+   "region": true
+  },
+  "gait_score": -17
+ },
+ "B2_s1": {
+  "seconds": 15.3,
+  "vram_peak_mib": 15008,
+  "period": 17,
+  "out_spread": [
+   19,
+   19,
+   14,
+   21,
+   28,
+   25,
+   22,
+   22
+  ],
+  "heights": [
+   56,
+   56,
+   56,
+   56,
+   56,
+   56,
+   56,
+   56
+  ],
+  "head_dy": [
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0
+  ],
+  "colours": [
+   28,
+   16
+  ],
+  "region_px_fixed": 242,
+  "outside_palette": 0,
+  "pass": {
+   "head": true,
+   "gait": false,
+   "region": true
+  },
+  "gait_score": -20
+ },
+ "B2_s2": {
+  "seconds": 8.2,
+  "vram_peak_mib": 14992,
+  "period": 48,
+  "out_spread": [
+   31,
+   24,
+   16,
+   26,
+   35,
+   27,
+   14,
+   22
+  ],
+  "heights": [
+   57,
+   57,
+   57,
+   57,
+   57,
+   56,
+   57,
+   57
+  ],
+  "head_dy": [
+   -1,
+   -1,
+   -1,
+   -1,
+   -1,
+   0,
+   -1,
+   -1
+  ],
+  "colours": [
+   29,
+   16
+  ],
+  "region_px_fixed": 242,
+  "outside_palette": 0,
+  "pass": {
+   "head": true,
+   "gait": false,
+   "region": true
+  },
+  "gait_score": 9
+ },
+ "B2_s3": {
+  "seconds": 8.1,
+  "vram_peak_mib": 14992,
+  "period": 23,
+  "out_spread": [
+   29,
+   26,
+   24,
+   24,
+   24,
+   20,
+   14,
+   23
+  ],
+  "heights": [
+   56,
+   56,
+   56,
+   56,
+   56,
+   56,
+   56,
+   56
+  ],
+  "head_dy": [
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0
+  ],
+  "colours": [
+   28,
+   16
+  ],
+  "region_px_fixed": 289,
+  "outside_palette": 0,
+  "pass": {
+   "head": true,
+   "gait": false,
+   "region": true
+  },
+  "gait_score": -15
+ },
+ "B2_s4": {
+  "seconds": 8.2,
+  "vram_peak_mib": 14992,
+  "period": 23,
+  "out_spread": [
+   28,
+   24,
+   20,
+   20,
+   20,
+   19,
+   14,
+   20
+  ],
+  "heights": [
+   56,
+   56,
+   56,
+   56,
+   56,
+   56,
+   56,
+   56
+  ],
+  "head_dy": [
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0
+  ],
+  "colours": [
+   29,
+   16
+  ],
+  "region_px_fixed": 216,
+  "outside_palette": 0,
+  "pass": {
+   "head": true,
+   "gait": false,
+   "region": true
+  },
+  "gait_score": -14
  }
 }

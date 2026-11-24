@@ -66,7 +66,7 @@ VRAM 峰值為 `nvidia-smi` 整卡用量（含桌面）。全程沒有 OOM。
 | --- | --- | --- |
 | A | 現行 `h3_video_i2v.json`：8 步 turbo LoRA、8 步 | ✅ 和第十輪完全相同（同工作流、首尾幀、提示詞、seed），直接沿用第十輪的影格和耗時，沒有重跑 |
 | D | 同一工作流，LoRA 換官方 4 步版 `minimax_h3_fl2v_turbo_4step_v1.0_768p_comfyui_bf16.safetensors`（Comfy-Org/MiniMax-H3，1.96GB，已下載到 models/loras），4 步 | ✅ |
-| B | pi-H3（ComfyUI-piFlow，4 步、2 步） | ⏸ 未跑。透過 ComfyUI Manager API 安裝 `comfyui-piflow` 被本機 Claude Code 權限擋下，等使用者手動安裝後補跑。adapter 尚未下載 |
+| B4／B2 | pi-H3 DWD adapter，4 步／2 步 | ✅ 補跑。使用者手動安裝 ComfyUI-piFlow（`comfyui-piflow`，commit 4355cc4）並重啟後跑。adapter `pi_h3_{4,2}step_dwd_adapter_int8_convrot.safetensors`（Lakonik/pi-H3，各 2.19GB）。工作流 `art/ai/workflows/h3_video_pih3_dwd.json`，見下 |
 | C | A＋`pixelart8x_h3_v3.safetensors` | ⏭ 跳過。`huggingface.co/JOYUNGI/pixelart8x-h3-lora` 不存在（API 查無），本機也沒有這個檔 |
 
 ComfyUI 0.46.3（≥0.45 ✅）。
@@ -85,6 +85,14 @@ ComfyUI 0.46.3（≥0.45 ✅）。
 | D s2 | 18.2 s | 15332 MiB | 25 | 32 26 20 20 19 18 15 22 | ✅ | ❌ | ✅ |
 | D s3 | 18.2 s | 15332 MiB | 16 | 24 19 15 24 31 29 24 24 | ✅ | ❌ | ✅ |
 | D s4 | 18.2 s | 15332 MiB | 16 | 17 17 15 25 33 25 24 24 | ✅ | ❌ | ✅ |
+| B4 s1 | 46.8 s（冷啟動＋載 adapter） | 15000 MiB | 16 | 34 24 18 18 18 18 14 25 | ✅ | ❌ | ✅ |
+| B4 s2 | 14.2 s | 15016 MiB | 23 | 27 26 23 23 22 17 14 21 | ✅ | ❌ | ✅ |
+| B4 s3 | 13.6 s | 14992 MiB | 26 | 26 27 27 27 25 20 13 22 | ✅ | ❌ | ✅ |
+| B4 s4 | 13.6 s | 14992 MiB | 23 | 32 25 21 21 21 17 15 21 | ✅ | ❌ | ✅ |
+| B2 s1 | 15.3 s（換 adapter） | 15008 MiB | 17 | 19 19 14 21 28 25 22 22 | ✅ | ❌ | ✅ |
+| B2 s2 | 8.2 s | 14992 MiB | 48 | 31 24 16 26 35 27 14 22 | ✅ | ❌（兩次最開差 4，門檻 3） | ✅ |
+| B2 s3 | 8.1 s | 14992 MiB | 23 | 29 26 24 24 24 20 14 23 | ✅ | ❌ | ✅ |
+| B2 s4 | 8.2 s | 14992 MiB | 23 | 28 24 20 20 20 19 14 20 | ✅ | ❌ | ✅ |
 
 驗收條件（程式判定，`build_zombie11.py` 開頭有寫）：
 - **頭鎖定**：8 格頭部逐像素相同，只上下 0／−1 px。
@@ -95,7 +103,8 @@ ComfyUI 0.46.3（≥0.45 ✅）。
 
 ![並排對照](../out/zombie_m/r11/compare_x3.png)
 
-- 並排 GIF：`art/ai/out/zombie_m/r11/compare.gif`（A s3、A s1、D s3、D s1；4 倍、8 fps）
+- 並排 GIF：`art/ai/out/zombie_m/r11/compare.gif`（A s3、A s1、D s3、D s1、B4 s3、B4 s2、B2 s3、B2 s2；4 倍、8 fps）
+- 全部 16 組：`art/ai/out/zombie_m/r11/compare_all_x3.png`
 - 全部 8 組：`art/ai/out/zombie_m/r11/compare_all_x3.png`
 - 數字：`art/ai/out/zombie_m/r11/summary.json`
 
@@ -108,12 +117,21 @@ ComfyUI 0.46.3（≥0.45 ✅）。
   - 4 步時動作幅度變小、腿部細節變糊（`compare_all_x3.png` 第 5–8 排褲管比較成團）。
 - **A 有 2/4 過**（s1、s3），s3 仍是最好的。
 - 頭和衣服的畫質兩者差不多，因為頭是鎖定的、顏色是後處理對的，差異主要在腿的動作。
+- **B（pi-H3）最快**：4 步 13.6 s、2 步 8.1 s，分別是 A 的 45%、27%；整卡 VRAM 峰值約 15.0GB，比 A 少約 0.3GB（不用 VAE 解碼）。
+- **B 的步態也不行**：8 個 seed 都沒過。
+  - 多數 seed 一隻腳一直在前、另一隻腳小幅來回（張開寬度停在 20–27，沒有明顯交錯），像滑步。
+  - B2 s2 最接近：週期 48、兩次最開 31／35、交錯 16／14，只差在兩步不一樣大；播起來可以看出在走，但比 A s3 拖。
+  - 畫面顆粒感比 A 重一點，但經過 ÷8 和對色後差不多看不出來。
+- B 工作流的做法（`h3_video_pih3_dwd.json`）：
+  - 來源是 piFlow 官方的 `workflows/pi-H3-DWD.json`。子圖攤平、拿掉音訊；圖片縮放改 nearest-exact。
+  - **拿掉稀疏注意力**（BlockSparseAttention sol-attn）改用一般注意力。piFlow 文件說 ComfyUI 內建的 sol-attn 是 INT8，會明顯降低 pi-H3 畫質；我們 512²／56 幀很小，不需要它加速。
+  - 其他照官方：euler、pi-Flow Scheduler（max_raw_t 4 步 0.96／2 步 0.93、final_step_size_scale 0.6）、sigma shift 12／3、DWD 直接輸出影格。
 
 ### 結論
 
 - 走路這種要求「兩腳清楚交替、步幅一致」的循環，**維持 A（8 步）**。
 - D 可以拿來做不在乎腳步的動作（待機呼吸、受擊）先快速試 seed，再用 A 出正式版。這只是推測，本輪沒測。
-- B（pi-H3）裝好 ComfyUI-piFlow 後補跑，比較會加到這一節。
+- B（pi-H3）和 D 一樣：快很多但腳步不夠清楚。適合拿來快速試提示詞或 seed 方向（2 步 8 秒），定案還是用 A。這也是推測，要在短動作上實測才算數。
 
 ## 第十輪（STYLE_ANCHOR 續）：一般霧屍 M 版走路重做
 

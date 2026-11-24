@@ -8,7 +8,7 @@ Variants (see art/ai/workflows/README.md):
   A  current h3_video_i2v.json: 8-step turbo LoRA, 8 steps. Not regenerated: same workflow, key, prompt and seeds
      as round 10, so the round 10 frames (art/ai/raw/zombie10/walk_s*) are reused, with their recorded timings.
   D  h3_video_i2v.json with the official 4-step LoRA (minimax_h3_fl2v_turbo_4step_v1.0_768p_comfyui_bf16), 4 steps.
-  B  pi-H3 (ComfyUI-piFlow) 4 and 2 steps: not run yet, the node pack is not installed (REPORT round 11).
+  B4/B2 pi-H3 DWD adapters (ComfyUI-piFlow), 4 and 2 steps: art/ai/workflows/h3_video_pih3_dwd.json.
   C  pixelart8x_h3_v3 LoRA: skipped, the model does not exist on Hugging Face.
 
 Post-processing and checks are exactly round 10's (build_zombie10.walk_frames): gait pick, head lock, region quantize,
@@ -44,6 +44,14 @@ VARIANTS = {
           "pattern": "zombie10_walk_*.png"},
     "D": {"label": "D official 4-step LoRA, 4 steps", "dir": lambda s: RAW / f"D_s{s}", "pattern": "zombie11_D_*.png",
           "set": [f"lora.lora_name={LORA4}", "sched.steps=4"]},
+    "B4": {"label": "B pi-H3 DWD 4 steps", "dir": lambda s: RAW / f"B4_s{s}", "pattern": "zombie11_B4_*.png",
+           "workflow": "h3_video_pih3_dwd.json",
+           "set": ["adapter.adapter_name=pi_h3_4step_dwd_adapter_int8_convrot.safetensors", "sched.steps=4",
+                   "sched.max_raw_t=0.96"]},
+    "B2": {"label": "B pi-H3 DWD 2 steps", "dir": lambda s: RAW / f"B2_s{s}", "pattern": "zombie11_B2_*.png",
+           "workflow": "h3_video_pih3_dwd.json",
+           "set": ["adapter.adapter_name=pi_h3_2step_dwd_adapter_int8_convrot.safetensors", "sched.steps=2",
+                   "sched.max_raw_t=0.93"]},
 }
 
 
@@ -53,7 +61,7 @@ def gen(variant: str, seeds: list[int]):
         raise SystemExit(f"variant {variant} reuses existing frames")
     key = ROOT / "art/ai/raw/zombie10/key_512.png"
     for s in seeds:
-        cmd = [PY, "-I", ROOT / "tools/art/ai/run_comfy.py", ROOT / "art/ai/workflows/h3_video_i2v.json",
+        cmd = [PY, "-I", ROOT / "tools/art/ai/run_comfy.py", ROOT / "art/ai/workflows" / v.get("workflow", "h3_video_i2v.json"),
                "--image", f"first={key}", "--image", f"last={key}",
                "--set", "scale_first.width=512", "--set", "scale_first.height=512",
                "--set", "scale_last.width=512", "--set", "scale_last.height=512",

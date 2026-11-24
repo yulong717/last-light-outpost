@@ -64,9 +64,23 @@
 
 正式流程的後處理是 repo 裡的 Python（`tools/art/ai/pixelize.py`、`build_zombie9/10.py`），不是這個。
 
+### `h3_video_pih3_dwd.json`：pi-H3 DWD 首尾幀（2 步／4 步）
+
+| 項目 | 內容 |
+| --- | --- |
+| 來源 | `Lakonik/ComfyUI-piFlow` 的 `workflows/pi-H3-DWD.json`（commit 4355cc4，2026-11-23） |
+| 需要的節點 | ComfyUI-piFlow（`Load LakonLab Adapter`、`pi-Flow Scheduler`、`DWD Decode`） |
+| 模型 | `minimax_h3_fl2va_pruned_int8_convrot.safetensors` |
+| adapter | `pi_h3_4step_dwd_adapter_int8_convrot.safetensors`／`pi_h3_2step_dwd_adapter_int8_convrot.safetensors`（HF `Lakonik/pi-H3`，各 2.19GB，放 models/loras） |
+| 文字編碼器／VAE | 同 `h3_video_i2v.json`（VAE 只編碼首尾幀，畫面由 DWD 直接輸出） |
+| 取樣 | euler、pi-Flow Scheduler（4 步 max_raw_t 0.96／2 步 0.93，final_step_size_scale 0.6）、MiniMaxH3SigmaShift 12／3 |
+
+改了什麼：
+- 子圖（adapter 切換、秒數換算）攤平，直接用 `--set adapter.adapter_name=… sched.steps=… sched.max_raw_t=…` 切 4／2 步。
+- 拿掉音訊分支。
+- **拿掉稀疏注意力**（官方用 ComfyUI 內建 BlockSparseAttention sol-attn，INT8，piFlow 文件說會明顯降低畫質），改一般注意力。
+- 圖片縮放 nearest-exact 512²。
+
 ## 尚未納入
 
-- **pi-H3**（`Lakonik/pi-H3`，2 步／4 步 DWD adapter）：需要自訂節點 ComfyUI-piFlow（`comfyui-piflow` 1.4.2）。目前還沒安裝，見 REPORT 第十一輪。
-  - 官方工作流：`Lakonik/ComfyUI-piFlow` 的 `workflows/pi-H3-DWD.json`（ComfyUI 內建稀疏注意力，不用另外裝）
-  - adapter：`pi_h3_{2,4}step_dwd_adapter_int8_convrot.safetensors` → `models/loras/`
 - **pixelart8x_h3_v3**（`JOYUNGI/pixelart8x-h3-lora`）：Hugging Face 上查無此模型。
