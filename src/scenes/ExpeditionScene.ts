@@ -7,7 +7,8 @@ import { getZone, MEDKIT_HEAL, NOISE, SUPPLIES, WALK, type EventOption, type Exp
 import { Expedition, playerExploreHp, describeLoot, lootEntries, type Resolution } from '../explore/Expedition';
 import { ensureEventArt, icon, VIG_H, VIG_W, type IconId } from '../art/EventArt';
 import { ensureIllustration, illustrationFor, ILLUS_H, ILLUS_W } from '../art/IllustrationArt';
-import { uiBar, uiButton, uiPanel } from '../explore/ui';
+import { uiBar, uiButton, uiPanel, uiTopBar } from '../explore/ui';
+import { icon as uiIcon } from '../ui/theme';
 import { GameState } from '../state/GameState';
 import type { Chapter } from '../data/story';
 import { getWeapon } from '../data/weapons';
@@ -68,9 +69,9 @@ export class ExpeditionScene extends Phaser.Scene {
     this.drawBackdrop(null);
 
     // 上方狀態列
-    this.add.rectangle(0, 0, GAME_WIDTH, 26, 0x000000, 0.6).setOrigin(0).setDepth(98);
+    uiTopBar(this, 26, 98);
     pixelText(this, 8, 6, `探索：${exp.zone.name}`, 9, '#f5d76e');
-    pixelText(this, 150, 7, '生命', 8);
+    uiIcon(this, 166, 8, 'heart');
     this.setHp = uiBar(this, 178, 9, 70, 7, 0xef5350);
     this.hpText = pixelText(this, 252, 7, '', 8);
     pixelText(this, 296, 7, '噪音', 8, '#ffcc80');
