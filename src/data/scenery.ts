@@ -5,10 +5,12 @@
  * 原則：事件文字寫到的東西，畫面上一定要看得到（「停車場」就要有車、「公車頂」就要有公車）。
  */
 
+import type { TerrainDef } from '../scenery/Terrain';
+
 export type Setting = 'ext' | 'int';
 
 /** 室外的主建築立面 */
-export type FacadeStyle = 'gas' | 'market' | 'homes' | 'hospital' | 'police' | 'military' | 'street' | 'school' | 'parking' | 'rooftop' | 'alley' | 'islandshop';
+export type FacadeStyle = 'gas' | 'market' | 'homes' | 'hospital' | 'police' | 'military' | 'street' | 'school' | 'parking' | 'rooftop' | 'alley' | 'islandshop' | 'gascenter';
 /** 室內的牆面風格 */
 export type InteriorStyle = 'garage' | 'store' | 'house' | 'ward' | 'precinct' | 'bunker' | 'warehouse' | 'lobby' | 'classroom';
 export type FarStyle = 'city' | 'hills' | 'industrial';
@@ -569,6 +571,8 @@ export interface OutpostMapDef {
   dual?: { waves: number; slots: string[] };
   /** 不擺隨機道具的範圍（據點、路障、槽位附近）；不填 = [[0, 430]] */
   keepClear?: [number, number][];
+  /** 地形：立體障礙物、減速地面、油漬（src/scenery/Terrain.ts） */
+  terrain?: TerrainDef[];
 }
 
 export const OUTPOST_MAPS: OutpostMapDef[] = [
@@ -576,8 +580,13 @@ export const OUTPOST_MAPS: OutpostMapDef[] = [
     id: 'street',
     name: '街口據點',
     blurb: '十字路口的五金行，左右都是倒塌的店面。',
-    perks: ['廢棄車輛可觸發警報引怪', '路燈照亮前線'],
+    perks: ['倒塌的騎樓把路切成之字形', '路口積水拖慢霧屍', '廢棄車輛可觸發警報引怪'],
     theme: 'street',
+    terrain: [
+      { kind: 'block', style: 'rubble', x0: 540, x1: 600, y0: 226, y1: 270, height: 30 },
+      { kind: 'block', style: 'concrete', x0: 770, x1: 840, y0: 302, y1: 346, height: 26 },
+      { kind: 'water', x0: 670, x1: 760, y0: 288, y1: 330 },
+    ],
     pieces: [
       { prop: 'car_red', x: 640, lane: 266 },
       { prop: 'car_white', x: 930, lane: 318, flip: true, frame: 1, kind: 'cover' },
@@ -585,7 +594,7 @@ export const OUTPOST_MAPS: OutpostMapDef[] = [
       { prop: 'lamppost', x: 470, lane: 'wall' },
       { prop: 'lamppost', x: 820, lane: 'wall' },
       { prop: 'dumpster', x: 1080, lane: 250 },
-      { prop: 'hydrant', x: 600, lane: 'back', kind: null },
+      { prop: 'hydrant', x: 720, lane: 'back', kind: null },
     ],
     barrels: [560, 760, 1010],
     crates: [880],
@@ -593,27 +602,44 @@ export const OUTPOST_MAPS: OutpostMapDef[] = [
   {
     id: 'gasstation',
     name: '加油站',
-    blurb: '公路邊的加油站，油槽還有油——對霧屍和你都很危險。',
-    perks: ['加油機與油桶多：連鎖爆炸', '開闊視野，屍潮來得快'],
+    blurb: '公路中間的加油站，便利商店夾在兩頭公路之間。霧屍沿著公路從兩邊來，地上全是漏出來的油。',
+    perks: ['單軸雙向：公路兩頭同時來霧屍', '油漬會被爆炸點燃，整片燒起來', '加油機與油桶：連鎖爆炸'],
     theme: 'gasstation',
+    facade: 'gascenter',
     pieces: [
-      { prop: 'pump', x: 560, lane: 252 },
-      { prop: 'pump', x: 620, lane: 252 },
-      { prop: 'pump', x: 780, lane: 252 },
-      { prop: 'pump', x: 840, lane: 252 },
-      { prop: 'car_taxi', x: 700, lane: 316 },
-      { prop: 'tires', x: 1000, lane: 300 },
-      { prop: 'lamppost', x: 1100, lane: 'wall' },
+      { prop: 'pump', x: 300, lane: 'back' },
+      { prop: 'pump', x: 420, lane: 'back' },
+      { prop: 'pump', x: 1050, lane: 'back' },
+      { prop: 'pump', x: 1170, lane: 'back' },
+      { prop: 'car_taxi', x: 160, lane: 'back' },
+      { prop: 'tires', x: 1000, lane: 'back' },
+      { prop: 'lamppost', x: 980, lane: 'wall' },
     ],
-    barrels: [500, 680, 920, 1040],
-    crates: [960],
+    barrels: [430, 870],
+    crates: [1240],
+    keepClear: [[470, 810]],
+    single: {
+      waves: 1.3,
+      runners: 0.3,
+      slots: ['R-tower-far', 'R-tower-near', 'R-front-2', 'R-mid-2', 'L-tower-far', 'L-tower-near', 'L-front-2', 'L-mid-2'],
+    },
+    dual: { waves: 1, slots: [] },
+    terrain: [
+      { kind: 'oil', x0: 380, x1: 460, y0: 272, y1: 308 },
+      { kind: 'oil', x0: 830, x1: 910, y0: 272, y1: 308 },
+    ],
   },
   {
     id: 'school',
     name: '國小校園',
     blurb: '圍牆內的操場，校車還停在門口，教室裡留著學童的書包。',
-    perks: ['校車與圍牆當掩體', '物資箱較多'],
+    perks: ['校門窄口：霧屍只能從中間擠進來', '沙坑讓霧屍陷住', '物資箱較多'],
     theme: 'school',
+    terrain: [
+      { kind: 'block', style: 'brick', x0: 600, x1: 640, y0: 226, y1: 266, height: 26 },
+      { kind: 'block', style: 'brick', x0: 600, x1: 640, y0: 314, y1: 346, height: 26 },
+      { kind: 'sand', x0: 440, x1: 540, y0: 244, y1: 286 },
+    ],
     pieces: [
       { prop: 'bus', x: 760, lane: 262, kind: 'cover' },
       { prop: 'hoop', x: 560, lane: 'wall' },
@@ -629,8 +655,9 @@ export const OUTPOST_MAPS: OutpostMapDef[] = [
     id: 'alley',
     name: '後巷鐵捲門',
     blurb: '兩棟樓中間的窄巷，盡頭是一扇拉下一半的鐵捲門。只有一個入口，霧屍只能排成一列擠進來。',
-    perks: ['單軸：只有一個入口，好守', '霧屍量多、跑得快，打起來爽快'],
+    perks: ['單軸：只有一個入口，好守', '霧屍量多、跑得快，打起來爽快', '巷口積水拖慢霧屍'],
     theme: 'street',
+    terrain: [{ kind: 'water', x0: 560, x1: 660, y0: 276, y1: 304 }],
     facade: 'alley',
     pieces: [
       { prop: 'dumpster', x: 620, lane: 'back' },
@@ -649,7 +676,7 @@ OUTPOST_MAPS.push({
   id: 'islandshop',
   name: '孤島小店',
   blurb: '空曠路口正中間的 24 小時便利商店，燈還亮著。四面都沒有遮蔽，霧屍會從左右兩邊同時湧上來。',
-  perks: ['雙面防守：左右各一道路障', '隊員分配到兩側，主角居中支援'],
+  perks: ['雙面防守：左右各一道路障', '隊員分配到兩側，主角居中支援', '停車場花台把路分成上下兩條'],
   theme: 'street',
   facade: 'islandshop',
   pieces: [
@@ -667,6 +694,12 @@ OUTPOST_MAPS.push({
     slots: ['R-tower-far', 'R-tower-near', 'R-front-1', 'R-front-2', 'R-front-3', 'R-mid-2', 'L-tower-far', 'L-tower-near', 'L-front-1', 'L-front-2', 'L-front-3', 'L-mid-2'],
   },
   keepClear: [[290, 990]],
+  terrain: [
+    { kind: 'block', style: 'planter', x0: 320, x1: 380, y0: 270, y1: 300, height: 16 },
+    { kind: 'block', style: 'planter', x0: 900, x1: 960, y0: 270, y1: 300, height: 16 },
+    { kind: 'block', style: 'container', x0: 60, x1: 150, y0: 226, y1: 262, height: 48 },
+    { kind: 'mud', x0: 1000, x1: 1100, y0: 300, y1: 346 },
+  ],
 });
 
 export function getOutpostMap(id: string | undefined): OutpostMapDef {

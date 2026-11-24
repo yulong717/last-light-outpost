@@ -334,6 +334,10 @@ function drawFacade(
       case 'gas':
         facadeGas(p, W, t, rnd, signs);
         break;
+      case 'gascenter':
+        // 雙向公路加油站：便利商店正好在戰場中間（店的中心在 x0 + 440）
+        facadeGas(p, W, t, rnd, signs, Math.round(W / 2) - 440 - 760);
+        break;
       case 'market':
         facadeMarket(p, W, t, rnd, signs);
         break;
@@ -479,8 +483,8 @@ function facadeHomes(p: Painter, W: number, _t: LocationTheme, rnd: Phaser.Math.
 }
 
 /** 加油站：5m 高的雨棚、便利商店、修車間、價目牌 */
-function facadeGas(p: Painter, W: number, _t: LocationTheme, rnd: Phaser.Math.RandomDataGenerator, signs: Sign[]): void {
-  for (let x0 = 0; x0 < W; x0 += 760) {
+function facadeGas(p: Painter, W: number, _t: LocationTheme, rnd: Phaser.Math.RandomDataGenerator, signs: Sign[], start = 0): void {
+  for (let x0 = start; x0 < W; x0 += 760) {
     // 便利商店（3.6m 高）
     const sx = x0 + 330;
     const sw = 220;

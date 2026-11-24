@@ -55,6 +55,7 @@ import { describeLoot } from '../explore/Expedition';
 import { AMMO } from '../data/weapons';
 import { getFirearm } from '../data/weapons';
 import { PropSystem } from '../scenery/PropSystem';
+import { Terrain } from '../scenery/Terrain';
 import { outpostScenery } from '../scenery/locations';
 import type { SceneryResult } from '../scenery/SceneryBuilder';
 import { ZombieDrops } from '../systems/ZombieDrops';
@@ -180,6 +181,8 @@ export class DefenseScene extends Phaser.Scene {
   private scenery!: SceneryResult;
   /** 戰場上的油桶、車、木箱、路燈 */
   private props!: PropSystem;
+  /** 據點地形：立體障礙物、積水、沙坑、油漬（src/scenery/Terrain.ts） */
+  private terrain!: Terrain;
   /** 職業霧屍的掉落物（src/systems/ZombieDrops.ts） */
   private drops!: ZombieDrops;
   /** 夜裡隨機的拯救倖存者事件（入夜才建立） */
@@ -253,6 +256,8 @@ export class DefenseScene extends Phaser.Scene {
       rollLoot: () => this.crateLoot(),
     }, this.scenery);
 
+    this.terrain = new Terrain(this, map.terrain ?? []);
+
     this.drops = new ZombieDrops(this, {
       heal: (a) => this.player.heal(a),
       // 雙面據點：修比較爛的那一道
@@ -272,7 +277,7 @@ export class DefenseScene extends Phaser.Scene {
     if (map.single) {
       // 單軸：鏡頭拉近，HUD 類物件另用不縮放的鏡頭畫（同探索的單軸關卡）
       setViewZoom(cam, 1.5);
-      cam.startFollow(this.player.sprite, true, 0.12, 1, -60, SINGLE_LANE_Y - 226);
+      cam.startFollow(this.player.sprite, true, 0.12, 1, this.dual ? 0 : -60, SINGLE_LANE_Y - 226);
       cam.setDeadzone(110, 0);
       this.uiCam = addUiCamera(this);
     }
@@ -295,7 +300,8 @@ export class DefenseScene extends Phaser.Scene {
     });
     // 夜晚強度依可出戰的隊員人數縮放（單人開局比較溫和）
     const base = buildNight(GameState.data.day, Math.random, deployedCrew(GameState.data.crew).length);
-    const night = map.dual ? scaleNight(base, map.dual.waves) : singleLaneNight(base, map.single);
+    const lane = singleLaneNight(base, map.single);
+    const night = map.dual ? scaleNight(lane, map.dual.waves) : lane;
     prewarmLooks(this, night.flatMap((w) => w.groups.map((g) => g.enemy)));
     this.spawner = new WaveSpawner(this, night, (id) => this.spawnZombie(id));
 
@@ -694,7 +700,7 @@ export class DefenseScene extends Phaser.Scene {
     return {
       ...blocker,
       blockerFor: (x, y) => this.outpost.blockerFor(x, y, minFront, front.side),
-      speedMul: (x, y) => this.outpost.speedMul(x, y),
+      speedMul: (x, y) => this.outpost.speedMul(x, y) * this.terrain.speedMul(x, y),
       player: { x: this.player.footX, y: this.player.footY, alive: this.player.alive },
       // 受擊回饋（震動、紅邊、卡肉）在 wireFeedback() 裡訂閱 player:hurt
       hitPlayer: (d, fromX, fromY, src) => (this.heroSys ? this.heroSys.hitPlayer(d, fromX, fromY, src) : this.player.takeDamage(d, fromX, fromY)),
@@ -739,7 +745,7 @@ export class DefenseScene extends Phaser.Scene {
     this.kills += meleeRes.kills;
     // 負重：拿機槍走得慢、近戰模式輕快、揮鈍器時站定；衝刺變快、被抓住變超慢
     const heroMul = this.heroSys ? this.heroSys.update(dt, inp.moveX !== 0 || inp.moveY !== 0) : 1;
-    this.player.speedMul = this.melee.moveMul(this.weapons.active.def.moveMul) * heroMul;
+    this.player.speedMul = this.melee.moveMul(this.weapons.active.def.moveMul) * heroMul * this.terrain.playerMul(this.player.footX, this.player.footY);
 
     // 主角移動：據點外牆內側到戰場右緣（揮擊中不轉身）
     // 近戰模式＋觸控：面向跟著搖桿（沒有槍要瞄）
@@ -797,6 +803,11 @@ export class DefenseScene extends Phaser.Scene {
     this.props.update(dt);
     this.props.collide(this.player);
     for (const z of this.zombies) if (!z.dead && z.spec.body !== 'crow') this.props.collide(z);
+    // 地形：障礙物擋人（霧屍會繞）、油漬碰到火會燒起來
+    this.terrain.collide(this.player);
+    for (const z of this.zombies) if (!z.dead && z.spec.body !== 'crow') this.terrain.collide(z);
+    for (const c of this.companions.companions) if (c.alive) this.terrain.collide(c);
+    this.terrain.update([this.player, ...this.zombies.filter((z) => !z.dead)], this.props);
     // 陷阱與砲塔
     this.kills += this.outpost.update(dt, this.zombies);
     this.rescue?.update(dt);

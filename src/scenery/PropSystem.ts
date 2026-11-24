@@ -361,6 +361,16 @@ export class PropSystem {
   }
 
   /** 火堆：持續燒傷走過的霧屍與主角 */
+  /** 地形（油漬）用：有沒有火碰到這個範圍 */
+  fireTouches(x0: number, x1: number, y0: number, y1: number, pad = 24): boolean {
+    return this.fires.some((f) => f.t > 0 && f.x + f.r > x0 - pad && f.x - f.r < x1 + pad && f.y > y0 - pad * 2 && f.y < y1 + pad * 2);
+  }
+
+  /** 地形（油漬）用：在 (x, y) 點起一片會燒傷霧屍與主角的火 */
+  ignite(x: number, y: number, r: number, secs: number): void {
+    this.fireAt(x, y, r, secs);
+  }
+
   private fireAt(x: number, y: number, r: number, secs: number, small = false): void {
     const emitter = this.scene.add.particles(x, y, FX.px2, {
       x: { min: -r, max: r },
