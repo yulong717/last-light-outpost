@@ -12,7 +12,7 @@ import { Player } from '../entities/Player';
 import { WeaponRig } from '../entities/WeaponRig';
 import { Zombie, type ZombieContext, type ZombieTarget } from '../entities/Zombie';
 import { Expedition } from '../explore/Expedition';
-import { throwGrenade, useMedkit } from '../explore/Supplies';
+import { useMedkit } from '../explore/Supplies';
 import { CameraFeel } from '../feel/CameraFeel';
 import { Crosshair } from '../feel/Crosshair';
 import { FEEL } from '../feel/FeelConfig';
@@ -20,7 +20,7 @@ import { rumble } from '../feel/Haptics';
 import { ScreenFeedback } from '../feel/ScreenFeedback';
 import { createAtmosphere } from '../fx/Atmosphere';
 import { Fx } from '../fx/Fx';
-import { InputManager, holdAction, queueAction, registerUIRect } from '../input/InputManager';
+import { touchMeleeAimX, InputManager, holdAction, queueAction, registerUIRect } from '../input/InputManager';
 import { GameState } from '../state/GameState';
 import { GameEvents } from '../systems/GameEvents';
 import { HeroSystem, heroTouch } from '../systems/HeroSystem';
@@ -198,7 +198,7 @@ export class ExploreFieldScene extends Phaser.Scene {
     if (GameState.data.armory.loadout.length === 0) this.melee.lockStance();
     this.heroSys = new HeroSystem(this, this.player, this.melee, () => this.zombies);
     this.heroSys.onKill = () => this.kills++;
-    this.input2 = new InputManager(this);
+    this.input2 = new InputManager(this, { x: this.player.footX + 200, y: this.player.footY - 30 });
     this.crosshair = new Crosshair(this);
     this.screenFx = new ScreenFeedback(this);
     attachAudio(this);
@@ -229,11 +229,9 @@ export class ExploreFieldScene extends Phaser.Scene {
     else this.setupFight(count);
     this.buildHud();
 
-    this.input.keyboard?.on('keydown-G', this.grenade, this);
     this.input.keyboard?.on('keydown-H', this.medkit, this);
     this.input.keyboard?.on('keydown-F', this.interact, this);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
-      this.input.keyboard?.off('keydown-G', this.grenade, this);
       this.input.keyboard?.off('keydown-H', this.medkit, this);
       this.input.keyboard?.off('keydown-F', this.interact, this);
       this.unregister.forEach((fn) => fn());
@@ -607,15 +605,15 @@ export class ExploreFieldScene extends Phaser.Scene {
       ? touch
         ? '只能左右移動・路邊的箱子可以打開'
         : this.spec.walk
-          ? 'A／D 左右移動・往右走到下一站・F 互動（翻箱、開門）・G 手榴彈・H 醫療包'
-          : 'A／D 左右移動・前後都會有霧屍・G 手榴彈・H 醫療包'
+          ? 'A／D 左右移動・往右走到下一站・F 互動（翻箱、開門）・H 醫療包'
+          : 'A／D 左右移動・前後都會有霧屍・H 醫療包'
       : this.spec.mode === 'stealth'
         ? touch
           ? '躲進陰影・從背後按近戰暗殺'
-          : 'WASD 移動・躲進陰影或掩體後・從背後按 E 暗殺・F 互動・G 手榴彈・H 醫療包'
+          : 'WASD 移動・躲進陰影或掩體後・從背後按 E 暗殺・F 互動・H 醫療包'
         : touch
           ? ''
-          : 'F 互動（封門・斷電）・射擊油桶引爆・G 手榴彈・H 醫療包';
+          : 'F 互動（封門・斷電）・射擊油桶引爆・H 醫療包';
     fix(pixelText(this, GAME_WIDTH / 2, GAME_HEIGHT - 14, help, 7, '#90a4ae').setOrigin(0.5));
     this.interactHint = pixelText(this, 0, 0, '', 8, '#90caf9').setOrigin(0.5).setDepth(70).setStroke('#000000', 3).setVisible(false);
     this.hiddenHint = pixelText(this, 0, 0, '', 7, '#9ad17a').setOrigin(0.5).setDepth(70).setStroke('#000000', 3).setVisible(false);
@@ -630,8 +628,7 @@ export class ExploreFieldScene extends Phaser.Scene {
         holdAction('melee', true);
       }, () => holdAction('melee', false));
       if (!this.spec.meleeOnly) this.stanceLabel = this.touchButton(GAME_WIDTH - 76, GAME_HEIGHT - 114, '持刀', () => queueAction('stance'));
-      this.touchButton(GAME_WIDTH - 76, GAME_HEIGHT - 76, '手雷', () => this.grenade());
-      this.touchButton(GAME_WIDTH - 114, GAME_HEIGHT - 38, '醫療', () => this.medkit());
+      this.touchButton(GAME_WIDTH - 76, GAME_HEIGHT - 76, '醫療', () => this.medkit());
       this.touchButton(GAME_WIDTH - 38, GAME_HEIGHT - 114, '互動', () => this.interact());
       if (GameState.data.hero === 'soldier') this.touchButton(GAME_WIDTH - 114, GAME_HEIGHT - 76, '擊倒', () => (heroTouch.skill = true));
     }
@@ -670,7 +667,7 @@ export class ExploreFieldScene extends Phaser.Scene {
       this.melee.stance ? `近戰：${this.melee.def.name}${pips}` : `${w.def.name}  ${w.ammo}/${w.def.magazine}  ${res === Infinity ? '∞' : res}${this.weapons.reloading ? '  換彈中…' : ''}`,
     );
     const s = GameState.data.supplies;
-    const parts = [`手雷 ${s.grenade}`, `醫療 ${s.medkit}`];
+    const parts = [`醫療 ${s.medkit}`];
     if (this.spec.seconds && this.spec.mode === 'fight') parts.unshift(`剩 ${Math.max(0, Math.ceil(this.spec.seconds - this.elapsed))} 秒`);
     else if (this.alerted) parts.unshift(`剩 ${this.zombies.length + this.toSpawn} 隻`);
     const hh = this.heroSys?.hud();
@@ -685,16 +682,6 @@ export class ExploreFieldScene extends Phaser.Scene {
   private interact(): void {
     if (this.ended || !this.interaction) return;
     this.props.interact(this.interaction);
-  }
-
-  private grenade(): void {
-    if (this.ended) return;
-    const inp = this.input2.state;
-    const ok = throwGrenade(this, this.player, inp.aimX, inp.aimY, () => this.zombies, (n) => (this.kills += n));
-    if (ok) {
-      this.exp.addNoise(20);
-      this.raiseAlarm();
-    }
   }
 
   private medkit(): void {
@@ -721,18 +708,22 @@ export class ExploreFieldScene extends Phaser.Scene {
     const melee = this.melee.handleInput(inp);
     if (inp.selectWeapon >= 0) this.weapons.select(inp.selectWeapon);
     if (inp.nextWeapon) this.weapons.next();
-    if (inp.reloadPressed && !this.melee.busy && !this.melee.stance) this.weapons.reload();
-    this.weapons.update(dt);
+    // 揮擊中按換彈不吃鍵：收招後自動開始換
+    if (this.melee.reloadNow(inp.reloadPressed, realDt)) this.weapons.reload();
+    // 槍的冷卻、換彈用真實時間：卡肉不會拖慢射速
+    this.weapons.update(realDt);
+    // 觸控按「近戰」鍵：方向看搖桿／面向，不是按鈕所在的右下角
+    const meleeAim = touchMeleeAimX(inp, p.footX, p.facing);
     if (melee.swing && p.alive) {
       this.weapons.cancelReload();
-      this.melee.trySwing(p, inp.aimX, melee.pressed);
+      this.melee.trySwing(p, meleeAim, melee.pressed);
     }
     const meleeRes = this.melee.update(dt, p, this.zombies);
     this.kills += meleeRes.kills;
     // 潛行時腳步放輕；衝刺變快、被抓住變超慢
     const heroMul = this.heroSys.update(dt, inp.moveX !== 0 || inp.moveY !== 0);
     p.speedMul = (this.alerted ? this.melee.moveMul(this.weapons.active.def.moveMul) : 0.75) * heroMul;
-    p.update(dt, inp.moveX, inp.moveY, this.melee.aimX(p, inp.aimX), { minX: 20, maxX: this.worldW - 16 });
+    p.update(dt, inp.moveX, inp.moveY, this.melee.aimX(p, this.melee.stance ? meleeAim : inp.aimX), { minX: 20, maxX: this.worldW - 16 });
 
     // 手上的武器先擺好姿勢，子彈從真正的槍口射出
     this.rig.setWeapon(this.weapons.active.def.id);

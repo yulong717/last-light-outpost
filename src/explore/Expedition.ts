@@ -317,5 +317,5 @@ export function lootEntries(l: Loot): { icon: IconId; text: string }[] {
 }
 
 function supplyName(id: SupplyId): string {
-  return { medkit: '醫療包', grenade: '手榴彈', lockpick: '開鎖工具', decoy: '噪音誘餌' }[id];
+  return { medkit: '醫療包', lockpick: '開鎖工具', decoy: '噪音誘餌' }[id];
 }

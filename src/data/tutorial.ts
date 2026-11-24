@@ -56,7 +56,7 @@ export const TUTORIAL_STEPS: TutorialStepDef[] = [
     id: 'melee',
     title: '翻出路障，切成近戰',
     desktop: '按 4（或 X）收槍拿近戰武器，左鍵揮、按住連砍；拿槍時右鍵／V 也能快揮',
-    touch: '按「持刀」收槍，點畫面就揮、按住連砍；拿槍時按「近戰」也能快揮',
+    touch: '按右下「持刀」收槍，點畫面就揮、按住連砍',
     focus: 'stance',
     goal: 3,
     unarmed: {
@@ -71,7 +71,7 @@ export const TUTORIAL_STEPS: TutorialStepDef[] = [
     id: 'swap',
     title: '切回槍、換武器',
     desktop: '近戰模式中按 Q 或 1／2 回到槍，再按 Q 換下一把',
-    touch: '按「持槍」回到槍，或按右下「換槍」',
+    touch: '按右下「持槍」回到槍；點左上的武器欄可以換下一把',
     focus: 'swap',
     goal: 1,
   },

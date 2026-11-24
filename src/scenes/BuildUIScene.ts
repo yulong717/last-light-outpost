@@ -1,7 +1,8 @@
 import Phaser from 'phaser';
+import { uiButton, uiPanel, uiTopBar } from '../explore/ui';
+import { PAL } from '../ui/theme';
 import { GAME_WIDTH } from '../config';
 import { BARRICADE_LEVELS, BUILDINGS, LAMP, SPIKES, TURRET, type BuildingKind } from '../data/buildings';
-import { AudioManager } from '../audio/AudioManager';
 import type { BuildMode } from '../build/BuildMode';
 import type { Quote } from '../build/Outpost';
 import { registerUIRect } from '../input/InputManager';
@@ -64,7 +65,7 @@ export class BuildUIScene extends Phaser.Scene {
     this.fixedRects = [];
     const touch = this.sys.game.device.input.touch;
 
-    this.add.rectangle(0, 0, GAME_WIDTH, 26, 0x000000, 0.55).setOrigin(0);
+    uiTopBar(this, 26, 0);
     pixelText(this, 8, 6, `第 ${GameState.data.day} 天・白天`, 9, '#f5d76e');
     this.scrapText = pixelText(this, 96, 6, '', 9, '#e8e8e8');
     this.fixedRects.push(registerUIRect({ x: 0, y: 0, w: GAME_WIDTH, h: 26 }));
@@ -118,7 +119,7 @@ export class BuildUIScene extends Phaser.Scene {
 
   private refresh(): void {
     const s = GameState.data.supplies;
-    this.scrapText.setText(`廢料 ${GameState.data.scrap}　醫療 ${s.medkit} 手雷 ${s.grenade}`);
+    this.scrapText.setText(`廢料 ${GameState.data.scrap}　醫療 ${s.medkit}`);
     this.clearPanel();
     const sel = this.mode.selection;
     if (sel) this.rosterOpen = false;
@@ -209,7 +210,7 @@ export class BuildUIScene extends Phaser.Scene {
     const w = GAME_WIDTH - 40;
     const cw = (w - 24) / cols;
     const h = 26 + rows * (cellH + 4);
-    const bg = this.add.rectangle(x0, PANEL_Y, w, h, 0x0d0f14, 0.92).setOrigin(0).setStrokeStyle(1, 0xf5d76e, 0.6);
+    const bg = uiPanel(this, x0, PANEL_Y, w, h);
     this.panel.add(bg);
     this.panelRects.push(registerUIRect({ x: x0, y: PANEL_Y, w, h }));
     GameState.normalizeDeploy();
@@ -233,7 +234,7 @@ export class BuildUIScene extends Phaser.Scene {
     list.forEach((m, i) => {
       const cx = x0 + 8 + (i % cols) * (cw + 8);
       const cy = PANEL_Y + 24 + Math.floor(i / cols) * (cellH + 4);
-      this.panel.add(this.add.rectangle(cx, cy, cw, cellH, 0x1c2029, 0.95).setOrigin(0).setStrokeStyle(1, 0xffffff, 0.12));
+      this.panel.add(this.add.graphics().fillStyle(PAL.ink, 1).fillRect(cx, cy, cw, cellH).fillStyle(0x221e1a, 0.95).fillRect(cx + 1, cy + 1, cw - 2, cellH - 2).fillStyle(PAL.frameLo, 1).fillRect(cx + 1, cy + 1, cw - 2, 1));
       // 半身像：切出頭到腰，對齊到格子左上
       const key = ensureCrewTexture(this, m) ?? 'player';
       const img = this.add.image(cx - 10, cy + 6, key, 0).setOrigin(0, 0).setCrop(12, 4, 40, 50);
@@ -277,9 +278,7 @@ export class BuildUIScene extends Phaser.Scene {
 
   /** 名冊的出戰開關：出戰時亮黃色 */
   private toggleButton(x: number, y: number, w: number, h: number, label: string, enabled: boolean, on: boolean, onPress: () => void): void {
-    const objs = this.button(x, y, w, h, '', enabled, onPress, on ? 0x5a4a14 : 0x2a2f3a);
-    const bg = objs[0] as Phaser.GameObjects.Rectangle;
-    if (on) bg.setStrokeStyle(1, 0xf5d76e, 0.9);
+    const objs = this.button(x, y, w, h, '', enabled, onPress, on ? 0x5a4a14 : undefined, on ? PAL.amber : undefined);
     this.panel.add(objs);
     this.text(x + w / 2, y + h / 2, label, 8, !enabled ? '#ef9a9a' : on ? '#f5d76e' : '#90a4ae').setOrigin(0.5);
   }
@@ -337,7 +336,7 @@ export class BuildUIScene extends Phaser.Scene {
   }
 
   private frame(h: number): void {
-    const bg = this.add.rectangle(PANEL_X, PANEL_Y, PANEL_W, h, 0x0d0f14, 0.88).setOrigin(0).setStrokeStyle(1, 0xf5d76e, 0.6);
+    const bg = uiPanel(this, PANEL_X, PANEL_Y, PANEL_W, h);
     this.panel.add(bg);
     this.panelRects.push(registerUIRect({ x: PANEL_X, y: PANEL_Y, w: PANEL_W, h }));
   }
@@ -361,28 +360,11 @@ export class BuildUIScene extends Phaser.Scene {
     label: string,
     enabled: boolean,
     onPress: () => void,
-    fill = 0x2a2f3a,
+    fill?: number,
+    accent?: number,
   ): Phaser.GameObjects.GameObject[] {
-    const bg = this.add
-      .rectangle(x, y, w, h, enabled ? fill : 0x1a1c22, 0.95)
-      .setOrigin(0)
-      .setStrokeStyle(1, 0xffffff, enabled ? 0.5 : 0.15);
-    const objs: Phaser.GameObjects.GameObject[] = [bg];
-    if (label) {
-      objs.push(pixelText(this, x + w / 2, y + h / 2, label, 8, enabled ? '#ffffff' : '#6b7280').setOrigin(0.5));
-    }
-    if (enabled) {
-      bg.setInteractive({ useHandCursor: true });
-      bg.on('pointerover', () => bg.setFillStyle(0x4a5262, 0.95));
-      bg.on('pointerout', () => bg.setFillStyle(fill, 0.95));
-      bg.on('pointerdown', (_p: Phaser.Input.Pointer, _x: number, _y: number, e: Phaser.Types.Input.EventData) => {
-        e.stopPropagation();
-        // 等這次點擊處理完再動作：動作會重建面板，不要在按鈕自己的事件裡把它銷毀
-        AudioManager.ui('tap');
-        this.time.delayedCall(0, onPress);
-      });
-    }
-    return objs;
+    // 等這次點擊處理完再動作（uiButton 內部已延後一幀）：動作會重建面板
+    return uiButton(this, x, y, w, h, label, onPress, { enabled, fill, accent });
   }
 
   private clearPanel(): void {

@@ -9,7 +9,7 @@ import type { Loot } from './explore';
  */
 
 /** 掉落物的小圖示（程式畫的，見 ZombieDrops.ts 的 ICONS） */
-export type DropIcon = 'ammo' | 'shells' | 'rifle' | 'med' | 'heal' | 'grenade' | 'tool' | 'pick' | 'gun' | 'scrap';
+export type DropIcon = 'ammo' | 'shells' | 'rifle' | 'med' | 'heal' | 'tool' | 'pick' | 'gun' | 'scrap';
 
 export interface DropEntry {
   weight: number;
@@ -61,7 +61,7 @@ export const ZOMBIE_DROPS: Partial<Record<string, DropTable>> = {
     entries: [
       { weight: 6, icon: 'rifle', loot: { ammo: { '556': 20 } } },
       { weight: 3, icon: 'rifle', loot: { ammo: { '762': 10 } } },
-      { weight: 3, icon: 'grenade', loot: { supplies: { grenade: 1 } } },
+      { weight: 3, icon: 'rifle', loot: { ammo: { '556': 10 } } },
       { weight: 1, icon: 'med', loot: { supplies: { medkit: 1 } }, label: '急救包 +1' },
       { weight: 0.3, icon: 'gun', loot: { weapons: ['m4a1'] } },
       { weight: 0.25, icon: 'gun', loot: { weapons: ['ak47'] } },
@@ -96,7 +96,7 @@ export const ZOMBIE_DROPS: Partial<Record<string, DropTable>> = {
     entries: [
       { weight: 3, icon: 'pick', loot: { supplies: { lockpick: 1 } } },
       { weight: 3, icon: 'scrap', loot: { scrap: 8 } },
-      { weight: 1, icon: 'grenade', loot: { supplies: { decoy: 1 } } },
+      { weight: 1, icon: 'tool', loot: { supplies: { decoy: 1 } }, label: '噪音誘餌 +1' },
       { weight: 0.4, icon: 'gun', loot: { weapons: ['machete'] } },
     ],
   },

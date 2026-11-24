@@ -31,7 +31,7 @@ import { FEEL } from '../feel/FeelConfig';
 import { rumble } from '../feel/Haptics';
 import { ScreenFeedback } from '../feel/ScreenFeedback';
 import { GameEvents } from '../systems/GameEvents';
-import { InputManager } from '../input/InputManager';
+import { touchMeleeAimX, InputManager } from '../input/InputManager';
 import { GameState } from '../state/GameState';
 import { WaveSpawner } from '../systems/WaveSpawner';
 import { WeaponSystem } from '../systems/WeaponSystem';
@@ -44,7 +44,7 @@ import { HeroSystem, type HeroHud } from '../systems/HeroSystem';
 import { LUCK } from '../data/heroes';
 import { OPENINGS, PROLOGUES } from '../data/story';
 import type { StoryData } from './StoryScene';
-import { throwGrenade, useMedkit } from '../explore/Supplies';
+import { useMedkit } from '../explore/Supplies';
 import { describeLoot } from '../explore/Expedition';
 import { AMMO } from '../data/weapons';
 import { getFirearm } from '../data/weapons';
@@ -401,7 +401,7 @@ export class DefenseScene extends Phaser.Scene {
     this.heroSys = new HeroSystem(this, this.player, this.melee, () => this.zombies);
     this.heroSys.onKill = () => this.kills++;
     // 輸入在入夜時才接上，白天點槽位不會變成第一發子彈
-    this.input2 = new InputManager(this);
+    this.input2 = new InputManager(this, { x: this.player.footX + 200, y: this.player.footY - 30 });
     // 準星會隱藏滑鼠游標，白天要點槽位，所以入夜才建立
     this.crosshair = new Crosshair(this);
     this.companions.active = true;
@@ -447,23 +447,13 @@ export class DefenseScene extends Phaser.Scene {
   }
 
   private wireNightSupplies(): void {
-    // 輔助用品：G 手榴彈、H 醫療包（觸控在 UIScene 的按鈕）
-    this.input.keyboard?.on('keydown-G', this.nightGrenade, this);
+    // 輔助用品：H 醫療包（觸控在 UIScene 的按鈕）
     this.input.keyboard?.on('keydown-H', this.nightMedkit, this);
-    this.events.on('use-grenade', this.nightGrenade, this);
     this.events.on('use-medkit', this.nightMedkit, this);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
-      this.input.keyboard?.off('keydown-G', this.nightGrenade, this);
       this.input.keyboard?.off('keydown-H', this.nightMedkit, this);
-      this.events.off('use-grenade', this.nightGrenade, this);
       this.events.off('use-medkit', this.nightMedkit, this);
     });
-  }
-
-  private nightGrenade(): void {
-    if (this.phase !== 'night' || this.ended) return;
-    const inp = this.input2.state;
-    throwGrenade(this, this.player, inp.aimX, inp.aimY, () => this.zombies, (n) => (this.kills += n));
   }
 
   private nightMedkit(): void {
@@ -591,12 +581,17 @@ export class DefenseScene extends Phaser.Scene {
     // 武器
     if (inp.selectWeapon >= 0) this.weapons.select(inp.selectWeapon);
     if (inp.nextWeapon) this.weapons.next();
-    if (inp.reloadPressed && !this.melee.busy && !this.melee.stance) this.weapons.reload();
-    this.weapons.update(dt);
+    // 揮擊中按換彈不吃鍵：收招後自動開始換
+    const frameDt = Math.min(deltaMs / 1000, 0.05);
+    if (this.melee.reloadNow(inp.reloadPressed, frameDt)) this.weapons.reload();
+    // 槍的冷卻、換彈用真實時間：卡肉不會拖慢射速
+    this.weapons.update(frameDt);
+    // 觸控沒在點畫面時，近戰方向看搖桿／面向（不是上一次點的位置或按鈕的位置）
+    const meleeAim = touchMeleeAimX(inp, this.player.footX, this.player.facing);
     // 近戰：拿槍時隨時快揮一下，近戰模式下攻擊鍵就是揮；會打斷換彈
     if (melee.swing && this.player.alive) {
       this.weapons.cancelReload();
-      this.melee.trySwing(this.player, inp.aimX, melee.pressed);
+      this.melee.trySwing(this.player, meleeAim, melee.pressed);
     }
     const meleeRes = this.melee.update(dt, this.player, this.zombies);
     this.kills += meleeRes.kills;
@@ -605,7 +600,8 @@ export class DefenseScene extends Phaser.Scene {
     this.player.speedMul = this.melee.moveMul(this.weapons.active.def.moveMul) * heroMul;
 
     // 主角移動：據點外牆內側到戰場右緣（揮擊中不轉身）
-    this.player.update(dt, inp.moveX, inp.moveY, this.melee.aimX(this.player, inp.aimX), { minX: BASE_X + 14, maxX: WORLD_WIDTH - 16 });
+    // 近戰模式＋觸控：面向跟著搖桿（沒有槍要瞄）
+    this.player.update(dt, inp.moveX, inp.moveY, this.melee.aimX(this.player, this.melee.stance ? meleeAim : inp.aimX), { minX: BASE_X + 14, maxX: WORLD_WIDTH - 16 });
 
     const p = this.player;
     // 手上的武器先擺好姿勢，子彈從真正的槍口射出
@@ -697,7 +693,7 @@ export class DefenseScene extends Phaser.Scene {
       this.scrapEarned += n;
       this.fx.popText(z.footX, z.footY - 56 * (z.def.scale ?? 1), `+${n}`, '#f5d76e');
     }
-    // 職業霧屍有機率掉出生前的裝備（警察掉手槍彈、士兵掉步槍彈或手榴彈…）
+    // 職業霧屍有機率掉出生前的裝備（警察掉手槍彈、士兵掉步槍彈…）
     for (const z of this.zombies) if (z.dead) this.drops.onZombieDown(z);
   }
 

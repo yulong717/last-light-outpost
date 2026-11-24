@@ -28,7 +28,7 @@ export interface GameStateData {
   buildings: SavedBuilding[];
   /** 已經見過的霧屍職業（第一次遇到時畫面會介紹） */
   seenZombies?: string[];
-  /** 輔助用品（醫療包、手榴彈、開鎖工具、誘餌） */
+  /** 輔助用品（醫療包、開鎖工具、誘餌） */
   supplies: Record<SupplyId, number>;
   /** 今天白天還剩幾個時段可以探索 */
   dayTime: number;
@@ -289,6 +289,7 @@ class GameStateStore {
       overflowScrap += Math.floor(((n - got) / AMMO[t].box) * AMMO[t].price);
     }
     for (const [s, n] of Object.entries(loot.supplies ?? {}) as [SupplyId, number][]) {
+      if (!SUPPLIES[s]) continue; // 已移除的用品（舊存檔背包裡的手榴彈）
       const got = Math.min(SUPPLIES[s].max - d.supplies[s], n);
       d.supplies[s] += got;
       overflowScrap += (n - got) * 8;
@@ -445,6 +446,8 @@ class GameStateStore {
       // 探索模式之前的存檔：補上用品、時段
       parsed.supplies ??= freshSupplies();
       for (const s of Object.keys(SUPPLIES) as SupplyId[]) parsed.supplies[s] ??= 0;
+      // 手榴彈已移除：舊存檔裡的數量直接丟掉
+      for (const k of Object.keys(parsed.supplies)) if (!(k in SUPPLIES)) delete (parsed.supplies as Record<string, number>)[k];
       parsed.dayTime ??= EXPLORE_TIME.slotsPerDay;
       parsed.exploredToday ??= [];
       this.data = parsed;

@@ -21,6 +21,10 @@ export interface MeleeResult {
 const COMBO_WINDOW = 0.45;
 /** 連擊數（畫面上的「N 連擊」）多久沒打中就歸零 */
 const STREAK_WINDOW = 1.4;
+/** 揮擊中預先按下的下一刀，記多久（遊戲時間，卡肉時不算）；太早按的會作廢，不會很久之後自己多揮一下 */
+const SWING_BUFFER = 0.3;
+/** 揮擊中按換彈：記多久，收招後自動開始換 */
+const RELOAD_BUFFER = 0.8;
 /** 刀類連段中後面幾刀的起手縮短（越砍越順手） */
 const CHAIN_WINDUP = 0.6;
 
@@ -33,7 +37,9 @@ const SWING_MOVE = { light: 0.8, heavy: 0.35 };
 /** 收招長度倍率：打中變短，揮空變長；打中後收招進行到 cancel 就能直接接下一下 */
 const HIT_RECOVERY = { hit: 0.75, whiff: 1.15, cancel: 0.5 };
 /** 重擊打飛（收尾、處決）：起飛速度 px/s、水平距離 px、多停幾毫秒、鏡頭放大 */
-const LAUNCH_HIT = { power: 230, dist: 48, extraStop: 35, zoom: 1.04, zoomMs: 100 };
+const LAUNCH_HIT = { power: 230, dist: 48, extraStop: 20, zoom: 1.04, zoomMs: 100 };
+/** 卡肉上限（毫秒） */
+const HIT_STOP_MAX = 110;
 /** 卡肉期間被打的那隻左右抖幾 px */
 const VICTIM_SHAKE = { light: 1, mid: 3, heavy: 4 };
 
@@ -80,6 +86,10 @@ export class MeleeSystem {
   /** 收完招後的重新掄起時間（鈍器） */
   private heftT = 0;
   private queued = false;
+  /** 排隊那一刀往哪邊揮（按下時的瞄準點；undefined＝照目前面向） */
+  private queuedAim?: number;
+  private queueT = 0;
+  private reloadBuf = 0;
   private hitSet = new Set<Zombie>();
   private hitCount = 0;
   private dir = 1;
@@ -191,11 +201,35 @@ export class MeleeSystem {
     if (!player.alive) return false;
     if (this.busy || this.heftT > 0) {
       // 只有「按下」才排下一下；按著不放不會在揮的途中多排一下（點一下＝揮一下）
-      if (pressed) this.queued = true;
+      if (pressed) {
+        this.queued = true;
+        this.queuedAim = aimX;
+        this.queueT = SWING_BUFFER;
+      }
       return true;
     }
     this.start(player, aimX);
     return true;
+  }
+
+  /**
+   * 換彈要不要現在開始：揮擊中按的先記著，收招後再換（不吃鍵）。
+   * 近戰模式不換彈（槍收著）。dt 用真實時間。
+   */
+  reloadNow(pressed: boolean, dt: number): boolean {
+    if (pressed) this.reloadBuf = RELOAD_BUFFER;
+    else this.reloadBuf = Math.max(0, this.reloadBuf - dt);
+    if (this.stance) this.reloadBuf = 0;
+    if (this.reloadBuf > 0 && !this.busy) {
+      this.reloadBuf = 0;
+      return true;
+    }
+    return false;
+  }
+
+  /** 排隊的那一刀出手（帶著按下時的方向） */
+  private startQueued(player: Player): void {
+    this.start(player, this.queuedAim);
   }
 
   /** 這一下是連段招式表裡的哪一招（沒有招式表就是 undefined） */
@@ -234,6 +268,7 @@ export class MeleeSystem {
     this.swingBonus = { ...this.bonus };
     this.comboTimer = 0;
     this.queued = false;
+    this.queuedAim = undefined;
     this.phase = 'windup';
     this.t = 0;
     this.hitSet.clear();
@@ -265,6 +300,13 @@ export class MeleeSystem {
     const d = this.def;
     const res: MeleeResult = { hits: 0, kills: 0 };
     this.comboTimer = Math.max(0, this.comboTimer - dt);
+    if (this.queued) {
+      this.queueT -= dt;
+      if (this.queueT <= 0) {
+        this.queued = false;
+        this.queuedAim = undefined;
+      }
+    }
     this.updateStreak(dt, player);
     if (this.phase === 'idle') {
       // 近戰模式：專心用刀的人換氣比較快（純近戰主角也要撐得完一整夜）
@@ -273,7 +315,7 @@ export class MeleeSystem {
       player.swingLean += (0 - player.swingLean) * Math.min(1, dt * 14);
       if (this.heftT > 0) {
         this.heftT = Math.max(0, this.heftT - dt);
-        if (this.heftT <= 0 && this.queued) this.start(player);
+        if (this.heftT <= 0 && this.queued) this.startQueued(player);
       }
       return res;
     }
@@ -315,12 +357,12 @@ export class MeleeSystem {
         // 打中確認取消：鈍器打中之後收招後半段就能再揮（不用重新掄起）
         const hitCancel = this.queued && d.comboEvery <= 1 && this.hitCount > 0 && !this.finisher && k >= HIT_RECOVERY.cancel;
         if (hitCancel) {
-          this.start(player);
+          this.startQueued(player);
           break;
         }
         if (canChain) {
           this.comboTimer = COMBO_WINDOW;
-          this.start(player);
+          this.startQueued(player);
           break;
         }
         if (k >= 1) {
@@ -328,7 +370,7 @@ export class MeleeSystem {
           // 收尾重擊後一串結束；鈍器要重新掄起才能再揮
           this.comboTimer = this.finisher ? 0 : COMBO_WINDOW;
           this.heftT = this.finisher ? Math.max(d.heft, 0.08) : d.heft;
-          if (this.queued && this.heftT <= 0) this.start(player);
+          if (this.queued && this.heftT <= 0) this.startQueued(player);
         }
         break;
       }
@@ -407,7 +449,7 @@ export class MeleeSystem {
       };
       const hx = z.footX - 4 * away;
       const hy = z.footY - (slam ? 14 : 30) * (z.def.scale ?? 1);
-      fx?.blood(hx, hy, away, z.footY, blunt ? 4 : fin ? 10 : 6, blunt ? 0.8 : fin ? 1.4 : 1.1);
+      fx?.blood(hx, hy, away, z.footY, blunt ? 3 : fin ? 6 : 3, blunt ? 0.8 : fin ? 1.3 : 1);
       fx?.meleeImpact(hx, hy, away, blunt ? 'blunt' : heavy || fin ? 'heavy-slash' : 'slash', z.footY);
       const killed = z.takeHit(info);
       if (!killed) {
@@ -431,8 +473,9 @@ export class MeleeSystem {
     }
     if (hitsNow > 0) {
       // 打中才卡肉、震鏡頭：重武器頓得更久，打越多隻越重；收尾重擊多頓一拍
-      const extra = (hitsNow - 1) * 10 + (killsNow > 0 ? 15 : 0) + (fin && !st ? 45 : 0) + (execNow ? 25 : 0) + (launchNow ? LAUNCH_HIT.extraStop : 0);
-      const stop = Math.min(170, (st ? st.hitStop : d.hitStop) + extra);
+      // 上限 110 ms：以前疊到 170 ms，手機上幀率一低，玩家感覺是「打下去卡住」而不是重量感
+      const extra = (hitsNow - 1) * 6 + (killsNow > 0 ? 10 : 0) + (fin && !st ? 30 : 0) + (execNow ? 15 : 0) + (launchNow ? LAUNCH_HIT.extraStop : 0);
+      const stop = Math.min(HIT_STOP_MAX, (st ? st.hitStop : d.hitStop) + extra);
       fx?.freeze(stop);
       // 卡肉時只有被打的那隻在抖，攻擊者定格
       for (const v of victims) v.z.hitShake(stop + 20, VICTIM_SHAKE[v.tier]);
@@ -472,7 +515,9 @@ export class MeleeSystem {
     }
     const t = this.streakText;
     const color = this.streak >= 12 ? '#ff7043' : this.streak >= 6 ? '#ffca28' : '#ffe082';
-    t.setText(`${this.streak} 連擊`).setColor(color).setVisible(true).setAlpha(1).setPosition(player.footX, player.footY - 72);
+    // setColor 和 setText 各會重畫一次文字貼圖：顏色沒變就不要設
+    if (t.style.color !== color) t.setColor(color);
+    t.setText(`${this.streak} 連擊`).setVisible(true).setAlpha(1).setPosition(player.footX, player.footY - 72);
     this.scene.tweens.killTweensOf(t);
     t.setScale(big ? 1.6 : 1.3);
     this.scene.tweens.add({ targets: t, scale: 1, duration: 140, ease: 'Back.easeOut' });
@@ -481,7 +526,7 @@ export class MeleeSystem {
   /** 砸地：落點一圈震波（扁橢圓往外擴、淡掉）＋ 一圈揚塵（只在地上，不晃鏡頭） */
   private slamFx(x: number, y: number, r: number): void {
     const sc = this.scene;
-    const ring = sc.add.ellipse(x, y, 8, 3).setStrokeStyle(1, 0xd8cbb0, 0.9).setDepth(3);
+    const ring = sc.add.ellipse(x, y, 8, 3).setStrokeStyle(1, 0xd8cbb0, 0.35).setDepth(3);
     sc.tweens.add({ targets: ring, width: r * 2, height: r * 0.7, alpha: 0, duration: 260, ease: 'Quad.easeOut', onComplete: () => ring.destroy() });
     const fx = Fx.of(sc);
     for (let i = 0; i < 8; i++) {
@@ -492,7 +537,7 @@ export class MeleeSystem {
   }
 
   /**
-   * 揮擊軌跡：只畫幾條細的速度線（不畫整片白弧，免得擋住畫面）。
+   * 揮擊軌跡：只畫兩條很淡的細速度線（不畫白弧、不發光），只在揮到的那一端，一下就消失。
    * 左揮、右揮是壓扁的橫向弧（方向相反），下揮是直立的弧，刀類收尾突刺是幾條直線。
    */
   private drawTrail(player: Player): void {
@@ -504,14 +549,14 @@ export class MeleeSystem {
     const f = this.facing;
     const color = d.trailColor;
     const arc = (a0: number, a1: number, r: number, sx: number, sy: number, oy = 0): void => {
-      // 弧頭（揮到的那一端）實、弧尾虛：只畫後 60%，三條細線錯開半徑
-      for (let line = 0; line < 3; line++) {
+      // 只畫弧的後 45%（揮到的那一端），兩條細線錯開半徑；顏色用武器本色、不用純白
+      for (let line = 0; line < 2; line++) {
         const rr = r - line * 3;
-        g.lineStyle(1, line === 0 ? 0xffffff : color, line === 0 ? 0.7 : 0.45);
+        g.lineStyle(1, color, line === 0 ? 0.42 : 0.2);
         g.beginPath();
-        const steps = 10;
+        const steps = 8;
         for (let i = 0; i <= steps; i++) {
-          const a = Phaser.Math.Linear(a0, a1, 0.4 + 0.6 * (i / steps));
+          const a = Phaser.Math.Linear(a0, a1, 0.55 + 0.45 * (i / steps));
           const px = cx + f * Math.cos(a) * rr * sx;
           const py = cy + oy + Math.sin(a) * rr * sy;
           if (i === 0) g.moveTo(px, py);
@@ -526,13 +571,13 @@ export class MeleeSystem {
       arc(-100 * deg, 60 * deg, (st.reach ?? d.reach) + 4, 0.7, 0.75, 4);
     } else if (st?.spin) {
       // 迴旋：繞身體一圈的細線（只畫一條、半透明，不要整圈白）
-      g.lineStyle(1, color, 0.4);
+      g.lineStyle(1, color, 0.22);
       g.strokeEllipse(cx, cy + 10, (st.reach + 4) * 2, (st.reach + 4) * 0.7);
     } else if (st?.thrust) {
       // 刺擊：幾條往前的直線
       const len = st.reach + 8;
-      for (let i = -1; i <= 1; i++) {
-        g.lineStyle(1, i === 0 ? 0xffffff : color, i === 0 ? 0.8 : 0.45);
+      for (let i = -1; i <= 1; i += 2) {
+        g.lineStyle(1, color, 0.35);
         g.lineBetween(cx + f * 8, cy + 2 + i * 2, cx + f * (len - Math.abs(i) * 6), cy + 2 + i * 2);
       }
     } else if (st?.launch && !this.dashSwing) {
@@ -541,8 +586,8 @@ export class MeleeSystem {
     } else if (this.finisher && !st) {
       // 刀類收尾突刺：三條直線
       const len = d.reach * 1.25 + 8;
-      for (let i = -1; i <= 1; i++) {
-        g.lineStyle(1, i === 0 ? 0xffffff : color, i === 0 ? 0.8 : 0.45);
+      for (let i = -1; i <= 1; i += 2) {
+        g.lineStyle(1, color, 0.35);
         g.lineBetween(cx + f * 8, cy + i * 3, cx + f * (len - Math.abs(i) * 6), cy + i * 3);
       }
     } else {
@@ -551,7 +596,7 @@ export class MeleeSystem {
       const half = Math.min(150, st ? st.arc : d.arc) / 2;
       arc(-half * this.dir * deg, half * this.dir * deg, r, 1, 0.55);
     }
-    this.scene.tweens.add({ targets: g, alpha: 0, duration: 110, onComplete: () => g.destroy() });
+    this.scene.tweens.add({ targets: g, alpha: 0, duration: 80, onComplete: () => g.destroy() });
   }
 
 }

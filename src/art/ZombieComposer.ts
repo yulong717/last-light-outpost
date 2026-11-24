@@ -496,24 +496,41 @@ export interface GoreBase {
 
 export const GORE_REGION = { none: Region.None, shirt: Region.Shirt, pants: Region.Pants } as const;
 
+const goreBaseCache = new WeakMap<BaseData, GoreBase>();
+
 export function goreBase(scene: Phaser.Scene): GoreBase | null {
   const base = loadBase(scene);
   if (!base) return null;
+  const hit = goreBaseCache.get(base);
+  if (hit) return hit;
   const at = (f: number, x: number, y: number) => (x < 0 || x >= F || y < 0 || y >= F ? Region.None : base.region[y * base.w + f * F + x]);
+  // center／pantsTop 要掃整格，而斷肢每個像素都會問一次：每格只算一次、記起來（以前每次都重掃，切一張要上百毫秒）
+  const centers = new Map<number, number>();
+  const pantsTops = new Map<number, number>();
   const pantsTop = (f: number) => {
-    for (let y = 0; y < F; y++) {
+    const c = pantsTops.get(f);
+    if (c !== undefined) return c;
+    let top = F;
+    for (let y = 0; y < F && top === F; y++) {
       let n = 0;
       for (let x = 0; x < F; x++) if (at(f, x, y) === Region.Pants) n++;
-      if (n >= 4) return y;
+      if (n >= 4) top = y;
     }
-    return F;
+    pantsTops.set(f, top);
+    return top;
   };
-  return {
+  const gb: GoreBase = {
     region: at,
     torsoRight: (f) => base.frames[f]?.torso?.r ?? null,
     pantsTop,
-    center: (f) => frameCenter(base, f),
+    center: (f) => {
+      let c = centers.get(f);
+      if (c === undefined) centers.set(f, (c = frameCenter(base, f)));
+      return c;
+    },
   };
+  goreBaseCache.set(base, gb);
+  return gb;
 }
 
 /** 這張貼圖是用哪個加寬倍率合成的；不是合成出來的（zombie_basic 原圖）回傳 1，其他貼圖回傳 null */

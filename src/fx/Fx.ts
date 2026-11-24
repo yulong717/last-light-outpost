@@ -50,6 +50,9 @@ const MAX_DEBRIS = 260;
 const CORPSE_STAY = 7000;
 const DEPTH_BURST = 57;
 const MAX_CORPSES = 24;
+/** 血的顏色：偏暗、低彩度（鮮紅色看起來像油漆） */
+const BLOOD = [0x6a0c0c, 0x7a1010, 0x4e0909, 0x5c0b0b];
+const MIST = 0x5a0c0c;
 
 const registry = new WeakMap<Phaser.Scene, Fx>();
 
@@ -61,6 +64,8 @@ export class Fx {
   private corpses: Phaser.GameObjects.Sprite[] = [];
   private freezeUntil = 0;
   private squashTweens = new WeakMap<Phaser.GameObjects.Sprite, Phaser.Tweens.Tween>();
+  private textPool = new Map<string, Phaser.GameObjects.Text[]>();
+  private puffPool: Phaser.GameObjects.Image[] = [];
 
   static attach(scene: Phaser.Scene): Fx {
     const fx = new Fx(scene);
@@ -80,6 +85,12 @@ export class Fx {
     this.decals = scene.add.renderTexture(0, 0, w, h).setOrigin(0).setDepth(1);
 
     scene.events.on(Phaser.Scenes.Events.UPDATE, this.update, this);
+    // 打擊時最常跳的字
+    this.prewarmText([
+      ['爆頭', '#ffd24a'],
+      ['處決', '#ff8a65'],
+      ['衝撞', '#80d8ff'],
+    ]);
     scene.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       scene.events.off(Phaser.Scenes.Events.UPDATE, this.update, this);
       registry.delete(scene);
@@ -87,6 +98,8 @@ export class Fx {
       this.pool = [];
       this.shadows.clear();
       this.corpses = [];
+      this.textPool.clear();
+      this.puffPool = [];
       scene.tweens.timeScale = 1;
     });
   }
@@ -107,13 +120,13 @@ export class Fx {
   /** 受擊擠壓：瞬間變扁變寬再彈回，配合閃白 */
   squash(sprite: Phaser.GameObjects.Sprite, baseScale = 1, amount = 1, baseScaleX = baseScale): void {
     this.squashTweens.get(sprite)?.stop();
-    sprite.setScale(baseScaleX * (1 + 0.18 * amount), baseScale * (1 - 0.14 * amount));
+    sprite.setScale(baseScaleX * (1 + 0.07 * amount), baseScale * (1 - 0.05 * amount));
     const tw = this.scene.tweens.add({
       targets: sprite,
       scaleX: baseScaleX,
       scaleY: baseScale,
-      duration: 110,
-      ease: 'Back.easeOut',
+      duration: 90,
+      ease: 'Quad.easeOut',
     });
     this.squashTweens.set(sprite, tw);
   }
@@ -235,21 +248,9 @@ export class Fx {
    */
   headBurst(x: number, y: number, dir: number, floorY: number, parts: string | null, scale = 1, tint?: number): void {
     const sc = this.scene;
-    // 血霧：一團暗紅一下子膨脹、淡掉（外圈暗、內圈亮一點）
-    for (let i = 0; i < 3; i++) {
-      const p = sc.add
-        .circle(x + dir * i * 3, y + Phaser.Math.Between(-2, 2), 4 - i, [0x5e0b0b, 0x8a1010, 0xb02020][i], 0.75)
-        .setDepth(DEPTH_BURST + i * 0.01);
-      sc.tweens.add({
-        targets: p,
-        scale: 3.2 - i * 0.6,
-        alpha: 0,
-        x: p.x + dir * Phaser.Math.Between(3, 9),
-        duration: 260 + i * 60,
-        ease: 'Quad.easeOut',
-        onComplete: () => p.destroy(),
-      });
-    }
+    // 血霧：兩團暗紅的霧往子彈方向散開、淡掉（不用亮紅色實心圓，看起來才不像卡通爆炸）
+    this.mist(x, y, dir, 0.55, 1.2);
+    this.mist(x + dir * 4, y - 2, dir, 0.4, 0.9);
     // 頭的碎片：大多往子彈方向飛，一些往回噴
     if (parts && sc.textures.exists(parts)) {
       for (let i = 0; i < 6; i++) {
@@ -272,7 +273,7 @@ export class Fx {
       }
     }
     // 碎肉
-    for (let i = 0; i < 10; i++) {
+    for (let i = 0; i < 7; i++) {
       this.spawn(FX.px2, x, y, {
         vx: dir * Phaser.Math.Between(-60, 180),
         vy: -Phaser.Math.Between(40, 200),
@@ -281,7 +282,7 @@ export class Fx {
         bounce: 0.2,
         life: 3,
         onLand: 'rest',
-        tint: Phaser.Utils.Array.GetRandom([0x5e0b0b, 0x7a1212, 0xb05a5a, 0x3a0606]),
+        tint: Phaser.Utils.Array.GetRandom([0x4e0909, 0x6a0c0c, 0x7a3c3c, 0x3a0606]),
       });
     }
     this.blood(x, y, dir, floorY, 26, 1.5);
@@ -317,33 +318,25 @@ export class Fx {
 
   // ───────────────────── 粒子與碎片 ─────────────────────
 
-  /** 子彈命中：往子彈方向噴血，落地成血跡 */
+  /** 子彈命中：往子彈方向噴血（射出的那一側）＋一小團血霧，落地成血跡。打在肉上不會有火花 */
   bulletHit(x: number, y: number, dirX: number, floorY: number, headshot: boolean): void {
-    this.blood(x, y, dirX, floorY, headshot ? 14 : 6, headshot ? 1.2 : 0.8);
-    // 一兩顆亮色火花，表示打中了
-    for (let i = 0; i < 2; i++) {
-      this.spawn(FX.px, x, y, {
-        vx: -dirX * Phaser.Math.Between(20, 60),
-        vy: -Phaser.Math.Between(10, 60),
-        floorY,
-        life: 0.12,
-        onLand: 'vanish',
-        tint: 0xfff3a0,
-      });
-    }
+    this.blood(x, y, dirX, floorY, headshot ? 12 : 5, headshot ? 1.2 : 0.8);
+    this.mist(x, y, dirX, headshot ? 0.45 : 0.28, headshot ? 0.9 : 0.6);
     if (headshot) this.popText(x, y - 8, '爆頭', '#ffd24a');
   }
 
   blood(x: number, y: number, dirX: number, floorY: number, count: number, power = 1): void {
     for (let i = 0; i < count; i++) {
-      const big = Math.random() < 0.25;
+      // 大多是細小的血滴；少數較大的滴落得慢、飛不遠（重量感）
+      const big = Math.random() < 0.18;
+      const sp = big ? 0.6 : 1;
       this.spawn(big ? FX.px2 : FX.px, x, y, {
-        vx: dirX * Phaser.Math.Between(30, 140) * power + Phaser.Math.Between(-20, 20),
-        vy: -Phaser.Math.Between(20, 140) * power,
+        vx: (dirX * Phaser.Math.Between(30, 130) * power + Phaser.Math.Between(-15, 15)) * sp,
+        vy: -Phaser.Math.Between(10, 110) * power * sp,
         floorY: floorY + Phaser.Math.Between(-2, 3),
         life: 2,
         onLand: 'stain',
-        tint: Phaser.Utils.Array.GetRandom([0x8a1010, 0xa31818, 0x5e0b0b]),
+        tint: Phaser.Utils.Array.GetRandom(BLOOD),
       });
     }
   }
@@ -407,12 +400,7 @@ export class Fx {
 
   muzzleSmoke(x: number, y: number, angle: number): void {
     for (let i = 0; i < 2; i++) {
-      const p = this.scene.add
-        .image(x + Math.cos(angle) * 3, y + Math.sin(angle) * 3, FX.smoke)
-        .setDepth(53)
-        .setAlpha(0.35)
-        .setScale(0.4)
-        .setTint(0xbfc4cc);
+      const p = this.puff(x + Math.cos(angle) * 3, y + Math.sin(angle) * 3, 0xbfc4cc, 0.35, 0.4, 53);
       this.scene.tweens.add({
         targets: p,
         x: p.x + Math.cos(angle) * Phaser.Math.Between(4, 10),
@@ -421,7 +409,7 @@ export class Fx {
         alpha: 0,
         duration: Phaser.Math.Between(300, 500),
         delay: i * 40,
-        onComplete: () => p.destroy(),
+        onComplete: () => this.unpuff(p),
       });
     }
   }
@@ -444,7 +432,7 @@ export class Fx {
   /** 倒地揚起的灰塵 */
   dust(x: number, y: number, count: number): void {
     for (let i = 0; i < count; i++) {
-      const p = this.scene.add.image(x + Phaser.Math.Between(-8, 8), y - 1, FX.smoke).setScale(0.3).setAlpha(0.25).setTint(0x8a8378).setDepth(3);
+      const p = this.puff(x + Phaser.Math.Between(-8, 8), y - 1, 0x8a8378, 0.22, 0.3, 3);
       this.scene.tweens.add({
         targets: p,
         x: p.x + Phaser.Math.Between(-10, 10),
@@ -452,20 +440,27 @@ export class Fx {
         scale: 0.8,
         alpha: 0,
         duration: 450,
-        onComplete: () => p.destroy(),
+        onComplete: () => this.unpuff(p),
       });
     }
+  }
+
+  /** 煙／霧小圖從池子裡拿（打擊時一次要好幾個，不每次新建，手機上少一點 GC 停頓） */
+  private puff(x: number, y: number, tint: number, alpha: number, scale: number, depth: number): Phaser.GameObjects.Image {
+    const p = this.puffPool.pop() ?? this.scene.add.image(0, 0, FX.smoke);
+    return p.setPosition(x, y).setTint(tint).setAlpha(alpha).setScale(scale).setDepth(depth).setVisible(true).setActive(true);
+  }
+
+  private unpuff(p: Phaser.GameObjects.Image): void {
+    p.setVisible(false).setActive(false);
+    if (this.puffPool.length < 64) this.puffPool.push(p);
+    else p.destroy();
   }
 
   /** 腳步揚塵：一兩小團灰往腳後方散開，很淡 */
   footDust(x: number, y: number, dirX: number): void {
     for (let i = 0; i < 2; i++) {
-      const p = this.scene.add
-        .image(x + Phaser.Math.Between(-2, 2), y - 1, FX.smoke)
-        .setScale(0.18)
-        .setAlpha(0.22)
-        .setTint(0x8a8378)
-        .setDepth(2 + y / 1000);
+      const p = this.puff(x + Phaser.Math.Between(-2, 2), y - 1, 0x8a8378, 0.22, 0.18, 2 + y / 1000);
       this.scene.tweens.add({
         targets: p,
         x: p.x - dirX * Phaser.Math.Between(3, 7),
@@ -473,7 +468,7 @@ export class Fx {
         scale: 0.45,
         alpha: 0,
         duration: Phaser.Math.Between(260, 380),
-        onComplete: () => p.destroy(),
+        onComplete: () => this.unpuff(p),
       });
     }
   }
@@ -492,7 +487,7 @@ export class Fx {
   /** 地上留一塊血跡（畫進 RenderTexture，永久留著直到場景結束） */
   stain(x: number, y: number, scale = 1): void {
     this.decals.stamp(FX.splat, Phaser.Math.Between(0, SPLAT_FRAMES - 1), x, y, {
-      tint: Phaser.Utils.Array.GetRandom([0x6e0f0f, 0x561010, 0x7a1414]),
+      tint: Phaser.Utils.Array.GetRandom([0x5a0c0c, 0x4a0a0a, 0x641010]),
       alpha: Phaser.Math.FloatBetween(0.6, 0.85),
       scaleX: scale * Phaser.Math.FloatBetween(0.6, 1),
       scaleY: Math.max(0.6, scale * 0.6),
@@ -564,51 +559,88 @@ export class Fx {
   }
 
   /**
-   * 近戰命中：
-   * - slash：一道細白斜光劃過命中點＋幾點火星（快、輕）
-   * - heavy-slash：粗一點的十字光（斧頭、刀類收尾）
-   * - blunt：白色星芒閃一下＋往外擴散的壓扁衝擊環＋腳下揚塵（重、悶）
-   * 卡肉期間 tween 照跑，所以頓住的那一拍正好看到閃光。
+   * 近戰命中（寫實、收斂：不畫星芒、衝擊環、白色斬線，也不在肉上冒火花）：
+   * - slash／heavy-slash：沿著刀的方向噴出一道細細的血（刀類是「劃開」），重的多一點
+   * - blunt：打在肉上的悶擊，一小團血霧＋少量血滴往打擊方向噴，腳下一點揚塵
+   * 卡肉期間 tween 也停，所以頓住的那一拍看得到血剛噴出來的樣子。
    */
   meleeImpact(x: number, y: number, dirX: number, kind: 'slash' | 'heavy-slash' | 'blunt', floorY: number): void {
-    const s = this.scene;
-    const depth = DEPTH_BURST + 1;
     if (kind === 'blunt') {
-      // 小星芒＋往打擊方向噴的速度線（不做大片白光，免得擋住畫面）
-      const star = s.add.star(x, y, 4, 1, 6, 0xffffff, 0.9).setDepth(depth).setAngle(Phaser.Math.Between(0, 45));
-      s.tweens.add({ targets: star, scale: 1.4, alpha: 0, duration: 100, ease: 'Quad.easeOut', onComplete: () => star.destroy() });
-      for (let i = 0; i < 3; i++) {
-        // 往打擊方向噴出的速度線
-        const a = Phaser.Math.DegToRad(Phaser.Math.Between(-35, 35)) + (dirX > 0 ? 0 : Math.PI);
-        const line = s.add.rectangle(x + Math.cos(a) * 6, y + Math.sin(a) * 4, 10, 1, 0xfff3d0, 1).setDepth(depth).setRotation(a).setOrigin(0, 0.5);
-        s.tweens.add({ targets: line, x: x + Math.cos(a) * 22, y: y + Math.sin(a) * 14, scaleX: 0.3, alpha: 0, duration: 130, onComplete: () => line.destroy() });
-      }
-      const ring = s.add.ellipse(x, y, 10, 6).setStrokeStyle(1, 0xfff3d0, 0.6).setDepth(depth);
-      s.tweens.add({ targets: ring, scaleX: 4.2, scaleY: 3.2, alpha: 0, duration: 220, ease: 'Quad.easeOut', onComplete: () => ring.destroy() });
-      this.dust(x + dirX * 6, floorY, 6);
+      this.mist(x, y, dirX, 0.35, 0.7);
+      this.blood(x, y, dirX, floorY, 3, 0.7);
+      this.dust(x + dirX * 6, floorY, 2);
       return;
     }
     const heavy = kind === 'heavy-slash';
-    const g = s.add.graphics().setDepth(depth).setPosition(x, y);
-    const len = heavy ? 18 : 13;
-    const tilt = Phaser.Math.DegToRad(Phaser.Math.Between(25, 55)) * (Math.random() < 0.5 ? 1 : -1);
-    const cuts = heavy ? [tilt, tilt + Math.PI / 2.2] : [tilt];
-    for (const a of cuts) {
-      const cx = Math.cos(a) * len;
-      const cy = Math.sin(a) * len * 0.8;
-      g.lineStyle(1, 0xffffff, 0.9).lineBetween(-cx, -cy, cx, cy);
+    // 刀口噴血：窄窄一道往刀的去向斜上方甩出去，速度快、顆粒小
+    const n = heavy ? 9 : 6;
+    const tilt = Phaser.Math.FloatBetween(-0.5, 0.2);
+    for (let i = 0; i < n; i++) {
+      const sp = Phaser.Math.Between(90, heavy ? 200 : 160);
+      const a = tilt + Phaser.Math.FloatBetween(-0.18, 0.18);
+      this.spawn(FX.px, x + dirX * Phaser.Math.Between(-2, 2), y + Phaser.Math.Between(-3, 3), {
+        vx: dirX * Math.cos(a) * sp,
+        vy: Math.sin(a) * sp - 20,
+        floorY: floorY + Phaser.Math.Between(-2, 3),
+        life: 2,
+        onLand: 'stain',
+        tint: Phaser.Utils.Array.GetRandom(BLOOD),
+      });
     }
-    g.setScale(0.4, 0.4);
-    s.tweens.add({ targets: g, scaleX: 1.15, scaleY: 1, duration: 60, ease: 'Quad.easeOut' });
-    s.tweens.add({ targets: g, alpha: 0, delay: 60, duration: heavy ? 150 : 100, onComplete: () => g.destroy() });
-    this.sparks(x, y, -dirX, floorY, heavy ? 5 : 3);
+    if (heavy) this.mist(x, y, dirX, 0.3, 0.6);
   }
 
-  /** 跳字：往上飄、放大再縮回 */
+  /** 血霧：一小團暗紅的霧往 dirX 散開、很快淡掉 */
+  mist(x: number, y: number, dirX: number, alpha = 0.4, size = 1): void {
+    const p = this.puff(x, y, MIST, alpha, 0.3 * size, DEPTH_BURST);
+    this.scene.tweens.add({
+      targets: p,
+      x: x + dirX * Phaser.Math.Between(5, 10) * size,
+      y: y - Phaser.Math.Between(0, 3),
+      scale: Phaser.Math.FloatBetween(0.8, 1) * size,
+      alpha: 0,
+      duration: Phaser.Math.Between(180, 260),
+      ease: 'Quad.easeOut',
+      onComplete: () => this.unpuff(p),
+    });
+  }
+
+  /**
+   * 跳字：往上飄、放大再縮回。
+   * 文字物件用完放回池子重複使用：每次新建都要重畫一張文字貼圖再上傳 GPU（手機上 4 倍解析度很貴），
+   * 「爆頭」「處決」這類字又剛好都在打擊瞬間跳出來。
+   */
   popText(x: number, y: number, text: string, color: string): void {
-    const t = pixelText(this.scene, x, y, text, 8, color).setOrigin(0.5).setDepth(60).setStroke('#000000', 3).setScale(0.6);
+    const id = `${text}|${color}`;
+    const free = this.textPool.get(id);
+    const t = free?.pop() ?? pixelText(this.scene, x, y, text, 8, color).setOrigin(0.5).setDepth(60).setStroke('#000000', 3);
+    t.setPosition(x, y).setAlpha(1).setScale(0.6).setVisible(true).setActive(true);
     this.scene.tweens.add({ targets: t, scale: 1, duration: 90, ease: 'Back.easeOut' });
-    this.scene.tweens.add({ targets: t, y: y - 16, alpha: 0, delay: 250, duration: 400, onComplete: () => t.destroy() });
+    this.scene.tweens.add({
+      targets: t,
+      y: y - 16,
+      alpha: 0,
+      delay: 250,
+      duration: 400,
+      onComplete: () => {
+        t.setVisible(false).setActive(false);
+        let list = this.textPool.get(id);
+        if (!list) this.textPool.set(id, (list = []));
+        // 同一句話最多留 4 個，太少見的字不留
+        if (list.length < 4 && this.textPool.size < 40) list.push(t);
+        else t.destroy();
+      },
+    });
+  }
+
+  /** 先建好常跳的字，第一次跳出來時才不用當場畫 */
+  prewarmText(list: [string, string][]): void {
+    for (const [text, color] of list) {
+      const id = `${text}|${color}`;
+      if (this.textPool.get(id)?.length) continue;
+      const t = pixelText(this.scene, -100, -100, text, 8, color).setOrigin(0.5).setDepth(60).setStroke('#000000', 3).setVisible(false).setActive(false);
+      this.textPool.set(id, [t]);
+    }
   }
 
   // ───────────────────── 內部 ─────────────────────

@@ -55,10 +55,6 @@ const ICONS: Record<DropIcon, { rows: string[]; colors: Record<string, number> }
     rows: ['.......', '..ggg..', '..ggg..', 'ggggggg', '..ggg..', '..ggg..', '.......'],
     colors: { g: 0x7ee08a },
   },
-  grenade: {
-    rows: ['...kk..', '..k..k.', '.ggg...', 'gGgGg..', 'ggggg..', 'gGgGg..', '.ggg...'],
-    colors: { k: 0x9a9a9a, g: 0x3a4a22, G: 0x5a6a32 },
-  },
   tool: {
     rows: ['ssss...', 'ssss...', '..bb...', '..bb...', '..bb...', '..bb...', '..bb...'],
     colors: { s: 0xb0b8c0, b: 0x9a6a3a },
