@@ -536,6 +536,22 @@ export const SFX: Record<string, SfxDef> = {
       return b.reverb(0.25, 1.2).normalize(0.8);
     },
   },
+  /** 狂奔屍蓄力的尖嘯：高、刺耳、往上拉，一聽就知道要衝了 */
+  zombie_scream: {
+    variants: 3,
+    volume: 0.55,
+    pitch: 1.5,
+    maxVoices: 2,
+    minGapMs: 150,
+    recipe: (fs, r) => {
+      const len = 0.7 + r() * 0.15;
+      const b = new Buf(fs, len + 0.3);
+      const f0 = 260 + r() * 60;
+      voice(b, 0, len, r, { f0, f1: f0 * 1.6, formants: [1100 + r() * 300, 2600 + r() * 500], rough: 0.95, breath: 0.7, attack: 0.03 });
+      voice(b, 0.02, len * 0.9, r, { f0: f0 * 0.5, f1: f0 * 0.75, formants: [600, 1400], rough: 0.8, breath: 0.3, attack: 0.05, gain: 0.5 });
+      return b.reverb(0.2, 0.8).normalize(0.9);
+    },
+  },
   zombie_attack: {
     variants: 4,
     volume: 0.4,

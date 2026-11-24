@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import type { WaveDef } from '../data/waves';
+import { HORDE, type WaveDef } from '../data/waves';
 import { GameEvents } from './GameEvents';
 
 /**
@@ -45,11 +45,19 @@ export class WaveSpawner {
     }
     const wave = this.waves[next];
     this.waitingNext = true;
+    if (wave.horde) {
+      // 屍潮預警：遠方的嘶吼，給玩家幾秒補彈、退回路障後
+      const warn = Math.min(HORDE.warn, wave.delayBefore - 0.5);
+      this.scene.time.delayedCall((wave.delayBefore - warn) * 1000, () => {
+        this.scene.events.emit('horde-warning', warn);
+        GameEvents.of(this.scene).emit('wave:horde-warning', { seconds: warn });
+      });
+    }
     this.scene.time.delayedCall(wave.delayBefore * 1000, () => {
       this.waitingNext = false;
       this.waveIndex = next;
-      this.scene.events.emit('wave-start', next + 1, this.waves.length);
-      GameEvents.of(this.scene).emit('wave:start', { wave: next + 1, total: this.waves.length });
+      this.scene.events.emit('wave-start', next + 1, this.waves.length, !!wave.horde);
+      GameEvents.of(this.scene).emit('wave:start', { wave: next + 1, total: this.waves.length, horde: !!wave.horde });
       for (const g of wave.groups) {
         this.pending += g.count;
         for (let i = 0; i < g.count; i++) {

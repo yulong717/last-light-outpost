@@ -65,9 +65,15 @@ export interface GameEventMap {
   'enemy:burst': { enemyId: string; x: number; y: number; radius: number; damage: number };
   /** 囚犯霧屍血量過半後暴走 */
   'enemy:enrage': { enemyId: string; x: number; y: number };
+  /** 狂奔屍開始蓄力：尖嘯（衝刺預警） */
+  'enemy:scream': { enemyId: string; x: number; y: number };
+  /** 狂奔屍開始衝刺 */
+  'enemy:sprint': { enemyId: string; x: number; y: number };
   /** 護理師霧屍替附近同伴回血 */
   'enemy:heal': { enemyId: string; x: number; y: number; targets: number };
-  'wave:start': { wave: number; total: number };
+  'wave:start': { wave: number; total: number; horde?: boolean };
+  /** 屍潮前的預警（seconds 秒後開始） */
+  'wave:horde-warning': { seconds: number };
   'game:over': { survived: boolean };
   /** NPC 夥伴開了一槍 */
   'ally:shoot': { role: string; x: number; y: number; angle: number; weaponId?: string };

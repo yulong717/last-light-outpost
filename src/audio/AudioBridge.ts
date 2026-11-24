@@ -30,7 +30,7 @@ export function attachAudio(scene: Phaser.Scene): void {
   };
   /** 大型霧屍聲音低一點 */
   // 霧屍職業的嗓音高低（職業列表見 src/data/zombies.ts）
-  const KIND_PITCH: Record<string, number> = { brute: -5, runner: 3, nurse: 2, firefighter: -2, soldier: -2, prisoner: -1 };
+  const KIND_PITCH: Record<string, number> = { sprinter: 2, brute: -5, runner: 3, nurse: 2, firefighter: -2, soldier: -2, prisoner: -1 };
   const kindPitch = (kind: string) => KIND_PITCH[kind] ?? 0;
   const shotName = (id: string) => {
     const snd = getFirearm(id)?.sound;
@@ -136,6 +136,8 @@ export function attachAudio(scene: Phaser.Scene): void {
       play('flesh_hit', e.x, { semitones: -3, volume: 1 });
       play('melee_blunt', e.x, { semitones: -8, volume: 0.6 });
     })
+    .on('enemy:scream', (e) => play('zombie_scream', e.x, { volume: 1 }))
+    .on('enemy:sprint', (e) => play('footstep', e.x, { volume: 1, semitones: -3 }))
     .on('enemy:enrage', (e) => play('zombie_groan', e.x, { semitones: -4, volume: 1 }))
     .on('enemy:heal', (e) => play('ui_confirm', e.x, { semitones: -6, volume: 0.25 }))
     .on('barricade:hit', (e) => play('barricade_hit', e.x))
@@ -152,7 +154,16 @@ export function attachAudio(scene: Phaser.Scene): void {
     .on('ally:heal', (e) => play('ui_confirm', e.x, { volume: 0.4, semitones: 5 }))
     .on('ally:order', () => play('ui_tap'))
     .on('barricade:repair', () => play('barricade_hit', undefined, { volume: 0.3, semitones: 6 }))
-    .on('wave:start', () => play('wave_horn'))
+    .on('wave:start', (e) => {
+      play('wave_horn');
+      // 屍潮：號角後面疊一片此起彼落的低吼
+      if (e.horde) for (let i = 0; i < 6; i++) play('zombie_groan', cam.scrollX + GAME_WIDTH * 0.9, { semitones: -6 + i * 1.5, volume: 0.9, delay: 0.15 + i * 0.22 });
+    })
+    // 屍潮預警：遠方的尖嘯和低吼
+    .on('wave:horde-warning', () => {
+      play('zombie_scream', cam.scrollX + GAME_WIDTH * 0.9, { volume: 0.45, semitones: -3 });
+      for (let i = 0; i < 4; i++) play('zombie_groan', cam.scrollX + GAME_WIDTH * 0.9, { semitones: -8 + i * 2, volume: 0.5, delay: 0.5 + i * 0.4 });
+    })
     .on('game:over', (e) => {
       AudioManager.setMood('off');
       play(e.survived ? 'stinger_win' : 'stinger_lose', undefined, { delay: 0.3 });

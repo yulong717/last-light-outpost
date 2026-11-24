@@ -145,12 +145,14 @@ export class UIScene extends Phaser.Scene {
     const defense = this.scene.get('Defense');
     defense.events.on('hud', this.onHud, this);
     defense.events.on('wave-start', this.onWaveStart, this);
+    defense.events.on('horde-warning', this.onHordeWarning, this);
     if (data.tutorial) this.buildTutorial();
     defense.events.on('tutorial', this.onTutorial, this);
 
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       defense.events.off('hud', this.onHud, this);
       defense.events.off('wave-start', this.onWaveStart, this);
+      defense.events.off('horde-warning', this.onHordeWarning, this);
       defense.events.off('tutorial', this.onTutorial, this);
       this.scale.off(Phaser.Scale.Events.ORIENTATION_CHANGE, this.checkOrientation, this);
       this.unregister.forEach((fn) => fn());
@@ -608,8 +610,12 @@ export class UIScene extends Phaser.Scene {
     this.setKey(this.keys.reload, !h.meleeStance && !h.unarmed && h.ammo < h.magazine && !h.reloading);
   }
 
-  private onWaveStart(wave: number, total: number): void {
+  private onWaveStart(wave: number, total: number, horde = false): void {
     if (this.tut) return;
+    if (horde) {
+      this.hordeBanner(wave === total);
+      return;
+    }
     const label = wave === total ? '最後一波！' : `第 ${wave} 波來襲`;
     const w = 150;
     const x = (GAME_WIDTH - w) / 2;
@@ -618,6 +624,49 @@ export class UIScene extends Phaser.Scene {
     drawPanel(g, x, y, w, 30, { tone: 'danger', alpha: 0.88, hazard: true });
     const t = pixelText(this, GAME_WIDTH / 2, y + 15, label, 14, '#ff8a70').setOrigin(0.5).setDepth(111);
     this.tweens.add({ targets: [g, t], alpha: 0, delay: 1000, duration: 500, onComplete: () => (g.destroy(), t.destroy()) });
+  }
+
+  /** 屍潮預警：畫面上方閃爍的一行字，邊緣開始泛紅 */
+  private onHordeWarning(seconds: number): void {
+    if (this.tut) return;
+    const t = pixelText(this, GAME_WIDTH / 2, 92, '遠方傳來嘶吼……屍潮逼近！', 10, '#ffb08a')
+      .setOrigin(0.5)
+      .setDepth(111)
+      .setStroke('#000000', 3);
+    this.tweens.add({ targets: t, alpha: 0.25, duration: 260, yoyo: true, repeat: Math.max(1, Math.floor((seconds * 1000) / 520) - 1), onComplete: () => t.destroy() });
+    this.edgeGlow(seconds * 1000, 0.25);
+  }
+
+  /** 屍潮開始：大號危險橫幅 + 畫面四邊紅光脈動 */
+  private hordeBanner(last: boolean): void {
+    const w = 220;
+    const x = (GAME_WIDTH - w) / 2;
+    const y = 98;
+    const g = this.add.graphics().setDepth(110);
+    drawPanel(g, x, y, w, 42, { tone: 'danger', alpha: 0.92, hazard: true });
+    const t = pixelText(this, GAME_WIDTH / 2, y + 15, '屍潮來襲！', 18, '#ff6a50').setOrigin(0.5).setDepth(111);
+    const sub = pixelText(this, GAME_WIDTH / 2, y + 33, last ? '最後一波　撐過去就天亮' : '守住路障　小心狂奔屍', 8, '#f2ece0').setOrigin(0.5).setDepth(111);
+    t.setScale(1.6);
+    this.tweens.add({ targets: t, scale: 1, duration: 260, ease: 'Back.Out' });
+    this.tweens.add({ targets: [g, t, sub], alpha: 0, delay: 1800, duration: 600, onComplete: () => (g.destroy(), t.destroy(), sub.destroy()) });
+    this.edgeGlow(6000, 0.45);
+  }
+
+  /** 畫面四邊的紅光，脈動 ms 毫秒後淡出 */
+  private edgeGlow(ms: number, peak: number): void {
+    const g = this.add.graphics().setDepth(95);
+    const steps = 6;
+    for (let i = 0; i < steps; i++) {
+      const a = (1 - i / steps) * 0.5;
+      const d = i * 4;
+      g.fillStyle(0xa01010, a);
+      g.fillRect(d, d, GAME_WIDTH - d * 2, 4);
+      g.fillRect(d, GAME_HEIGHT - d - 4, GAME_WIDTH - d * 2, 4);
+      g.fillRect(d, d + 4, 4, GAME_HEIGHT - d * 2 - 8);
+      g.fillRect(GAME_WIDTH - d - 4, d + 4, 4, GAME_HEIGHT - d * 2 - 8);
+    }
+    g.setAlpha(0);
+    this.tweens.add({ targets: g, alpha: peak, duration: 420, yoyo: true, repeat: Math.max(0, Math.round(ms / 840) - 1), onComplete: () => g.destroy() });
   }
 
   private buildRotateHint(): void {

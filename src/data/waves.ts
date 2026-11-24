@@ -12,26 +12,39 @@ export interface WaveDef {
   groups: SpawnGroup[];
   /** 這一波開始前的休息秒數 */
   delayBefore: number;
+  /**
+   * 屍潮：整夜的壓力高峰。數量更多、出得更密、混進狂奔屍；
+   * 開始前幾秒會先有「遠方嘶吼」預警，讓玩家補彈、站位。
+   */
+  horde?: boolean;
 }
+
+/** 屍潮的調整：預算倍率、出怪間隔倍率、開始前預警秒數、屍潮後那一波的喘息倍率 */
+export const HORDE = { budgetMul: 1.6, intervalMul: 0.45, warn: 4, breather: 0.75, delayBefore: 8 };
 
 /**
  * 第一個夜晚的波次：開局只有主角一人（M1911＋軍用刀），
  * 所以比照「教學夜」調得溫和，沒有重型霧屍。
  */
 export const NIGHT_ONE: WaveDef[] = [
-  { delayBefore: 2, groups: [{ enemy: 'basic', count: 6, interval: 1.8 }] },
+  { delayBefore: 2, groups: [{ enemy: 'basic', count: 8, interval: 1.4 }] },
   {
-    delayBefore: 6,
-    groups: [
-      { enemy: 'basic', count: 8, interval: 1.3 },
-      { enemy: 'runner', count: 2, interval: 3, startDelay: 4 },
-    ],
-  },
-  {
-    delayBefore: 6,
+    delayBefore: 5,
     groups: [
       { enemy: 'basic', count: 10, interval: 1.0 },
       { enemy: 'runner', count: 3, interval: 2.4, startDelay: 3 },
+      // 第一次見到狂奔屍：單獨一隻，讓玩家看清楚嘶吼→蓄力→衝刺
+      { enemy: 'sprinter', count: 1, interval: 1, startDelay: 7 },
+    ],
+  },
+  {
+    // 第一夜的屍潮：數量一口氣拉高、出得很密，再混兩隻狂奔屍
+    delayBefore: HORDE.delayBefore,
+    horde: true,
+    groups: [
+      { enemy: 'basic', count: 16, interval: 0.55 },
+      { enemy: 'runner', count: 4, interval: 1.4, startDelay: 2 },
+      { enemy: 'sprinter', count: 2, interval: 4, startDelay: 4 },
     ],
   },
 ];
@@ -53,11 +66,15 @@ export function squadScale(readyCrew: number): number {
 export function buildNight(day: number, rand: () => number = Math.random, readyCrew = 3): WaveDef[] {
   if (day <= 1) return NIGHT_ONE;
   const waves = Math.min(6, 3 + Math.floor((day - 1) / 2));
-  const base = (10 + 5 * day) * squadScale(readyCrew);
+  const base = (13 + 6 * day) * squadScale(readyCrew);
   const out: WaveDef[] = [];
   const unlocked = Object.values(PROFESSIONS).filter((p) => p.unlockDay <= day);
+  // 節奏：最後一波一定是屍潮；五波以上的夜晚中段再來一次。屍潮後那一波稍微放鬆，給玩家喘口氣
+  const hordes = new Set([waves - 1]);
+  if (waves >= 5) hordes.add(Math.floor(waves / 2));
   for (let w = 0; w < waves; w++) {
-    let budget = base * (0.6 + 0.4 * w);
+    const horde = hordes.has(w);
+    let budget = base * (0.6 + 0.4 * w) * (horde ? HORDE.budgetMul : hordes.has(w - 1) ? HORDE.breather : 1);
     const counts: Record<string, number> = {};
     const add = (id: string) => {
       counts[id] = (counts[id] ?? 0) + 1;
@@ -70,6 +87,8 @@ export function buildNight(day: number, rand: () => number = Math.random, readyC
       const elites = unlocked.filter((p) => p.threat >= 5);
       if (elites.length) add(elites[Math.floor(rand() * elites.length)].id);
     }
+    // 屍潮保證有狂奔屍，天數越大越多
+    if (horde) for (let i = 0; i < 1 + Math.floor(day / 3); i++) add('sprinter');
     // 第一波不出重型
     const pool = unlocked.filter((p) => p.id !== 'basic' && (w > 0 || p.threat <= 3));
     let guard = 200;
@@ -100,20 +119,21 @@ export function buildNight(day: number, rand: () => number = Math.random, readyC
       if (def.pack) {
         // 成群的動物：一群一組，群與群之間隔幾秒
         for (let k = 0, left = count; left > 0; k++, left -= def.pack) {
-          groups.push({ enemy, count: Math.min(def.pack, left), interval: 0.35, startDelay: 3 + k * 6 });
+          groups.push({ enemy, count: Math.min(def.pack, left), interval: 0.35, startDelay: (3 + k * 6) * (horde ? 0.6 : 1) });
         }
         continue;
       }
+      const interval = Math.max(0.5, def.threat * 0.9) / speedUp + (enemy === 'basic' ? 0.4 : 0.8);
       groups.push({
         enemy,
         count,
-        interval: +(Math.max(0.5, def.threat * 0.9) / speedUp + (enemy === 'basic' ? 0.4 : 0.8)).toFixed(2),
-        startDelay: def.threat >= 5 ? 4 : def.threat >= 3 ? 2 : 0,
+        interval: +(interval * (horde ? HORDE.intervalMul : 1)).toFixed(2),
+        startDelay: (def.threat >= 5 ? 4 : def.threat >= 3 ? 2 : 0) * (horde ? 0.5 : 1),
       });
     }
     // 平民先出、菁英最後
     groups.sort((a, b) => PROFESSIONS[a.enemy].threat - PROFESSIONS[b.enemy].threat);
-    out.push({ delayBefore: w === 0 ? 2 : 5, groups });
+    out.push({ delayBefore: horde ? HORDE.delayBefore : w === 0 ? 2 : 5, groups, horde });
   }
   return out;
 }
