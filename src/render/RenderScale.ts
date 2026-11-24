@@ -11,6 +11,11 @@ import { GAME_HEIGHT, GAME_WIDTH } from '../config';
  */
 
 const MAX_SCALE = 4;
+/**
+ * 手機（觸控為主）最多 3 倍：4 倍時畫布是 2560×1440，比多數手機螢幕的實際像素還多，
+ * 每幀都在填用不到的像素，打擊特效一多就掉幀。3 倍在手機螢幕上看起來沒有差別。
+ */
+const MAX_SCALE_TOUCH = 3;
 
 function pickScale(): number {
   if (typeof window === 'undefined') return 2;
@@ -19,7 +24,8 @@ function pickScale(): number {
   const w = Math.max(window.innerWidth, window.screen?.width ?? 0, window.screen?.height ?? 0) * dpr;
   const h = Math.max(window.innerHeight, Math.min(window.screen?.width ?? 0, window.screen?.height ?? 0)) * dpr;
   const fit = Math.min(w / GAME_WIDTH, h / GAME_HEIGHT);
-  return Phaser.Math.Clamp(Math.ceil(fit - 0.05), 2, MAX_SCALE);
+  const touch = window.matchMedia?.('(pointer: coarse)').matches && (navigator.maxTouchPoints ?? 0) > 0;
+  return Phaser.Math.Clamp(Math.ceil(fit - 0.05), 2, touch ? MAX_SCALE_TOUCH : MAX_SCALE);
 }
 
 /** 畫布實際像素對邏輯像素的整數倍率（2～4）。 */
