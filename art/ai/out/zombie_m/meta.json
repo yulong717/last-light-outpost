@@ -832,5 +832,1461 @@
     "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie10\\walk_s3\\zombie10_walk_s3_00056_.png"
    ]
   }
+ },
+ "attack": {
+  "round": 12,
+  "seed": 3,
+  "prompt": "Pixel art game sprite animation of the fog zombie from <Picture 1>: keep its grey-green skin, small head, torn light grey shirt, dark blue-grey trousers, dark shoes, colours and near-black outlines exactly. Three-quarter view facing right, fixed camera, no zoom, no pan, full body visible at all times. The background stays plain solid magenta in every frame. The hunched zombie attacks empty air just in front of it to the right (there is nothing there: no victim, no person, no object, no wall, only the zombie and the magenta background): it pulls back slightly, then lunges forward with both arms outstretched, claws and grabs at the air with both hands, pulls them in and bites with its head thrust forward and mouth wide open, then slowly returns to its hunched stance with arms forward. The feet stay planted on the ground line. One single attack. No effects, no blood spray. Flat colors.",
+  "first": "walk.png frame 0",
+  "last": "walk.png frame 0",
+  "workflow": "art/ai/workflows/h3_video_i2v.json 512x512, 56 frames, 8-step LoRA, 8 steps",
+  "pick": {
+   "start": 25,
+   "peak": 30,
+   "end": 50,
+   "picked": [
+    25,
+    27,
+    28,
+    30,
+    37,
+    43
+   ],
+   "stray_object_frames": [],
+   "stray_in_picked": [],
+   "scale": 1.0,
+   "heads": [
+    {
+     "dx": -1,
+     "dy": 0,
+     "err": 3.2,
+     "locked": true
+    },
+    {
+     "dx": -5,
+     "dy": -1,
+     "err": 23.7,
+     "locked": true
+    },
+    {
+     "dx": 0,
+     "dy": 0,
+     "err": 37.5,
+     "locked": true
+    },
+    {
+     "dx": 5,
+     "dy": 2,
+     "err": 66.0,
+     "locked": false
+    },
+    {
+     "dx": 1,
+     "dy": 2,
+     "err": 31.9,
+     "locked": true
+    },
+    {
+     "dx": 5,
+     "dy": 2,
+     "err": 66.1,
+     "locked": false
+    }
+   ],
+   "colours": 16,
+   "heights": [
+    56,
+    57,
+    56,
+    53,
+    54,
+    53
+   ],
+   "feet": [
+    61,
+    61,
+    61,
+    61,
+    61,
+    61
+   ],
+   "regions": {
+    "outline": 2304,
+    "skin": 1011,
+    "other": 243,
+    "shirt": 1296,
+    "pants": 1100
+   },
+   "region_px_fixed": 73,
+   "outside_palette": 0,
+   "seconds": 30.5,
+   "vram_peak_mib": 15364
+  },
+  "seeds": {
+   "attack_s1": {
+    "start": 1,
+    "peak": 14,
+    "end": 17,
+    "picked": [
+     1,
+     5,
+     10,
+     14,
+     15,
+     16
+    ],
+    "stray_object_frames": [],
+    "stray_in_picked": [],
+    "scale": 1.0,
+    "heads": [
+     {
+      "dx": 4,
+      "dy": 0,
+      "err": 9.3,
+      "locked": true
+     },
+     {
+      "dx": -2,
+      "dy": -2,
+      "err": 27.1,
+      "locked": true
+     },
+     {
+      "dx": -4,
+      "dy": -3,
+      "err": 7.1,
+      "locked": true
+     },
+     {
+      "dx": -4,
+      "dy": -3,
+      "err": 6.2,
+      "locked": true
+     },
+     {
+      "dx": -1,
+      "dy": -2,
+      "err": 7.7,
+      "locked": true
+     },
+     {
+      "dx": -1,
+      "dy": -2,
+      "err": 7.8,
+      "locked": true
+     }
+    ],
+    "colours": 15,
+    "heights": [
+     56,
+     58,
+     59,
+     59,
+     58,
+     58
+    ],
+    "feet": [
+     61,
+     61,
+     61,
+     61,
+     61,
+     61
+    ],
+    "regions": {
+     "outline": 2349,
+     "skin": 1115,
+     "other": 230,
+     "shirt": 1105,
+     "pants": 1130
+    },
+    "region_px_fixed": 58,
+    "outside_palette": 0,
+    "seconds": 38.4,
+    "vram_peak_mib": 15508
+   },
+   "attack_s2": {
+    "start": 5,
+    "peak": 24,
+    "end": 43,
+    "picked": [
+     5,
+     11,
+     18,
+     24,
+     30,
+     37
+    ],
+    "stray_object_frames": [],
+    "stray_in_picked": [],
+    "scale": 1.0,
+    "heads": [
+     {
+      "dx": 1,
+      "dy": 0,
+      "err": 3.4,
+      "locked": true
+     },
+     {
+      "dx": -5,
+      "dy": -2,
+      "err": 32.0,
+      "locked": true
+     },
+     {
+      "dx": -5,
+      "dy": -2,
+      "err": 31.1,
+      "locked": true
+     },
+     {
+      "dx": 7,
+      "dy": 2,
+      "err": 55.6,
+      "locked": false
+     },
+     {
+      "dx": 0,
+      "dy": 0,
+      "err": 32.6,
+      "locked": true
+     },
+     {
+      "dx": 6,
+      "dy": 2,
+      "err": 56.1,
+      "locked": false
+     }
+    ],
+    "colours": 16,
+    "heights": [
+     56,
+     58,
+     58,
+     53,
+     56,
+     53
+    ],
+    "feet": [
+     61,
+     61,
+     61,
+     61,
+     61,
+     61
+    ],
+    "regions": {
+     "outline": 2305,
+     "skin": 1109,
+     "other": 240,
+     "shirt": 1088,
+     "pants": 1124
+    },
+    "region_px_fixed": 60,
+    "outside_palette": 0,
+    "seconds": 30.5,
+    "vram_peak_mib": 15364
+   },
+   "attack_s3": {
+    "start": 25,
+    "peak": 30,
+    "end": 50,
+    "picked": [
+     25,
+     27,
+     28,
+     30,
+     37,
+     43
+    ],
+    "stray_object_frames": [],
+    "stray_in_picked": [],
+    "scale": 1.0,
+    "heads": [
+     {
+      "dx": -1,
+      "dy": 0,
+      "err": 3.2,
+      "locked": true
+     },
+     {
+      "dx": -5,
+      "dy": -1,
+      "err": 23.7,
+      "locked": true
+     },
+     {
+      "dx": 0,
+      "dy": 0,
+      "err": 37.5,
+      "locked": true
+     },
+     {
+      "dx": 5,
+      "dy": 2,
+      "err": 66.0,
+      "locked": false
+     },
+     {
+      "dx": 1,
+      "dy": 2,
+      "err": 31.9,
+      "locked": true
+     },
+     {
+      "dx": 5,
+      "dy": 2,
+      "err": 66.1,
+      "locked": false
+     }
+    ],
+    "colours": 16,
+    "heights": [
+     56,
+     57,
+     56,
+     53,
+     54,
+     53
+    ],
+    "feet": [
+     61,
+     61,
+     61,
+     61,
+     61,
+     61
+    ],
+    "regions": {
+     "outline": 2304,
+     "skin": 1011,
+     "other": 243,
+     "shirt": 1296,
+     "pants": 1100
+    },
+    "region_px_fixed": 73,
+    "outside_palette": 0,
+    "seconds": 30.5,
+    "vram_peak_mib": 15364
+   },
+   "attack_s4": {
+    "start": 2,
+    "peak": 14,
+    "end": 22,
+    "picked": [
+     2,
+     6,
+     10,
+     14,
+     17,
+     19
+    ],
+    "stray_object_frames": [],
+    "stray_in_picked": [],
+    "scale": 1.0,
+    "heads": [
+     {
+      "dx": -2,
+      "dy": 0,
+      "err": 26.3,
+      "locked": true
+     },
+     {
+      "dx": -7,
+      "dy": -1,
+      "err": 29.7,
+      "locked": true
+     },
+     {
+      "dx": -7,
+      "dy": -1,
+      "err": 29.2,
+      "locked": true
+     },
+     {
+      "dx": 3,
+      "dy": 2,
+      "err": 60.8,
+      "locked": false
+     },
+     {
+      "dx": 3,
+      "dy": 2,
+      "err": 61.7,
+      "locked": false
+     },
+     {
+      "dx": 3,
+      "dy": 2,
+      "err": 39.5,
+      "locked": true
+     }
+    ],
+    "colours": 15,
+    "heights": [
+     56,
+     57,
+     57,
+     53,
+     53,
+     54
+    ],
+    "feet": [
+     61,
+     61,
+     61,
+     61,
+     61,
+     61
+    ],
+    "regions": {
+     "outline": 2424,
+     "skin": 1002,
+     "other": 217,
+     "shirt": 1309,
+     "pants": 1112
+    },
+    "region_px_fixed": 55,
+    "outside_palette": 0,
+    "seconds": 30.5,
+    "vram_peak_mib": 15364
+   }
+  },
+  "generation": {
+   "workflow": "C:/AI/last-light-outpost/art/ai/workflows/h3_video_i2v.json",
+   "overrides": {
+    "first.image": "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie12\\walk0_512.png",
+    "last.image": "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie12\\walk0_512.png",
+    "scale_first.width": 512,
+    "scale_first.height": 512,
+    "scale_last.width": 512,
+    "scale_last.height": 512,
+    "cond.width": 512,
+    "cond.height": 512,
+    "cond.length": 56,
+    "noise.noise_seed": 3,
+    "cond.prompt": "Pixel art game sprite animation of the fog zombie from <Picture 1>: keep its grey-green skin, small head, torn light grey shirt, dark blue-grey trousers, dark shoes, colours and near-black outlines exactly. Three-quarter view facing right, fixed camera, no zoom, no pan, full body visible at all times. The background stays plain solid magenta in every frame. The hunched zombie attacks empty air just in front of it to the right (there is nothing there: no victim, no person, no object, no wall, only the zombie and the magenta background): it pulls back slightly, then lunges forward with both arms outstretched, claws and grabs at the air with both hands, pulls them in and bites with its head thrust forward and mouth wide open, then slowly returns to its hunched stance with arms forward. The feet stay planted on the ground line. One single attack. No effects, no blood spray. Flat colors.",
+    "save.filename_prefix": "ai_art/zombie12_attack_s3"
+   },
+   "models": {
+    "unet": {
+     "unet_name": "minimax_h3_fl2va_pruned_int8_convrot.safetensors",
+     "weight_dtype": "default"
+    },
+    "lora": {
+     "model": [
+      "unet",
+      0
+     ],
+     "lora_name": "minimax_h3_fl2v_turbo_8step_v1.0_comfyui_bf16.safetensors",
+     "strength_model": 1.0
+    },
+    "clip": {
+     "clip_name": "qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors",
+     "type": "minimax",
+     "device": "default"
+    },
+    "vae": {
+     "vae_name": "minimax_h3_video_vae_int8_convrot.safetensors"
+    }
+   },
+   "tag": "r12 zombie attack 8 steps seed 3",
+   "time": "2026-11-24 20:41:17",
+   "prompt_id": "1acb2793-9f58-4c0f-974f-7b81480b8ee7",
+   "seconds": 30.5,
+   "vram_peak_mib": 15364,
+   "files": [
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie12\\attack_s3\\zombie12_attack_s3_00057_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie12\\attack_s3\\zombie12_attack_s3_00058_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie12\\attack_s3\\zombie12_attack_s3_00059_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie12\\attack_s3\\zombie12_attack_s3_00060_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie12\\attack_s3\\zombie12_attack_s3_00061_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie12\\attack_s3\\zombie12_attack_s3_00062_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie12\\attack_s3\\zombie12_attack_s3_00063_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie12\\attack_s3\\zombie12_attack_s3_00064_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie12\\attack_s3\\zombie12_attack_s3_00065_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie12\\attack_s3\\zombie12_attack_s3_00066_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie12\\attack_s3\\zombie12_attack_s3_00067_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie12\\attack_s3\\zombie12_attack_s3_00068_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie12\\attack_s3\\zombie12_attack_s3_00069_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie12\\attack_s3\\zombie12_attack_s3_00070_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie12\\attack_s3\\zombie12_attack_s3_00071_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie12\\attack_s3\\zombie12_attack_s3_00072_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie12\\attack_s3\\zombie12_attack_s3_00073_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie12\\attack_s3\\zombie12_attack_s3_00074_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie12\\attack_s3\\zombie12_attack_s3_00075_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie12\\attack_s3\\zombie12_attack_s3_00076_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie12\\attack_s3\\zombie12_attack_s3_00077_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie12\\attack_s3\\zombie12_attack_s3_00078_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie12\\attack_s3\\zombie12_attack_s3_00079_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie12\\attack_s3\\zombie12_attack_s3_00080_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie12\\attack_s3\\zombie12_attack_s3_00081_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie12\\attack_s3\\zombie12_attack_s3_00082_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie12\\attack_s3\\zombie12_attack_s3_00083_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie12\\attack_s3\\zombie12_attack_s3_00084_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie12\\attack_s3\\zombie12_attack_s3_00085_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie12\\attack_s3\\zombie12_attack_s3_00086_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie12\\attack_s3\\zombie12_attack_s3_00087_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie12\\attack_s3\\zombie12_attack_s3_00088_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie12\\attack_s3\\zombie12_attack_s3_00089_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie12\\attack_s3\\zombie12_attack_s3_00090_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie12\\attack_s3\\zombie12_attack_s3_00091_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie12\\attack_s3\\zombie12_attack_s3_00092_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie12\\attack_s3\\zombie12_attack_s3_00093_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie12\\attack_s3\\zombie12_attack_s3_00094_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie12\\attack_s3\\zombie12_attack_s3_00095_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie12\\attack_s3\\zombie12_attack_s3_00096_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie12\\attack_s3\\zombie12_attack_s3_00097_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie12\\attack_s3\\zombie12_attack_s3_00098_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie12\\attack_s3\\zombie12_attack_s3_00099_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie12\\attack_s3\\zombie12_attack_s3_00100_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie12\\attack_s3\\zombie12_attack_s3_00101_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie12\\attack_s3\\zombie12_attack_s3_00102_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie12\\attack_s3\\zombie12_attack_s3_00103_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie12\\attack_s3\\zombie12_attack_s3_00104_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie12\\attack_s3\\zombie12_attack_s3_00105_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie12\\attack_s3\\zombie12_attack_s3_00106_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie12\\attack_s3\\zombie12_attack_s3_00107_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie12\\attack_s3\\zombie12_attack_s3_00108_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie12\\attack_s3\\zombie12_attack_s3_00109_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie12\\attack_s3\\zombie12_attack_s3_00110_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie12\\attack_s3\\zombie12_attack_s3_00111_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie12\\attack_s3\\zombie12_attack_s3_00112_.png"
+   ]
+  }
+ },
+ "hit": {
+  "round": 12,
+  "seed": 3,
+  "method": "H3 Image stills (video attempts all drew the attacker's weapon), frames = hitA / hitB / hitA",
+  "prompt": "Redraw the fog zombie of <Picture 1> as a clean pixel art game sprite for a 2D side-scrolling zombie game, at exactly the same position, size, colours and three-quarter view facing right, keeping its feet on the same ground line, but change its pose: {pose}. Keep the character of <Picture 2> (small head, grey-green rotting skin, torn plain light grey shirt, dark blue-grey trousers, dark shoes). Draw it in exactly the pixel art style of <Picture 3>: light from the upper left, 3 to 4 shading steps, a 1 pixel near-black outline. Only the zombie: no weapon, no bat, no hand of an attacker, no object, no effects, no blood. Plain solid magenta background, no ground, no floor line, no cast shadow, no text.",
+  "poses": {
+   "hitA": "its head has just snapped backward from a blow to the face: the head is tilted back with the chin up and the face turned up toward the upper right, the shoulders are pushed back a little, the arms are still reaching forward but jerked slightly up, the legs and feet stay exactly where they are",
+   "hitB": "it recoils from a heavy blow to the face: the whole upper body is bent backward to the left with the chest pushed out, the head thrown back, both arms flung loosely forward and up, the knees slightly bent, the feet stay exactly where they are on the ground line"
+  },
+  "references": {
+   "Picture 1": "walk.png frame 0 x16",
+   "Picture 2": "stand.png x16",
+   "Picture 3": "art/ai/style/anchor.png x5"
+  },
+  "workflow": "art/ai/workflows/h3_image_edit_3ref.json (1024x1024)",
+  "seeds": {
+   "hitstill_s1": {
+    "heights": [
+     55,
+     56,
+     55
+    ],
+    "feet": [
+     61,
+     61,
+     61
+    ],
+    "colours": 16,
+    "regions": {
+     "outline": 1176,
+     "skin": 614,
+     "other": 141,
+     "shirt": 577,
+     "pants": 560
+    },
+    "outside_palette": 0,
+    "picked": [
+     "hitA",
+     "hitB",
+     "hitA"
+    ],
+    "heads": [
+     {
+      "locked": false
+     },
+     {
+      "locked": false
+     },
+     {
+      "locked": false
+     }
+    ]
+   },
+   "hitstill_s2": {
+    "heights": [
+     58,
+     59,
+     58
+    ],
+    "feet": [
+     61,
+     61,
+     61
+    ],
+    "colours": 16,
+    "regions": {
+     "outline": 1287,
+     "skin": 593,
+     "other": 139,
+     "shirt": 640,
+     "pants": 590
+    },
+    "outside_palette": 0,
+    "picked": [
+     "hitA",
+     "hitB",
+     "hitA"
+    ],
+    "heads": [
+     {
+      "locked": false
+     },
+     {
+      "locked": false
+     },
+     {
+      "locked": false
+     }
+    ]
+   },
+   "hitstill_s3": {
+    "heights": [
+     57,
+     53,
+     57
+    ],
+    "feet": [
+     61,
+     61,
+     61
+    ],
+    "colours": 16,
+    "regions": {
+     "outline": 1142,
+     "skin": 607,
+     "other": 109,
+     "shirt": 610,
+     "pants": 563
+    },
+    "outside_palette": 0,
+    "picked": [
+     "hitA",
+     "hitB",
+     "hitA"
+    ],
+    "heads": [
+     {
+      "locked": false
+     },
+     {
+      "locked": false
+     },
+     {
+      "locked": false
+     }
+    ]
+   },
+   "hitstill_s4": {
+    "heights": [
+     58,
+     55,
+     58
+    ],
+    "feet": [
+     61,
+     61,
+     61
+    ],
+    "colours": 16,
+    "regions": {
+     "outline": 1202,
+     "skin": 635,
+     "other": 104,
+     "shirt": 599,
+     "pants": 580
+    },
+    "outside_palette": 0,
+    "picked": [
+     "hitA",
+     "hitB",
+     "hitA"
+    ],
+    "heads": [
+     {
+      "locked": false
+     },
+     {
+      "locked": false
+     },
+     {
+      "locked": false
+     }
+    ]
+   }
+  },
+  "generation": {
+   "hitA": {
+    "workflow": "C:/AI/last-light-outpost/art/ai/workflows/h3_image_edit_3ref.json",
+    "overrides": {
+     "load1.image": "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie12\\walk0_x16.png",
+     "load2.image": "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie12\\stand_x16.png",
+     "load3.image": "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie12\\ref_anchor_1024.png",
+     "scale1.width": 1024,
+     "scale1.height": 1024,
+     "cond.width": 1024,
+     "cond.height": 1024,
+     "sampler.seed": 3,
+     "cond.prompt": "Redraw the fog zombie of <Picture 1> as a clean pixel art game sprite for a 2D side-scrolling zombie game, at exactly the same position, size, colours and three-quarter view facing right, keeping its feet on the same ground line, but change its pose: its head has just snapped backward from a blow to the face: the head is tilted back with the chin up and the face turned up toward the upper right, the shoulders are pushed back a little, the arms are still reaching forward but jerked slightly up, the legs and feet stay exactly where they are. Keep the character of <Picture 2> (small head, grey-green rotting skin, torn plain light grey shirt, dark blue-grey trousers, dark shoes). Draw it in exactly the pixel art style of <Picture 3>: light from the upper left, 3 to 4 shading steps, a 1 pixel near-black outline. Only the zombie: no weapon, no bat, no hand of an attacker, no object, no effects, no blood. Plain solid magenta background, no ground, no floor line, no cast shadow, no text.",
+     "save.filename_prefix": "ai_art/zombie12_hitA_s3"
+    },
+    "models": {
+     "unet": {
+      "unet_name": "minimax_h3_image_pruned_int8_convrot.safetensors",
+      "weight_dtype": "default"
+     },
+     "clip": {
+      "clip_name": "qwen3vl_32b_minimax_h3_int8_convrot.safetensors",
+      "type": "minimax",
+      "device": "default"
+     },
+     "vae": {
+      "vae_name": "minimax_h3_image_vae_fp16.safetensors"
+     }
+    },
+    "tag": "r12 zombie hitA seed 3",
+    "time": "2026-11-24 20:51:04",
+    "prompt_id": "c687812c-688f-4622-8fd8-876df8c51349",
+    "seconds": 21.4,
+    "vram_peak_mib": 15420,
+    "files": [
+     "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie12\\hitA_s3\\zombie12_hitA_s3_00001_.png"
+    ]
+   },
+   "hitB": {
+    "workflow": "C:/AI/last-light-outpost/art/ai/workflows/h3_image_edit_3ref.json",
+    "overrides": {
+     "load1.image": "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie12\\walk0_x16.png",
+     "load2.image": "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie12\\stand_x16.png",
+     "load3.image": "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie12\\ref_anchor_1024.png",
+     "scale1.width": 1024,
+     "scale1.height": 1024,
+     "cond.width": 1024,
+     "cond.height": 1024,
+     "sampler.seed": 3,
+     "cond.prompt": "Redraw the fog zombie of <Picture 1> as a clean pixel art game sprite for a 2D side-scrolling zombie game, at exactly the same position, size, colours and three-quarter view facing right, keeping its feet on the same ground line, but change its pose: it recoils from a heavy blow to the face: the whole upper body is bent backward to the left with the chest pushed out, the head thrown back, both arms flung loosely forward and up, the knees slightly bent, the feet stay exactly where they are on the ground line. Keep the character of <Picture 2> (small head, grey-green rotting skin, torn plain light grey shirt, dark blue-grey trousers, dark shoes). Draw it in exactly the pixel art style of <Picture 3>: light from the upper left, 3 to 4 shading steps, a 1 pixel near-black outline. Only the zombie: no weapon, no bat, no hand of an attacker, no object, no effects, no blood. Plain solid magenta background, no ground, no floor line, no cast shadow, no text.",
+     "save.filename_prefix": "ai_art/zombie12_hitB_s3"
+    },
+    "models": {
+     "unet": {
+      "unet_name": "minimax_h3_image_pruned_int8_convrot.safetensors",
+      "weight_dtype": "default"
+     },
+     "clip": {
+      "clip_name": "qwen3vl_32b_minimax_h3_int8_convrot.safetensors",
+      "type": "minimax",
+      "device": "default"
+     },
+     "vae": {
+      "vae_name": "minimax_h3_image_vae_fp16.safetensors"
+     }
+    },
+    "tag": "r12 zombie hitB seed 3",
+    "time": "2026-11-24 21:01:09",
+    "prompt_id": "13083778-712b-48f2-8bcb-040febfbf6ee",
+    "seconds": 21.4,
+    "vram_peak_mib": 15352,
+    "files": [
+     "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie12\\hitB_s3\\zombie12_hitB_s3_00001_.png"
+    ]
+   }
+  }
+ },
+ "death": {
+  "round": 12,
+  "seed": 2,
+  "prompt": "Pixel art game sprite animation of the fog zombie from <Picture 1>: keep its grey-green skin, small head, torn light grey shirt, dark blue-grey trousers, dark shoes, colours and near-black outlines exactly. Three-quarter view facing right, fixed camera, no zoom, no pan, full body visible at all times. The background stays plain solid magenta in every frame. The hunched zombie is killed by an invisible blow from the right (no weapon, no object, no person, nothing else appears, only the zombie and the magenta background): its head snaps back, it staggers backward to the left, the knees buckle and it falls backward to the left, landing flat on its back on the ground line with the head on the left and the feet on the right, a small bounce, then it lies completely still. No effects, no blood. Flat colors.",
+  "first": "walk.png frame 0",
+  "last": "lying key (art/ai/raw/zombie12/down.png, H3 Image seed 4)",
+  "workflow": "art/ai/workflows/h3_video_i2v.json 512x512, 56 frames, 8-step LoRA, 8 steps",
+  "pick": {
+   "start": 13,
+   "end": 48,
+   "picked": [
+    14,
+    18,
+    22,
+    27,
+    31,
+    35,
+    40,
+    44,
+    48
+   ],
+   "stray_object_frames": [
+    2,
+    3,
+    4,
+    5,
+    6,
+    7
+   ],
+   "stray_in_picked": [],
+   "scale": 1.0,
+   "heads": [
+    {
+     "dx": -1,
+     "dy": -2,
+     "err": 41.9,
+     "locked": false
+    },
+    {
+     "dx": -7,
+     "dy": -3,
+     "err": 54.5,
+     "locked": false
+    },
+    {
+     "dx": -9,
+     "dy": -2,
+     "err": 45.8,
+     "locked": false
+    },
+    {
+     "dx": -10,
+     "dy": -2,
+     "err": 50.7,
+     "locked": false
+    },
+    {
+     "dx": -10,
+     "dy": 0,
+     "err": 76.3,
+     "locked": false
+    },
+    {
+     "dx": 8,
+     "dy": 8,
+     "err": 230.5,
+     "locked": false
+    },
+    {
+     "dx": -10,
+     "dy": -7,
+     "err": 255.0,
+     "locked": false
+    },
+    {
+     "dx": -10,
+     "dy": -7,
+     "err": 255.0,
+     "locked": false
+    },
+    {
+     "dx": -10,
+     "dy": -7,
+     "err": 255.0,
+     "locked": false
+    }
+   ],
+   "colours": 16,
+   "heights": [
+    57,
+    58,
+    58,
+    57,
+    55,
+    35,
+    30,
+    31,
+    24
+   ],
+   "feet": [
+    61,
+    61,
+    61,
+    61,
+    61,
+    61,
+    61,
+    61,
+    61
+   ],
+   "regions": {
+    "outline": 3188,
+    "skin": 1291,
+    "other": 319,
+    "shirt": 1745,
+    "pants": 1429
+   },
+   "region_px_fixed": 103,
+   "outside_palette": 0,
+   "seconds": 29.9,
+   "vram_peak_mib": 15364
+  },
+  "seeds": {
+   "death_s1": {
+    "start": 23,
+    "end": 50,
+    "picked": [
+     24,
+     27,
+     30,
+     34,
+     37,
+     40,
+     44,
+     47,
+     50
+    ],
+    "stray_object_frames": [
+     17,
+     18,
+     19,
+     20,
+     21,
+     22
+    ],
+    "stray_in_picked": [],
+    "scale": 1.0,
+    "heads": [
+     {
+      "dx": -10,
+      "dy": 7,
+      "err": 77.1,
+      "locked": false
+     },
+     {
+      "dx": -10,
+      "dy": 8,
+      "err": 101.8,
+      "locked": false
+     },
+     {
+      "dx": -10,
+      "dy": 8,
+      "err": 82.7,
+      "locked": false
+     },
+     {
+      "dx": -7,
+      "dy": 6,
+      "err": 83.5,
+      "locked": false
+     },
+     {
+      "dx": -6,
+      "dy": 8,
+      "err": 98.2,
+      "locked": false
+     },
+     {
+      "dx": 3,
+      "dy": 8,
+      "err": 215.3,
+      "locked": false
+     },
+     {
+      "dx": -7,
+      "dy": 8,
+      "err": 225.7,
+      "locked": false
+     },
+     {
+      "dx": 3,
+      "dy": 8,
+      "err": 239.3,
+      "locked": false
+     },
+     {
+      "dx": -10,
+      "dy": -7,
+      "err": 255.0,
+      "locked": false
+     }
+    ],
+    "colours": 16,
+    "heights": [
+     57,
+     57,
+     57,
+     57,
+     53,
+     39,
+     37,
+     33,
+     23
+    ],
+    "feet": [
+     61,
+     61,
+     61,
+     61,
+     61,
+     61,
+     61,
+     61,
+     61
+    ],
+    "regions": {
+     "outline": 3264,
+     "skin": 1095,
+     "other": 312,
+     "shirt": 1747,
+     "pants": 1412
+    },
+    "region_px_fixed": 167,
+    "outside_palette": 0,
+    "seconds": 36.5,
+    "vram_peak_mib": 15524
+   },
+   "death_s2": {
+    "start": 13,
+    "end": 48,
+    "picked": [
+     14,
+     18,
+     22,
+     27,
+     31,
+     35,
+     40,
+     44,
+     48
+    ],
+    "stray_object_frames": [
+     2,
+     3,
+     4,
+     5,
+     6,
+     7
+    ],
+    "stray_in_picked": [],
+    "scale": 1.0,
+    "heads": [
+     {
+      "dx": -1,
+      "dy": -2,
+      "err": 41.9,
+      "locked": false
+     },
+     {
+      "dx": -7,
+      "dy": -3,
+      "err": 54.5,
+      "locked": false
+     },
+     {
+      "dx": -9,
+      "dy": -2,
+      "err": 45.8,
+      "locked": false
+     },
+     {
+      "dx": -10,
+      "dy": -2,
+      "err": 50.7,
+      "locked": false
+     },
+     {
+      "dx": -10,
+      "dy": 0,
+      "err": 76.3,
+      "locked": false
+     },
+     {
+      "dx": 8,
+      "dy": 8,
+      "err": 230.5,
+      "locked": false
+     },
+     {
+      "dx": -10,
+      "dy": -7,
+      "err": 255.0,
+      "locked": false
+     },
+     {
+      "dx": -10,
+      "dy": -7,
+      "err": 255.0,
+      "locked": false
+     },
+     {
+      "dx": -10,
+      "dy": -7,
+      "err": 255.0,
+      "locked": false
+     }
+    ],
+    "colours": 16,
+    "heights": [
+     57,
+     58,
+     58,
+     57,
+     55,
+     35,
+     30,
+     31,
+     24
+    ],
+    "feet": [
+     61,
+     61,
+     61,
+     61,
+     61,
+     61,
+     61,
+     61,
+     61
+    ],
+    "regions": {
+     "outline": 3188,
+     "skin": 1291,
+     "other": 319,
+     "shirt": 1745,
+     "pants": 1429
+    },
+    "region_px_fixed": 103,
+    "outside_palette": 0,
+    "seconds": 29.9,
+    "vram_peak_mib": 15364
+   },
+   "death_s3": {
+    "start": 18,
+    "end": 50,
+    "picked": [
+     19,
+     23,
+     27,
+     31,
+     34,
+     38,
+     42,
+     46,
+     50
+    ],
+    "stray_object_frames": [
+     11,
+     12,
+     13,
+     14,
+     15,
+     16,
+     17
+    ],
+    "stray_in_picked": [],
+    "scale": 1.0,
+    "heads": [
+     {
+      "dx": 0,
+      "dy": -1,
+      "err": 51.4,
+      "locked": false
+     },
+     {
+      "dx": -6,
+      "dy": 0,
+      "err": 70.5,
+      "locked": false
+     },
+     {
+      "dx": -10,
+      "dy": 0,
+      "err": 90.1,
+      "locked": false
+     },
+     {
+      "dx": -10,
+      "dy": 8,
+      "err": 130.5,
+      "locked": false
+     },
+     {
+      "dx": -10,
+      "dy": 8,
+      "err": 171.4,
+      "locked": false
+     },
+     {
+      "dx": -10,
+      "dy": -7,
+      "err": 255.0,
+      "locked": false
+     },
+     {
+      "dx": -10,
+      "dy": -7,
+      "err": 255.0,
+      "locked": false
+     },
+     {
+      "dx": -10,
+      "dy": -7,
+      "err": 255.0,
+      "locked": false
+     },
+     {
+      "dx": -10,
+      "dy": -7,
+      "err": 255.0,
+      "locked": false
+     }
+    ],
+    "colours": 16,
+    "heights": [
+     57,
+     54,
+     54,
+     53,
+     41,
+     29,
+     29,
+     24,
+     24
+    ],
+    "feet": [
+     61,
+     61,
+     61,
+     61,
+     61,
+     61,
+     60,
+     61,
+     61
+    ],
+    "regions": {
+     "outline": 3217,
+     "skin": 1203,
+     "other": 345,
+     "shirt": 1639,
+     "pants": 1482
+    },
+    "region_px_fixed": 157,
+    "outside_palette": 0,
+    "seconds": 29.8,
+    "vram_peak_mib": 15364
+   },
+   "death_s4": {
+    "start": 23,
+    "end": 43,
+    "picked": [
+     24,
+     26,
+     29,
+     31,
+     34,
+     36,
+     38,
+     41,
+     43
+    ],
+    "stray_object_frames": [
+     14,
+     15,
+     16,
+     17,
+     18,
+     19,
+     20,
+     21,
+     22
+    ],
+    "stray_in_picked": [],
+    "scale": 1.0,
+    "heads": [
+     {
+      "dx": -10,
+      "dy": 8,
+      "err": 129.0,
+      "locked": false
+     },
+     {
+      "dx": -10,
+      "dy": 8,
+      "err": 164.4,
+      "locked": false
+     },
+     {
+      "dx": -10,
+      "dy": 8,
+      "err": 161.4,
+      "locked": false
+     },
+     {
+      "dx": -10,
+      "dy": 8,
+      "err": 191.4,
+      "locked": false
+     },
+     {
+      "dx": -10,
+      "dy": -7,
+      "err": 255.0,
+      "locked": false
+     },
+     {
+      "dx": -10,
+      "dy": -7,
+      "err": 255.0,
+      "locked": false
+     },
+     {
+      "dx": -10,
+      "dy": -7,
+      "err": 255.0,
+      "locked": false
+     },
+     {
+      "dx": 4,
+      "dy": 8,
+      "err": 249.9,
+      "locked": false
+     },
+     {
+      "dx": -10,
+      "dy": -7,
+      "err": 255.0,
+      "locked": false
+     }
+    ],
+    "colours": 16,
+    "heights": [
+     58,
+     57,
+     53,
+     43,
+     30,
+     30,
+     30,
+     32,
+     23
+    ],
+    "feet": [
+     61,
+     61,
+     61,
+     61,
+     61,
+     61,
+     61,
+     61,
+     61
+    ],
+    "regions": {
+     "outline": 3081,
+     "skin": 1533,
+     "other": 259,
+     "shirt": 1401,
+     "pants": 1588
+    },
+    "region_px_fixed": 147,
+    "outside_palette": 0,
+    "seconds": 29.8,
+    "vram_peak_mib": 15364
+   }
+  },
+  "generation": {
+   "workflow": "C:/AI/last-light-outpost/art/ai/workflows/h3_video_i2v.json",
+   "overrides": {
+    "first.image": "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie12\\walk0_512.png",
+    "last.image": "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie12\\down_512.png",
+    "scale_first.width": 512,
+    "scale_first.height": 512,
+    "scale_last.width": 512,
+    "scale_last.height": 512,
+    "cond.width": 512,
+    "cond.height": 512,
+    "cond.length": 56,
+    "noise.noise_seed": 2,
+    "cond.prompt": "Pixel art game sprite animation of the fog zombie from <Picture 1>: keep its grey-green skin, small head, torn light grey shirt, dark blue-grey trousers, dark shoes, colours and near-black outlines exactly. Three-quarter view facing right, fixed camera, no zoom, no pan, full body visible at all times. The background stays plain solid magenta in every frame. The hunched zombie is killed by an invisible blow from the right (no weapon, no object, no person, nothing else appears, only the zombie and the magenta background): its head snaps back, it staggers backward to the left, the knees buckle and it falls backward to the left, landing flat on its back on the ground line with the head on the left and the feet on the right, a small bounce, then it lies completely still. No effects, no blood. Flat colors.",
+    "save.filename_prefix": "ai_art/zombie12_death_s2"
+   },
+   "models": {
+    "unet": {
+     "unet_name": "minimax_h3_fl2va_pruned_int8_convrot.safetensors",
+     "weight_dtype": "default"
+    },
+    "lora": {
+     "model": [
+      "unet",
+      0
+     ],
+     "lora_name": "minimax_h3_fl2v_turbo_8step_v1.0_comfyui_bf16.safetensors",
+     "strength_model": 1.0
+    },
+    "clip": {
+     "clip_name": "qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors",
+     "type": "minimax",
+     "device": "default"
+    },
+    "vae": {
+     "vae_name": "minimax_h3_video_vae_int8_convrot.safetensors"
+    }
+   },
+   "tag": "r12 zombie death 8 steps seed 2",
+   "time": "2026-11-24 20:44:42",
+   "prompt_id": "8d41ba49-b12e-4f8c-abc8-c1a3fde9f608",
+   "seconds": 29.9,
+   "vram_peak_mib": 15364,
+   "files": [
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie12\\death_s2\\zombie12_death_s2_00057_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie12\\death_s2\\zombie12_death_s2_00058_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie12\\death_s2\\zombie12_death_s2_00059_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie12\\death_s2\\zombie12_death_s2_00060_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie12\\death_s2\\zombie12_death_s2_00061_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie12\\death_s2\\zombie12_death_s2_00062_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie12\\death_s2\\zombie12_death_s2_00063_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie12\\death_s2\\zombie12_death_s2_00064_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie12\\death_s2\\zombie12_death_s2_00065_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie12\\death_s2\\zombie12_death_s2_00066_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie12\\death_s2\\zombie12_death_s2_00067_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie12\\death_s2\\zombie12_death_s2_00068_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie12\\death_s2\\zombie12_death_s2_00069_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie12\\death_s2\\zombie12_death_s2_00070_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie12\\death_s2\\zombie12_death_s2_00071_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie12\\death_s2\\zombie12_death_s2_00072_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie12\\death_s2\\zombie12_death_s2_00073_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie12\\death_s2\\zombie12_death_s2_00074_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie12\\death_s2\\zombie12_death_s2_00075_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie12\\death_s2\\zombie12_death_s2_00076_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie12\\death_s2\\zombie12_death_s2_00077_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie12\\death_s2\\zombie12_death_s2_00078_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie12\\death_s2\\zombie12_death_s2_00079_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie12\\death_s2\\zombie12_death_s2_00080_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie12\\death_s2\\zombie12_death_s2_00081_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie12\\death_s2\\zombie12_death_s2_00082_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie12\\death_s2\\zombie12_death_s2_00083_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie12\\death_s2\\zombie12_death_s2_00084_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie12\\death_s2\\zombie12_death_s2_00085_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie12\\death_s2\\zombie12_death_s2_00086_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie12\\death_s2\\zombie12_death_s2_00087_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie12\\death_s2\\zombie12_death_s2_00088_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie12\\death_s2\\zombie12_death_s2_00089_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie12\\death_s2\\zombie12_death_s2_00090_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie12\\death_s2\\zombie12_death_s2_00091_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie12\\death_s2\\zombie12_death_s2_00092_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie12\\death_s2\\zombie12_death_s2_00093_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie12\\death_s2\\zombie12_death_s2_00094_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie12\\death_s2\\zombie12_death_s2_00095_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie12\\death_s2\\zombie12_death_s2_00096_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie12\\death_s2\\zombie12_death_s2_00097_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie12\\death_s2\\zombie12_death_s2_00098_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie12\\death_s2\\zombie12_death_s2_00099_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie12\\death_s2\\zombie12_death_s2_00100_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie12\\death_s2\\zombie12_death_s2_00101_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie12\\death_s2\\zombie12_death_s2_00102_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie12\\death_s2\\zombie12_death_s2_00103_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie12\\death_s2\\zombie12_death_s2_00104_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie12\\death_s2\\zombie12_death_s2_00105_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie12\\death_s2\\zombie12_death_s2_00106_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie12\\death_s2\\zombie12_death_s2_00107_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie12\\death_s2\\zombie12_death_s2_00108_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie12\\death_s2\\zombie12_death_s2_00109_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie12\\death_s2\\zombie12_death_s2_00110_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie12\\death_s2\\zombie12_death_s2_00111_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie12\\death_s2\\zombie12_death_s2_00112_.png"
+   ]
+  },
+  "down_prompt": "Redraw <Picture 1> as a clean pixel art game sprite for a 2D side-scrolling zombie game: the dead fog zombie from <Picture 2> lying flat on its back on the ground, seen from the side, head on the LEFT, feet on the RIGHT, face up, arms lying limp beside the body, legs straight, exactly the position and size of the grey figure in <Picture 1>. Keep its grey-green rotting skin, small head (3.5 heads tall), sunken dark eyes, torn plain light grey shirt (neutral grey), dark blue-grey trousers, dark worn shoes. Draw it in exactly the pixel art style of <Picture 3>: light from the upper left, 3 to 4 shading steps, a 1 pixel near-black outline, muted grey-green colours. Plain solid magenta background, no ground, no floor line, no cast shadow, no blood, no text."
  }
 }
