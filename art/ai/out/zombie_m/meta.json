@@ -139,181 +139,602 @@
  "post": "grid phase -> key magenta -> k_centroid -> foot y=61 -> region-locked quantize (raw region -> master.gpl colours of that region; kmeans 48 + cloth 3) -> edge pixels = near-black outline -> islands <=2px -> <=16 colours merged within regions jointly over all frames",
  "regions": "outline v<0.11 | shirt s<0.07 & v>0.58 | pants hue 165-230 & s>0.15 | skin hue 70-165 & s>=0.07",
  "walk": {
+  "round": 10,
   "seed": 3,
-  "prompt": "Pixel art game sprite animation of the fog zombie from <Picture 1>: keep its grey-green skin, small head, torn light grey shirt, dark blue-grey trousers, dark shoes, colours and near-black outlines exactly. Three-quarter view facing right, fixed camera, no zoom, no pan, full body visible at all times. The background stays plain solid magenta in every frame. It shambles forward in place on a treadmill with a slow limping zombie walk: hunched, head hanging forward, arms dangling forward and swaying, legs clearly alternating, knees bending, dragging steps, feet staying on the ground line. Two full steps. Seamless loop. No effects. Flat colors.",
-  "first_last": "stand.png x8 on magenta (stand_key_512.png)",
+  "prompt": "Pixel art game sprite animation of the fog zombie from <Picture 1>: keep its grey-green skin, small head, torn light grey shirt, dark blue-grey trousers, dark shoes, colours and near-black outlines exactly. Three-quarter view facing right, fixed camera, no zoom, no pan, full body visible at all times. The background stays plain solid magenta in every frame. It shambles forward in place on a treadmill with a slow, steady zombie walk: the body stays strongly hunched the whole time, the head stays pushed forward and does not turn, both arms stay stretched forward at shoulder height reaching to the right and only sway slightly. The legs clearly alternate with even, equal steps: the front foot drags forward, the back foot drags forward, knees bending, feet scraping along the ground line. Two full steps at a constant pace. Seamless loop. No effects. Flat colors.",
+  "first_last": "walk key pose x8 on magenta (art/ai/raw/zombie10/key_512.png)",
+  "key": {
+   "seed": 1,
+   "prompt": "Redraw the fog zombie from <Picture 2> in exactly the pose and position of <Picture 1>, as a clean pixel art game sprite for a 2D side-scrolling zombie game. Pose from <Picture 1>: a classic shambling zombie walk, strongly hunched forward with a rounded back, the head pushed forward and hanging low in front of the shoulders, BOTH arms stretched straight forward at shoulder height reaching toward the right, hands drooping limply at the wrists, legs apart in a dragging mid-step. Character from <Picture 2>: keep its small head (3.5 heads tall, not chibi, the head is much smaller than in <Picture 1>), grey-green rotting skin, sunken dark eyes, bald head with a few stray hairs, torn ragged plain light grey shirt (neutral grey, not greenish), dark blue-grey trousers, dark worn shoes, and its total height. Three-quarter view facing right with the torso turned slightly toward the camera. Nothing on the head. Draw it in exactly the pixel art style of <Picture 3>: a single light source from the upper left, 3 to 4 shading steps, a 1 pixel near-black outline, muted grey-green colours. Plain solid magenta background, no ground, no floor line, no cast shadow, no text.",
+   "references": {
+    "Picture 1": "public/assets/sprites/zombie_basic.png walk frame 0, scaled to 56 px, x16",
+    "Picture 2": "art/ai/out/zombie_m/stand.png (round 9 stand seed 3) x16",
+    "Picture 3": "art/ai/style/anchor.png x5"
+   },
+   "workflow": "art/ai/workflows/h3_image_edit_3ref.json (1024x1024)",
+   "seeds": {
+    "1": {
+     "colours": [
+      22,
+      16
+     ],
+     "island_px_fixed": 0,
+     "measure": {
+      "height": 56,
+      "head": 15,
+      "width": 52,
+      "top": 6,
+      "bottom": 61
+     },
+     "regions": {
+      "outline": 388,
+      "skin": 273,
+      "other": 34,
+      "shirt": 132,
+      "pants": 198
+     },
+     "outside_palette": 0
+    },
+    "2": {
+     "colours": [
+      22,
+      16
+     ],
+     "island_px_fixed": 1,
+     "measure": {
+      "height": 49,
+      "head": 23,
+      "width": 53,
+      "top": 13,
+      "bottom": 61
+     },
+     "regions": {
+      "outline": 357,
+      "skin": 159,
+      "shirt": 166,
+      "pants": 203,
+      "other": 29
+     },
+     "outside_palette": 0
+    },
+    "3": {
+     "colours": [
+      27,
+      16
+     ],
+     "island_px_fixed": 0,
+     "measure": {
+      "height": 51,
+      "head": 14,
+      "width": 52,
+      "top": 11,
+      "bottom": 61
+     },
+     "regions": {
+      "outline": 378,
+      "skin": 225,
+      "other": 12,
+      "shirt": 145,
+      "pants": 182
+     },
+     "outside_palette": 0
+    },
+    "4": {
+     "colours": [
+      23,
+      16
+     ],
+     "island_px_fixed": 14,
+     "measure": {
+      "height": 48,
+      "head": 22,
+      "width": 52,
+      "top": 14,
+      "bottom": 61
+     },
+     "regions": {
+      "outline": 316,
+      "skin": 198,
+      "other": 32,
+      "shirt": 146,
+      "pants": 194
+     },
+     "outside_palette": 0
+    }
+   }
+  },
   "workflow": "art/ai/workflows/h3_video_i2v.json 512x512, 56 frames",
+  "frame_pick": "loop period from pick_frames.py, contacts = widest leg spread pair half a period apart (frames 0/4), crossings = narrowest between (2/6), 1/3/5/7 = time midpoints",
+  "head_lock": "key head pixels pasted at fixed x, dy 0/1 from shoulder line",
   "seeds": {
    "1": {
-    "period": 25,
-    "start": 11,
-    "closure": 0.028938645219417344,
-    "motion": 0.10454125202454541,
+    "period": 27,
+    "start": 7,
+    "closure": 0.015609733353805458,
+    "motion": 0.13603515018004414,
     "mode": "loop",
     "picked": [
-     11,
-     14,
-     17,
-     20,
-     23,
-     27,
-     30,
-     33
+     15,
+     19,
+     22,
+     25,
+     29,
+     7,
+     10,
+     13
+    ],
+    "spread": [
+     196.0,
+     196.0,
+     144.0,
+     122.0,
+     157.0,
+     157.0,
+     164.0,
+     246.0,
+     246.0,
+     240.0,
+     240.0,
+     194.0,
+     193.0,
+     194.0,
+     148.0,
+     114.0,
+     174.0,
+     174.0,
+     174.0,
+     218.0,
+     220.0,
+     257.0,
+     257.0,
+     246.0,
+     246.0,
+     234.0,
+     234.0
+    ],
+    "contact": [
+     8,
+     22
+    ],
+    "crossing": [
+     15,
+     3
+    ],
+    "step_frames": [
+     4,
+     3,
+     3,
+     4,
+     5,
+     3,
+     3,
+     2
     ],
     "colours": [
-     29,
+     27,
      16
     ],
-    "island_px_fixed": 43,
+    "island_px_fixed": 44,
+    "region_px_fixed": 240,
     "scale": 1.0,
+    "head_dy": [
+     0,
+     -1,
+     -1,
+     -1,
+     -1,
+     -1,
+     -1,
+     -1
+    ],
     "heights": [
      56,
-     56,
-     56,
      57,
-     56,
-     56,
+     57,
+     57,
+     57,
+     57,
      57,
      57
     ],
+    "feet": [
+     61,
+     61,
+     61,
+     61,
+     61,
+     61,
+     61,
+     61
+    ],
     "regions": {
-     "outline": 2692,
-     "skin": 1298,
-     "pants": 1126,
-     "other": 151,
-     "shirt": 2000
+     "outline": 2967,
+     "skin": 1520,
+     "other": 271,
+     "shirt": 1547,
+     "pants": 1465
     },
-    "outside_palette": 0
+    "outside_palette": 0,
+    "head_identical": true,
+    "out_spread": [
+     31,
+     25,
+     14,
+     21,
+     32,
+     25,
+     15,
+     20
+    ]
    },
    "2": {
-    "period": 47,
-    "start": 6,
-    "closure": 0.004298539298924367,
-    "motion": 0.11099676960957312,
+    "period": 17,
+    "start": 17,
+    "closure": 0.043218408426681225,
+    "motion": 0.15550439294127064,
     "mode": "loop",
     "picked": [
-     6,
-     12,
-     18,
-     24,
+     26,
+     28,
      30,
-     35,
-     41,
-     47
+     33,
+     18,
+     23,
+     25,
+     25
+    ],
+    "spread": [
+     215.0,
+     245.0,
+     244.0,
+     241.0,
+     236.0,
+     217.0,
+     207.0,
+     196.0,
+     188.0,
+     172.0,
+     156.0,
+     144.0,
+     137.0,
+     107.0,
+     124.0,
+     143.0,
+     166.0
+    ],
+    "contact": [
+     9,
+     1
+    ],
+    "crossing": [
+     13,
+     8
+    ],
+    "step_frames": [
+     2,
+     2,
+     3,
+     2,
+     5,
+     2,
+     0,
+     1
     ],
     "colours": [
-     32,
+     26,
      16
     ],
-    "island_px_fixed": 45,
+    "island_px_fixed": 55,
+    "region_px_fixed": 256,
     "scale": 1.0,
+    "head_dy": [
+     -1,
+     -1,
+     -1,
+     -1,
+     0,
+     -1,
+     -1,
+     -1
+    ],
     "heights": [
      57,
-     56,
-     56,
-     56,
+     57,
+     57,
      57,
      56,
      57,
-     56
+     57,
+     57
+    ],
+    "feet": [
+     61,
+     61,
+     61,
+     61,
+     61,
+     61,
+     61,
+     61
     ],
     "regions": {
-     "outline": 2708,
-     "skin": 1330,
-     "other": 150,
-     "shirt": 1934,
-     "pants": 1188
+     "outline": 3090,
+     "skin": 1521,
+     "other": 177,
+     "shirt": 1438,
+     "pants": 1420
     },
-    "outside_palette": 0
+    "outside_palette": 0,
+    "head_identical": true,
+    "out_spread": [
+     21,
+     18,
+     12,
+     20,
+     31,
+     26,
+     23,
+     23
+    ]
    },
    "3": {
-    "period": 34,
-    "start": 17,
-    "closure": 0.019445612867191073,
-    "motion": 0.15587145101569783,
+    "period": 32,
+    "start": 9,
+    "closure": 0.02082291919296645,
+    "motion": 0.2159112512510851,
     "mode": "loop",
     "picked": [
-     17,
-     21,
-     25,
-     30,
-     34,
-     38,
-     43,
-     47
+     16,
+     20,
+     24,
+     27,
+     32,
+     36,
+     40,
+     14
+    ],
+    "spread": [
+     114.0,
+     113.0,
+     113.0,
+     113.0,
+     160.0,
+     196.0,
+     195.0,
+     246.0,
+     246.0,
+     210.0,
+     183.0,
+     184.0,
+     184.0,
+     131.0,
+     122.0,
+     122.0,
+     122.0,
+     178.0,
+     178.0,
+     223.0,
+     223.0,
+     267.0,
+     266.0,
+     263.0,
+     262.0,
+     231.0,
+     187.0,
+     186.0,
+     187.0,
+     118.0,
+     112.0,
+     113.0
+    ],
+    "contact": [
+     7,
+     23
+    ],
+    "crossing": [
+     15,
+     31
+    ],
+    "step_frames": [
+     4,
+     4,
+     3,
+     5,
+     4,
+     4,
+     6,
+     2
     ],
     "colours": [
-     34,
+     27,
      16
     ],
-    "island_px_fixed": 36,
+    "island_px_fixed": 32,
+    "region_px_fixed": 287,
     "scale": 1.0,
+    "head_dy": [
+     0,
+     -1,
+     -1,
+     -1,
+     0,
+     -1,
+     -1,
+     -1
+    ],
     "heights": [
      56,
      57,
+     57,
+     57,
      56,
-     55,
-     56,
-     55,
-     55,
-     55
+     57,
+     57,
+     57
+    ],
+    "feet": [
+     61,
+     61,
+     61,
+     61,
+     61,
+     61,
+     61,
+     61
     ],
     "regions": {
-     "outline": 2735,
-     "skin": 1393,
-     "other": 141,
-     "shirt": 1890,
-     "pants": 1201
+     "outline": 3034,
+     "skin": 1637,
+     "other": 269,
+     "shirt": 1412,
+     "pants": 1399
     },
-    "outside_palette": 0
+    "outside_palette": 0,
+    "head_identical": true,
+    "out_spread": [
+     30,
+     23,
+     14,
+     22,
+     32,
+     23,
+     13,
+     24
+    ]
    },
    "4": {
-    "period": 26,
-    "start": 29,
-    "closure": 0.004004203818898252,
-    "motion": 0.13897665007994112,
+    "period": 34,
+    "start": 5,
+    "closure": 0.030701592574889372,
+    "motion": 0.2914079092937922,
     "mode": "loop",
     "picked": [
+     16,
+     21,
+     23,
      29,
-     32,
-     35,
-     39,
-     42,
-     45,
-     49,
-     52
+     33,
+     5,
+     12,
+     14
+    ],
+    "spread": [
+     224.0,
+     152.0,
+     152.0,
+     152.0,
+     152.0,
+     135.0,
+     135.0,
+     134.0,
+     134.0,
+     247.0,
+     247.0,
+     247.0,
+     247.0,
+     220.0,
+     220.0,
+     209.0,
+     209.0,
+     142.0,
+     142.0,
+     142.0,
+     142.0,
+     150.0,
+     150.0,
+     150.0,
+     150.0,
+     273.0,
+     273.0,
+     273.0,
+     274.0,
+     277.0,
+     278.0,
+     273.0,
+     273.0,
+     222.0
+    ],
+    "contact": [
+     11,
+     28
+    ],
+    "crossing": [
+     18,
+     7
+    ],
+    "step_frames": [
+     5,
+     2,
+     6,
+     4,
+     6,
+     7,
+     2,
+     2
     ],
     "colours": [
-     35,
+     26,
      16
     ],
-    "island_px_fixed": 14,
+    "island_px_fixed": 62,
+    "region_px_fixed": 235,
     "scale": 1.0,
+    "head_dy": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
     "heights": [
      56,
      56,
-     55,
      56,
-     57,
      56,
-     55,
+     56,
+     56,
+     56,
      56
     ],
+    "feet": [
+     61,
+     61,
+     61,
+     61,
+     61,
+     61,
+     61,
+     61
+    ],
     "regions": {
-     "outline": 2665,
-     "skin": 1352,
-     "other": 159,
-     "shirt": 1830,
-     "pants": 1185
+     "outline": 3086,
+     "skin": 1354,
+     "other": 258,
+     "shirt": 1618,
+     "pants": 1456
     },
-    "outside_palette": 0
+    "outside_palette": 0,
+    "head_identical": true,
+    "out_spread": [
+     31,
+     26,
+     17,
+     18,
+     35,
+     28,
+     17,
+     31
+    ]
    }
   },
   "generation": {
    "workflow": "C:/AI/last-light-outpost/art/ai/workflows/h3_video_i2v.json",
    "overrides": {
-    "first.image": "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie9\\stand_key_512.png",
-    "last.image": "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie9\\stand_key_512.png",
+    "first.image": "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie10\\key_512.png",
+    "last.image": "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie10\\key_512.png",
     "scale_first.width": 512,
     "scale_first.height": 512,
     "scale_last.width": 512,
@@ -322,8 +743,8 @@
     "cond.height": 512,
     "cond.length": 56,
     "noise.noise_seed": 3,
-    "cond.prompt": "Pixel art game sprite animation of the fog zombie from <Picture 1>: keep its grey-green skin, small head, torn light grey shirt, dark blue-grey trousers, dark shoes, colours and near-black outlines exactly. Three-quarter view facing right, fixed camera, no zoom, no pan, full body visible at all times. The background stays plain solid magenta in every frame. It shambles forward in place on a treadmill with a slow limping zombie walk: hunched, head hanging forward, arms dangling forward and swaying, legs clearly alternating, knees bending, dragging steps, feet staying on the ground line. Two full steps. Seamless loop. No effects. Flat colors.",
-    "save.filename_prefix": "ai_art/zombie9_walk_s3"
+    "cond.prompt": "Pixel art game sprite animation of the fog zombie from <Picture 1>: keep its grey-green skin, small head, torn light grey shirt, dark blue-grey trousers, dark shoes, colours and near-black outlines exactly. Three-quarter view facing right, fixed camera, no zoom, no pan, full body visible at all times. The background stays plain solid magenta in every frame. It shambles forward in place on a treadmill with a slow, steady zombie walk: the body stays strongly hunched the whole time, the head stays pushed forward and does not turn, both arms stay stretched forward at shoulder height reaching to the right and only sway slightly. The legs clearly alternate with even, equal steps: the front foot drags forward, the back foot drags forward, knees bending, feet scraping along the ground line. Two full steps at a constant pace. Seamless loop. No effects. Flat colors.",
+    "save.filename_prefix": "ai_art/zombie10_walk_s3"
    },
    "models": {
     "unet": {
@@ -347,68 +768,68 @@
      "vae_name": "minimax_h3_video_vae_int8_convrot.safetensors"
     }
    },
-   "tag": "r9 zombie walk seed 3",
-   "time": "2026-11-24 20:05:26",
-   "prompt_id": "fe6c4e88-2f2a-4f9d-9642-91864c398164",
-   "seconds": 30.3,
-   "vram_peak_mib": 15364,
+   "tag": "r10 zombie walk seed 3",
+   "time": "2026-11-24 20:17:22",
+   "prompt_id": "3ef668e3-76d3-4920-a4d4-b891d63f45be",
+   "seconds": 30.5,
+   "vram_peak_mib": 15332,
    "files": [
-    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie9\\walk_s3\\zombie9_walk_s3_00001_.png",
-    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie9\\walk_s3\\zombie9_walk_s3_00002_.png",
-    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie9\\walk_s3\\zombie9_walk_s3_00003_.png",
-    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie9\\walk_s3\\zombie9_walk_s3_00004_.png",
-    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie9\\walk_s3\\zombie9_walk_s3_00005_.png",
-    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie9\\walk_s3\\zombie9_walk_s3_00006_.png",
-    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie9\\walk_s3\\zombie9_walk_s3_00007_.png",
-    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie9\\walk_s3\\zombie9_walk_s3_00008_.png",
-    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie9\\walk_s3\\zombie9_walk_s3_00009_.png",
-    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie9\\walk_s3\\zombie9_walk_s3_00010_.png",
-    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie9\\walk_s3\\zombie9_walk_s3_00011_.png",
-    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie9\\walk_s3\\zombie9_walk_s3_00012_.png",
-    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie9\\walk_s3\\zombie9_walk_s3_00013_.png",
-    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie9\\walk_s3\\zombie9_walk_s3_00014_.png",
-    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie9\\walk_s3\\zombie9_walk_s3_00015_.png",
-    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie9\\walk_s3\\zombie9_walk_s3_00016_.png",
-    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie9\\walk_s3\\zombie9_walk_s3_00017_.png",
-    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie9\\walk_s3\\zombie9_walk_s3_00018_.png",
-    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie9\\walk_s3\\zombie9_walk_s3_00019_.png",
-    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie9\\walk_s3\\zombie9_walk_s3_00020_.png",
-    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie9\\walk_s3\\zombie9_walk_s3_00021_.png",
-    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie9\\walk_s3\\zombie9_walk_s3_00022_.png",
-    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie9\\walk_s3\\zombie9_walk_s3_00023_.png",
-    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie9\\walk_s3\\zombie9_walk_s3_00024_.png",
-    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie9\\walk_s3\\zombie9_walk_s3_00025_.png",
-    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie9\\walk_s3\\zombie9_walk_s3_00026_.png",
-    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie9\\walk_s3\\zombie9_walk_s3_00027_.png",
-    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie9\\walk_s3\\zombie9_walk_s3_00028_.png",
-    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie9\\walk_s3\\zombie9_walk_s3_00029_.png",
-    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie9\\walk_s3\\zombie9_walk_s3_00030_.png",
-    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie9\\walk_s3\\zombie9_walk_s3_00031_.png",
-    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie9\\walk_s3\\zombie9_walk_s3_00032_.png",
-    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie9\\walk_s3\\zombie9_walk_s3_00033_.png",
-    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie9\\walk_s3\\zombie9_walk_s3_00034_.png",
-    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie9\\walk_s3\\zombie9_walk_s3_00035_.png",
-    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie9\\walk_s3\\zombie9_walk_s3_00036_.png",
-    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie9\\walk_s3\\zombie9_walk_s3_00037_.png",
-    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie9\\walk_s3\\zombie9_walk_s3_00038_.png",
-    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie9\\walk_s3\\zombie9_walk_s3_00039_.png",
-    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie9\\walk_s3\\zombie9_walk_s3_00040_.png",
-    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie9\\walk_s3\\zombie9_walk_s3_00041_.png",
-    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie9\\walk_s3\\zombie9_walk_s3_00042_.png",
-    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie9\\walk_s3\\zombie9_walk_s3_00043_.png",
-    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie9\\walk_s3\\zombie9_walk_s3_00044_.png",
-    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie9\\walk_s3\\zombie9_walk_s3_00045_.png",
-    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie9\\walk_s3\\zombie9_walk_s3_00046_.png",
-    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie9\\walk_s3\\zombie9_walk_s3_00047_.png",
-    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie9\\walk_s3\\zombie9_walk_s3_00048_.png",
-    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie9\\walk_s3\\zombie9_walk_s3_00049_.png",
-    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie9\\walk_s3\\zombie9_walk_s3_00050_.png",
-    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie9\\walk_s3\\zombie9_walk_s3_00051_.png",
-    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie9\\walk_s3\\zombie9_walk_s3_00052_.png",
-    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie9\\walk_s3\\zombie9_walk_s3_00053_.png",
-    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie9\\walk_s3\\zombie9_walk_s3_00054_.png",
-    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie9\\walk_s3\\zombie9_walk_s3_00055_.png",
-    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie9\\walk_s3\\zombie9_walk_s3_00056_.png"
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie10\\walk_s3\\zombie10_walk_s3_00001_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie10\\walk_s3\\zombie10_walk_s3_00002_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie10\\walk_s3\\zombie10_walk_s3_00003_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie10\\walk_s3\\zombie10_walk_s3_00004_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie10\\walk_s3\\zombie10_walk_s3_00005_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie10\\walk_s3\\zombie10_walk_s3_00006_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie10\\walk_s3\\zombie10_walk_s3_00007_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie10\\walk_s3\\zombie10_walk_s3_00008_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie10\\walk_s3\\zombie10_walk_s3_00009_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie10\\walk_s3\\zombie10_walk_s3_00010_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie10\\walk_s3\\zombie10_walk_s3_00011_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie10\\walk_s3\\zombie10_walk_s3_00012_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie10\\walk_s3\\zombie10_walk_s3_00013_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie10\\walk_s3\\zombie10_walk_s3_00014_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie10\\walk_s3\\zombie10_walk_s3_00015_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie10\\walk_s3\\zombie10_walk_s3_00016_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie10\\walk_s3\\zombie10_walk_s3_00017_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie10\\walk_s3\\zombie10_walk_s3_00018_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie10\\walk_s3\\zombie10_walk_s3_00019_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie10\\walk_s3\\zombie10_walk_s3_00020_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie10\\walk_s3\\zombie10_walk_s3_00021_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie10\\walk_s3\\zombie10_walk_s3_00022_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie10\\walk_s3\\zombie10_walk_s3_00023_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie10\\walk_s3\\zombie10_walk_s3_00024_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie10\\walk_s3\\zombie10_walk_s3_00025_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie10\\walk_s3\\zombie10_walk_s3_00026_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie10\\walk_s3\\zombie10_walk_s3_00027_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie10\\walk_s3\\zombie10_walk_s3_00028_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie10\\walk_s3\\zombie10_walk_s3_00029_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie10\\walk_s3\\zombie10_walk_s3_00030_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie10\\walk_s3\\zombie10_walk_s3_00031_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie10\\walk_s3\\zombie10_walk_s3_00032_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie10\\walk_s3\\zombie10_walk_s3_00033_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie10\\walk_s3\\zombie10_walk_s3_00034_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie10\\walk_s3\\zombie10_walk_s3_00035_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie10\\walk_s3\\zombie10_walk_s3_00036_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie10\\walk_s3\\zombie10_walk_s3_00037_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie10\\walk_s3\\zombie10_walk_s3_00038_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie10\\walk_s3\\zombie10_walk_s3_00039_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie10\\walk_s3\\zombie10_walk_s3_00040_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie10\\walk_s3\\zombie10_walk_s3_00041_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie10\\walk_s3\\zombie10_walk_s3_00042_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie10\\walk_s3\\zombie10_walk_s3_00043_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie10\\walk_s3\\zombie10_walk_s3_00044_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie10\\walk_s3\\zombie10_walk_s3_00045_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie10\\walk_s3\\zombie10_walk_s3_00046_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie10\\walk_s3\\zombie10_walk_s3_00047_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie10\\walk_s3\\zombie10_walk_s3_00048_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie10\\walk_s3\\zombie10_walk_s3_00049_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie10\\walk_s3\\zombie10_walk_s3_00050_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie10\\walk_s3\\zombie10_walk_s3_00051_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie10\\walk_s3\\zombie10_walk_s3_00052_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie10\\walk_s3\\zombie10_walk_s3_00053_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie10\\walk_s3\\zombie10_walk_s3_00054_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie10\\walk_s3\\zombie10_walk_s3_00055_.png",
+    "C:\\AI\\last-light-outpost\\art\\ai\\raw\\zombie10\\walk_s3\\zombie10_walk_s3_00056_.png"
    ]
   }
  }
