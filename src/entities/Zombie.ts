@@ -65,7 +65,18 @@ export interface ZombieTarget {
 }
 
 /** 主角離多近會被盯上（以地面距離計，y 方向加權） */
-const AGGRO_RANGE = 120;
+const AGGRO_RANGE = 200;
+/**
+ * 攻擊慾望：盯上活人時加速逼近，貼近時再撲一段；
+ * 主角躲在路障後面時，走向路障的霧屍會往主角所在的那一排靠（看得到人就往人那邊擠）。
+ */
+const CHASE = { speedMul: 1.3, closeMul: 1.55, closeDist: 56, laneSense: 280 };
+/**
+ * 近身攻擊的前搖：身體往後仰、低吼，前搖結束才判定（這時人已經退開就揮空）。
+ * 前搖長度 = 攻擊間隔 × ratio，夾在 min～max；第一次貼上來後 first 秒就開始前搖。
+ * 前搖中被打出硬直就取消。
+ */
+const ATTACK = { ratio: 0.3, min: 0.2, max: 0.45, first: 0.12, lean: 14, pull: 4, lift: 2 };
 /** 近戰攻擊的觸及範圍 */
 const REACH_X = 20;
 const REACH_Y = 9;
@@ -108,6 +119,11 @@ export class Zombie extends Phaser.GameObjects.Sprite {
   private knockVX = 0;
   /** 攻擊時往前撲的位移 */
   private lunge = 0;
+  /** 攻擊前搖剩幾秒（> 0 代表正在蓄力，這段不移動） */
+  private atkWind = 0;
+  /** 前搖往後仰的程度 0..1 與方向 */
+  private atkPose = 0;
+  private atkDir = 1;
   /** 卡肉抖動：到這個時間（真實時間 ms）前原地左右抖，幅度 px */
   private shakeUntil = 0;
   private shakeAmp = 0;
@@ -364,6 +380,7 @@ export class Zombie extends Phaser.GameObjects.Sprite {
       // 硬直：原地晃，不走也不打
       this.stunTimer = Math.max(0, this.stunTimer - dt);
       this.attackTimer = 0;
+      this.cancelWindup();
       if (this.dashState === 'windup' || this.dashState === 'dash') this.cancelDash();
       if (this.anims.isPlaying) this.anims.pause();
       this.sync(0, dt);
@@ -411,22 +428,30 @@ export class Zombie extends Phaser.GameObjects.Sprite {
       }
     }
     if (p) {
-      if (Math.abs(dx) <= REACH_X && Math.abs(dy) <= REACH_Y) {
-        this.setFlipX(dx < 0);
-        this.attack(dt, () => p.hit(this.damageNow, this.footX, this.footY, this), Math.sign(dx) || -1);
+      const inReach = () => Math.abs(p.x - this.footX) <= REACH_X + 2 && Math.abs(p.y - this.footY) <= REACH_Y + 2;
+      if (this.atkWind > 0 || (Math.abs(dx) <= REACH_X && Math.abs(dy) <= REACH_Y)) {
+        // 前搖一旦開始就把這下打完（人退開就揮空），不會邊蓄力邊追
+        if (this.atkWind <= 0) this.setFlipX(dx < 0);
+        this.attack(dt, () => p.alive && inReach() && p.hit(this.damageNow, this.footX, this.footY, this), this.atkWind > 0 ? this.atkDir : Math.sign(dx) || -1);
       } else {
+        // 盯上活人：加速逼近，貼近時再撲一段
+        const gap = Math.hypot(dx, dy * 1.6);
+        const chase = this.legLost ? 1 : gap < CHASE.closeDist ? CHASE.closeMul : CHASE.speedMul;
         // 站到主角的左邊或右邊，而不是疊在主角身上
         const side = dx >= 0 ? -1 : 1;
         const ex = p.x + side * (REACH_X - 4) - this.footX;
         const d = Math.hypot(ex, dy) || 1;
         // 前後（y）移動比左右慢，和主角一樣做出縱深感
-        this.footX += (ex / d) * speed * dt;
-        this.footY += (dy / d) * speed * 0.7 * dt;
+        this.footX += (ex / d) * speed * chase * dt;
+        this.footY += (dy / d) * speed * chase * 0.7 * dt;
         this.setFlipX(ex < 0);
         moved = true;
       }
       this.laneY = this.footY;
     } else if (this.footX > minX) {
+      // 主角躲在路障後：往主角那一排擠（聞得到活人），不是隨便找個位置敲路障
+      const seen = this.nearestLiving(ctx);
+      if (seen) this.laneY = Phaser.Math.Linear(this.laneY, seen.y, Math.min(1, dt * 0.8));
       // 屍熊：接近擋路線時衝撞，撞上的第一下特別重
       const charging = this.spec.body === 'bear' && !this.charged && this.footX - minX < CHARGE.from;
       const v = charging ? speed * CHARGE.speedMul : speed;
@@ -442,14 +467,19 @@ export class Zombie extends Phaser.GameObjects.Sprite {
       moved = true;
     } else {
       this.setFlipX(true);
-      this.attack(dt, () => hitBlock(this.damageNow, this.footY), -1);
+      // 敲路障時也慢慢往主角那一排挪
+      const seen = this.nearestLiving(ctx);
+      if (seen && this.atkWind <= 0) this.footY += Phaser.Math.Clamp(seen.y - this.footY, -speed * 0.25 * dt, speed * 0.25 * dt);
+      this.attack(dt, () => hitBlock(this.damageNow, this.footY), -1, false);
     }
 
     // 不能穿過路障
     this.footX = Math.max(minX, this.footX);
     this.footY = clampLaneY(this.footY);
     if (moved) {
-      this.attackTimer = 0;
+      this.cancelWindup();
+      // 一貼上來很快就出手（first 秒後開始前搖），不是先發呆一整個攻擊間隔
+      this.attackTimer = Math.max(0, this.attackIntervalNow - this.windupLen - ATTACK.first);
       if (this.legLost) {
         if (this.anims.isPlaying && this.anims.currentAnim?.key !== this.attackKey) this.anims.stop();
       } else if (this.anims.currentAnim?.key !== this.walkKey && this.scene.anims.exists(this.walkKey)) this.play(this.walkKey);
@@ -796,16 +826,58 @@ export class Zombie extends Phaser.GameObjects.Sprite {
     return best;
   }
 
-  private attack(dt: number, hit: () => void, dir: number): void {
-    this.attackTimer += dt;
-    if (this.attackTimer >= this.attackIntervalNow) {
+  /** 這隻的攻擊前搖長度（秒） */
+  private get windupLen(): number {
+    return Phaser.Math.Clamp(this.attackIntervalNow * ATTACK.ratio, ATTACK.min, ATTACK.max);
+  }
+
+  /** 最近的活人（不管在不在路障外），給走向路障的霧屍挑排用 */
+  private nearestLiving(ctx: ZombieContext): ZombieTarget | null {
+    let best: ZombieTarget | null = null;
+    let bestD = CHASE.laneSense;
+    for (const t of this.targets(ctx)) {
+      if (!t.alive) continue;
+      const d = Math.abs(t.x - this.footX);
+      if (d < bestD) {
+        bestD = d;
+        best = t;
+      }
+    }
+    return best;
+  }
+
+  private cancelWindup(): void {
+    this.atkWind = 0;
+    this.atkPose = 0;
+  }
+
+  /**
+   * 近身攻擊：計時到了先前搖（往後仰、低吼），前搖結束才真的出手。
+   * hit 自己負責檢查人還在不在觸及範圍（退開就揮空）。
+   */
+  private attack(dt: number, hit: () => void, dir: number, cue = true): void {
+    if (this.atkWind > 0) {
+      this.atkWind = Math.max(0, this.atkWind - dt);
+      const k = 1 - this.atkWind / this.windupLen;
+      // 很快仰到底、再停一下：看得出「要咬了」
+      this.atkPose = Math.min(1, k * 1.6);
+      if (this.atkWind > 0) return;
+      this.atkPose = 0;
       this.attackTimer = 0;
       hit();
       GameEvents.of(this.scene).emit('enemy:attack', { enemyId: this.def.id, x: this.footX, y: this.footY });
       if (this.scene.anims.exists(this.attackKey)) this.play(this.attackKey);
       // 攻擊時往前撲一下
-      this.lunge = 3 * dir;
-      this.scene.time.delayedCall(60, () => (this.lunge = 0));
+      this.lunge = 5 * dir;
+      this.scene.time.delayedCall(70, () => (this.lunge = 0));
+      return;
+    }
+    this.attackTimer += dt;
+    if (this.attackTimer >= this.attackIntervalNow - this.windupLen) {
+      this.atkWind = this.windupLen;
+      this.atkDir = dir;
+      this.atkPose = 0;
+      if (cue) GameEvents.of(this.scene).emit('enemy:windup', { enemyId: this.def.id, x: this.footX, y: this.footY });
     }
   }
 
@@ -891,7 +963,8 @@ export class Zombie extends Phaser.GameObjects.Sprite {
    * 再疊上被打中的後仰。有影格動畫時只留很小的搖晃，避免和步伐打架。
    */
   private sync(walking: number, dt = 0): void {
-    this.x = this.footX + this.lunge;
+    // 攻擊前搖：往後拉一點
+    this.x = this.footX + this.lunge - this.atkDir * ATTACK.pull * this.atkPose;
     if (this.spec.body === 'crow') {
       // 飛行：位置在空中，地上留一個隨高度變小的影子；畫在地面角色之上
       this.y = this.footY - this.alt + Math.sin(this.walkPhase * 2) * 1.5;
@@ -918,6 +991,11 @@ export class Zombie extends Phaser.GameObjects.Sprite {
     } else {
       this.y = this.footY;
       this.angle = Math.sin((this.walkPhase += dt * 3)) * 1.5 + this.hitLean;
+    }
+    // 前搖後仰（疊在其他姿勢上；受擊影格會蓋掉，那時本來就被打斷）
+    if (this.atkPose > 0) {
+      this.angle -= this.atkDir * ATTACK.lean * this.atkPose;
+      this.y -= ATTACK.lift * this.atkPose;
     }
     this.setDepth(depthForY(this.footY));
     this.applyReactFrame();

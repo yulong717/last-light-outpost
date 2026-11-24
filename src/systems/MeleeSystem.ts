@@ -21,6 +21,10 @@ export interface MeleeResult {
 const COMBO_WINDOW = 0.45;
 /** 連擊數（畫面上的「N 連擊」）多久沒打中就歸零 */
 const STREAK_WINDOW = 1.4;
+/** 揮擊中預先按下的下一刀，記多久（遊戲時間，卡肉時不算）；太早按的會作廢，不會很久之後自己多揮一下 */
+const SWING_BUFFER = 0.3;
+/** 揮擊中按換彈：記多久，收招後自動開始換 */
+const RELOAD_BUFFER = 0.8;
 /** 刀類連段中後面幾刀的起手縮短（越砍越順手） */
 const CHAIN_WINDUP = 0.6;
 
@@ -82,6 +86,10 @@ export class MeleeSystem {
   /** 收完招後的重新掄起時間（鈍器） */
   private heftT = 0;
   private queued = false;
+  /** 排隊那一刀往哪邊揮（按下時的瞄準點；undefined＝照目前面向） */
+  private queuedAim?: number;
+  private queueT = 0;
+  private reloadBuf = 0;
   private hitSet = new Set<Zombie>();
   private hitCount = 0;
   private dir = 1;
@@ -193,11 +201,35 @@ export class MeleeSystem {
     if (!player.alive) return false;
     if (this.busy || this.heftT > 0) {
       // 只有「按下」才排下一下；按著不放不會在揮的途中多排一下（點一下＝揮一下）
-      if (pressed) this.queued = true;
+      if (pressed) {
+        this.queued = true;
+        this.queuedAim = aimX;
+        this.queueT = SWING_BUFFER;
+      }
       return true;
     }
     this.start(player, aimX);
     return true;
+  }
+
+  /**
+   * 換彈要不要現在開始：揮擊中按的先記著，收招後再換（不吃鍵）。
+   * 近戰模式不換彈（槍收著）。dt 用真實時間。
+   */
+  reloadNow(pressed: boolean, dt: number): boolean {
+    if (pressed) this.reloadBuf = RELOAD_BUFFER;
+    else this.reloadBuf = Math.max(0, this.reloadBuf - dt);
+    if (this.stance) this.reloadBuf = 0;
+    if (this.reloadBuf > 0 && !this.busy) {
+      this.reloadBuf = 0;
+      return true;
+    }
+    return false;
+  }
+
+  /** 排隊的那一刀出手（帶著按下時的方向） */
+  private startQueued(player: Player): void {
+    this.start(player, this.queuedAim);
   }
 
   /** 這一下是連段招式表裡的哪一招（沒有招式表就是 undefined） */
@@ -236,6 +268,7 @@ export class MeleeSystem {
     this.swingBonus = { ...this.bonus };
     this.comboTimer = 0;
     this.queued = false;
+    this.queuedAim = undefined;
     this.phase = 'windup';
     this.t = 0;
     this.hitSet.clear();
@@ -267,6 +300,13 @@ export class MeleeSystem {
     const d = this.def;
     const res: MeleeResult = { hits: 0, kills: 0 };
     this.comboTimer = Math.max(0, this.comboTimer - dt);
+    if (this.queued) {
+      this.queueT -= dt;
+      if (this.queueT <= 0) {
+        this.queued = false;
+        this.queuedAim = undefined;
+      }
+    }
     this.updateStreak(dt, player);
     if (this.phase === 'idle') {
       // 近戰模式：專心用刀的人換氣比較快（純近戰主角也要撐得完一整夜）
@@ -275,7 +315,7 @@ export class MeleeSystem {
       player.swingLean += (0 - player.swingLean) * Math.min(1, dt * 14);
       if (this.heftT > 0) {
         this.heftT = Math.max(0, this.heftT - dt);
-        if (this.heftT <= 0 && this.queued) this.start(player);
+        if (this.heftT <= 0 && this.queued) this.startQueued(player);
       }
       return res;
     }
@@ -317,12 +357,12 @@ export class MeleeSystem {
         // 打中確認取消：鈍器打中之後收招後半段就能再揮（不用重新掄起）
         const hitCancel = this.queued && d.comboEvery <= 1 && this.hitCount > 0 && !this.finisher && k >= HIT_RECOVERY.cancel;
         if (hitCancel) {
-          this.start(player);
+          this.startQueued(player);
           break;
         }
         if (canChain) {
           this.comboTimer = COMBO_WINDOW;
-          this.start(player);
+          this.startQueued(player);
           break;
         }
         if (k >= 1) {
@@ -330,7 +370,7 @@ export class MeleeSystem {
           // 收尾重擊後一串結束；鈍器要重新掄起才能再揮
           this.comboTimer = this.finisher ? 0 : COMBO_WINDOW;
           this.heftT = this.finisher ? Math.max(d.heft, 0.08) : d.heft;
-          if (this.queued && this.heftT <= 0) this.start(player);
+          if (this.queued && this.heftT <= 0) this.startQueued(player);
         }
         break;
       }

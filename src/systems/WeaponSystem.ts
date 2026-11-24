@@ -42,6 +42,11 @@ interface ReloadState {
 
 /** 按扳機的緩衝：冷卻快結束時先按，冷卻一好就射出去（半自動連點不會吃鍵） */
 const FIRE_BUFFER = 0.14;
+/**
+ * 槍械擊殺的卡肉：只給爆頭擊殺，而且有冷卻。
+ * 以前每殺一隻全場凍 25 ms（爆頭 55 ms），全自動掃屍潮時畫面一頓一頓、射速也被拖慢。
+ */
+const KILL_STOP = { ms: 30, cooldown: 220 };
 
 /**
  * 槍械系統：即時命中（hitscan）射擊。
@@ -63,6 +68,7 @@ export class WeaponSystem {
   private rl: ReloadState | null = null;
   /** 栓動／泵動槍打斷換彈後，下一發前要先上膛 */
   private needsRack = false;
+  private lastKillStop = -1e9;
 
   constructor(
     private scene: Phaser.Scene,
@@ -404,8 +410,12 @@ export class WeaponSystem {
       if (killed) {
         result.kills++;
         rayKills++;
-        // 爆頭擊殺卡肉久一點，一般擊殺輕輕頓一下
-        fx?.freeze(head ? 55 : 25);
+        // 只有爆頭擊殺輕輕頓一下（有冷卻）；一般擊殺靠倒地、噴血和命中 ✕，不凍全場
+        const now = this.scene.game.loop.time;
+        if (head && now - this.lastKillStop >= KILL_STOP.cooldown) {
+          this.lastKillStop = now;
+          fx?.freeze(KILL_STOP.ms);
+        }
       }
       GameEvents.of(this.scene).emit('enemy:hit', { enemyId: h.z.def.id, x: h.x, y: h.y, damage: info.amount, headshot: head, killed });
       if (!fx) this.spawnHitSpark(h.x, h.y, head);
