@@ -32,6 +32,7 @@ export function attachAudio(scene: Phaser.Scene): void {
   // 霧屍職業的嗓音高低（職業列表見 src/data/zombies.ts）
   const KIND_PITCH: Record<string, number> = { sprinter: 2, brute: -5, runner: 3, nurse: 2, firefighter: -2, soldier: -2, prisoner: -1 };
   const kindPitch = (kind: string) => KIND_PITCH[kind] ?? 0;
+  let lastWindup = 0;
   const shotName = (id: string) => {
     const snd = getFirearm(id)?.sound;
     return snd && AudioManager.has(snd) ? snd : 'shot_pistol';
@@ -111,6 +112,13 @@ export function attachAudio(scene: Phaser.Scene): void {
     })
     .on('enemy:groan', (e) => play('zombie_groan', e.x, { semitones: kindPitch(e.enemyId), volume: 0.8 }))
     .on('enemy:attack', (e) => play('zombie_attack', e.x, { semitones: kindPitch(e.enemyId) }))
+    // 前搖預警：短促、偏高的低吼，一群同時蓄力時不要疊成一片
+    .on('enemy:windup', (e) => {
+      const now = performance.now();
+      if (now - lastWindup < 110) return;
+      lastWindup = now;
+      play('zombie_groan', e.x, { semitones: kindPitch(e.enemyId) + 4, volume: 0.55 });
+    })
     .on('enemy:hit', (e) => {
       play('flesh_hit', e.x);
       if (e.headshot) play('headshot', e.x, { volume: e.killed ? 1 : 0.7 });

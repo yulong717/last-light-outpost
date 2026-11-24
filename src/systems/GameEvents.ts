@@ -56,6 +56,8 @@ export interface GameEventMap {
   'enemy:spawn': { enemyId: string; x: number; y: number };
   'enemy:groan': { enemyId: string; x: number; y: number };
   'enemy:attack': { enemyId: string; x: number; y: number };
+  /** 近身攻擊前搖開始（低吼預警） */
+  'enemy:windup': { enemyId: string; x: number; y: number };
   'enemy:death': { enemyId: string; x: number; y: number; headshot: boolean; explode?: boolean };
   /** 手或腳被打斷 */
   'enemy:dismember': { enemyId: string; x: number; y: number; part: 'arm' | 'leg' };

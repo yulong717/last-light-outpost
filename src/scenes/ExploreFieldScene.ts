@@ -20,7 +20,7 @@ import { rumble } from '../feel/Haptics';
 import { ScreenFeedback } from '../feel/ScreenFeedback';
 import { createAtmosphere } from '../fx/Atmosphere';
 import { Fx } from '../fx/Fx';
-import { InputManager, holdAction, queueAction, registerUIRect } from '../input/InputManager';
+import { touchMeleeAimX, InputManager, holdAction, queueAction, registerUIRect } from '../input/InputManager';
 import { GameState } from '../state/GameState';
 import { GameEvents } from '../systems/GameEvents';
 import { HeroSystem, heroTouch } from '../systems/HeroSystem';
@@ -198,7 +198,7 @@ export class ExploreFieldScene extends Phaser.Scene {
     if (GameState.data.armory.loadout.length === 0) this.melee.lockStance();
     this.heroSys = new HeroSystem(this, this.player, this.melee, () => this.zombies);
     this.heroSys.onKill = () => this.kills++;
-    this.input2 = new InputManager(this);
+    this.input2 = new InputManager(this, { x: this.player.footX + 200, y: this.player.footY - 30 });
     this.crosshair = new Crosshair(this);
     this.screenFx = new ScreenFeedback(this);
     attachAudio(this);
@@ -721,18 +721,22 @@ export class ExploreFieldScene extends Phaser.Scene {
     const melee = this.melee.handleInput(inp);
     if (inp.selectWeapon >= 0) this.weapons.select(inp.selectWeapon);
     if (inp.nextWeapon) this.weapons.next();
-    if (inp.reloadPressed && !this.melee.busy && !this.melee.stance) this.weapons.reload();
-    this.weapons.update(dt);
+    // 揮擊中按換彈不吃鍵：收招後自動開始換
+    if (this.melee.reloadNow(inp.reloadPressed, realDt)) this.weapons.reload();
+    // 槍的冷卻、換彈用真實時間：卡肉不會拖慢射速
+    this.weapons.update(realDt);
+    // 觸控按「近戰」鍵：方向看搖桿／面向，不是按鈕所在的右下角
+    const meleeAim = touchMeleeAimX(inp, p.footX, p.facing);
     if (melee.swing && p.alive) {
       this.weapons.cancelReload();
-      this.melee.trySwing(p, inp.aimX, melee.pressed);
+      this.melee.trySwing(p, meleeAim, melee.pressed);
     }
     const meleeRes = this.melee.update(dt, p, this.zombies);
     this.kills += meleeRes.kills;
     // 潛行時腳步放輕；衝刺變快、被抓住變超慢
     const heroMul = this.heroSys.update(dt, inp.moveX !== 0 || inp.moveY !== 0);
     p.speedMul = (this.alerted ? this.melee.moveMul(this.weapons.active.def.moveMul) : 0.75) * heroMul;
-    p.update(dt, inp.moveX, inp.moveY, this.melee.aimX(p, inp.aimX), { minX: 20, maxX: this.worldW - 16 });
+    p.update(dt, inp.moveX, inp.moveY, this.melee.aimX(p, this.melee.stance ? meleeAim : inp.aimX), { minX: 20, maxX: this.worldW - 16 });
 
     // 手上的武器先擺好姿勢，子彈從真正的槍口射出
     this.rig.setWeapon(this.weapons.active.def.id);

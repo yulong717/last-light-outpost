@@ -25,6 +25,21 @@ export interface InputState {
   meleeHeld: boolean;
   /** 切換近戰模式（4、X 或觸控「持刀」鍵）：槍收起來，攻擊鍵改成揮擊 */
   toggleMelee: boolean;
+  /**
+   * 瞄準點是「舊的」：觸控時沒有手指正在瞄（只按搖桿或按鈕），aimX/aimY 是上一次點的位置。
+   * 這時近戰方向改看搖桿／面向（見 touchMeleeAimX）。滑鼠永遠是 false。
+   */
+  aimStale: boolean;
+}
+
+/**
+ * 觸控時近戰往哪邊揮：瞄準點是舊的，就照搖桿左右；沒推搖桿就照目前面向。
+ * 滑鼠或正在點畫面時照瞄準點。
+ */
+export function touchMeleeAimX(inp: InputState, footX: number, facing: number): number {
+  if (!inp.aimStale) return inp.aimX;
+  const dir = Math.abs(inp.moveX) > 0.3 ? Math.sign(inp.moveX) : facing;
+  return footX + dir * 100;
 }
 
 type Rect = { x: number; y: number; w: number; h: number };
@@ -86,6 +101,8 @@ export class InputManager {
   private tapQueued: { x: number; y: number } | null = null;
   private wasFiring = false;
   private firingPointerId: number | null = null;
+  /** 滑鼠／手指動過了沒；還沒動過的指標停在 (0,0)，不能拿來瞄準 */
+  private pointerSeen = false;
 
   readonly state: InputState = {
     moveX: 0,
@@ -100,10 +117,16 @@ export class InputManager {
     meleePressed: false,
     meleeHeld: false,
     toggleMelee: false,
+    aimStale: false,
   };
 
-  constructor(scene: Phaser.Scene) {
+  /** defaultAim：滑鼠還沒動之前的瞄準點（世界座標），讓主角一開場面向屍群 */
+  constructor(scene: Phaser.Scene, defaultAim?: { x: number; y: number }) {
     this.scene = scene;
+    if (defaultAim) {
+      this.state.aimX = defaultAim.x;
+      this.state.aimY = defaultAim.y;
+    }
     const kb = scene.input.keyboard;
     if (kb) {
       this.keys = {
@@ -131,7 +154,9 @@ export class InputManager {
 
     joystick.active = false;
     held.melee = false;
+    scene.input.on('pointermove', () => (this.pointerSeen = true));
     scene.input.on('pointerdown', (p: Phaser.Input.Pointer) => {
+      this.pointerSeen = true;
       // 滑鼠右鍵 = 近戰，不會開火
       if (!p.wasTouch && p.rightButtonDown()) {
         if (!isPointerOverUI(p)) queued.melee = true;
@@ -173,8 +198,14 @@ export class InputManager {
     // 鏡頭會捲動，所以每幀用畫面座標重新換算世界座標（pointer.worldX 只在游標移動時更新）
     // 只按著搖桿、沒在開火時，維持上一次的瞄準點
     const active = this.scene.input.activePointer;
-    const aimPointer = firing ?? (active.id === this.movePointerId ? null : active);
+    if (active.isDown) this.pointerSeen = true;
+    // 搖桿手指、按在按鈕上的手指、還沒動過的滑鼠都不拿來瞄準
+    // （按鈕常會擋掉事件傳遞，所以看手指「按下的位置」是不是在 UI 上）
+    const idle = active.id === this.movePointerId || (active.wasTouch && isPointerOverUI({ x: active.downX, y: active.downY })) || !this.pointerSeen;
+    const aimPointer = firing ?? (idle ? null : active);
     const aimScreen = aimPointer ?? this.tapQueued;
+    // 觸控時只有手指正按在畫面上（開火）才是即時的瞄準
+    s.aimStale = !firing && !this.tapQueued && (active.wasTouch || !this.pointerSeen);
     if (aimScreen) {
       const world = this.scene.cameras.main.getWorldPoint(aimScreen.x, aimScreen.y);
       s.aimX = world.x;
