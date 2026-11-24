@@ -1,0 +1,116 @@
+{
+ "frameWidth": 64,
+ "frameHeight": 64,
+ "frames": 26,
+ "foot_row": 62,
+ "ranges": {
+  "walk": [
+   0,
+   3
+  ],
+  "attack": [
+   4,
+   5
+  ],
+  "death": [
+   6,
+   14
+  ],
+  "hit": [
+   15,
+   17
+  ],
+  "rise": [
+   18,
+   18
+  ],
+  "fall": [
+   19,
+   19
+  ],
+  "bounce": [
+   20,
+   20
+  ],
+  "down": [
+   21,
+   21
+  ],
+  "getup": [
+   22,
+   25
+  ]
+ },
+ "source": [
+  "walk.png frame 0",
+  "walk.png frame 2",
+  "walk.png frame 4",
+  "walk.png frame 6",
+  "attack.png frame 3",
+  "attack.png frame 5",
+  "death.png frame 0",
+  "death.png frame 1",
+  "death.png frame 2",
+  "death.png frame 3",
+  "death.png frame 4",
+  "death.png frame 5",
+  "death.png frame 6",
+  "death.png frame 7",
+  "death.png frame 8",
+  "hit.png frame 0",
+  "hit.png frame 1",
+  "hit.png frame 2",
+  "react.png frame 0",
+  "react.png frame 1",
+  "react.png frame 2",
+  "react.png frame 3",
+  "react.png frame 4",
+  "react.png frame 5",
+  "react.png frame 6",
+  "react.png frame 7"
+ ],
+ "attack_reach_x": [
+  56,
+  51,
+  55,
+  62,
+  58,
+  62
+ ],
+ "attack_frames_used": [
+  3,
+  5
+ ],
+ "lowest_pixel_row": [
+  62,
+  62,
+  62,
+  62,
+  62,
+  62,
+  62,
+  62,
+  62,
+  62,
+  62,
+  62,
+  62,
+  62,
+  62,
+  62,
+  62,
+  62,
+  59,
+  57,
+  60,
+  62,
+  62,
+  62,
+  62,
+  62
+ ],
+ "extra": {
+  "zombie_basic_walk8.png": "walk.png 8 frames, y+1",
+  "zombie_basic_attack6.png": "attack.png 6 frames, y+1"
+ }
+}

@@ -47,6 +47,7 @@ RAW = ROOT / "art/ai/raw/zombie12"
 OUT = ROOT / "art/ai/out/zombie_m"
 PY = z9.PY
 FOOT = z9.FOOT
+NECK_STUB = 3
 LORA4 = "minimax_h3_fl2v_turbo_4step_v1.0_768p_comfyui_bf16.safetensors"
 
 COMMON = ("Pixel art game sprite animation of the fog zombie from <Picture 1>: keep its grey-green skin, small head, "
@@ -72,6 +73,12 @@ ACTIONS = {
         "left, the knees buckle and it falls backward to the left, landing flat on its back on the ground line with "
         "the head on the left and the feet on the right, a small bounce, then it lies completely still. No effects, "
         "no blood. Flat colors.")},
+    # round 13: get up from the death pose (death.png frame 8) back to the walk stance
+    "getup": {"n": 4, "length": 56, "start": "deathlast", "end": "walk0", "prompt": COMMON + (
+        "The zombie lies flat on its back on the ground line, head on the left, feet on the right. It slowly comes "
+        "back to life: it pushes its upper body up on its arms, sits up, pulls its legs in and gets onto one knee, "
+        "then stands up into its hunched walking stance with both arms reaching forward to the right. Slow, heavy, "
+        "jerky zombie movement. Only the zombie, nothing else appears. No effects, no blood. Flat colors.")},
 }
 DOWN_PROMPT = (
     "Redraw <Picture 1> as a clean pixel art game sprite for a 2D side-scrolling zombie game: the dead fog zombie "
@@ -82,6 +89,118 @@ DOWN_PROMPT = (
     "<Picture 3>: light from the upper left, 3 to 4 shading steps, a 1 pixel near-black outline, muted grey-green "
     "colours. Plain solid magenta background, no ground, no floor line, no cast shadow, no blood, no text."
 )
+
+
+KNOCK_POSES = {
+    # name: (rotation of the walk-0 silhouette, counter-clockwise degrees; lift of the lowest pixel above y=61; text)
+    "rise": (55, 3, "it has just been knocked off its feet by a heavy blow from the right: the whole body is in the "
+                    "air leaning far backward to the left, about 30 degrees, head thrown back, arms flung forward and "
+                    "up, legs kicked forward, both feet clearly off the ground"),
+    "fall": (100, 5, "it is flying backward through the air almost horizontal, back toward the ground, head on the "
+                    "left slightly lower than the feet on the right, arms and legs flung up, falling onto its back, "
+                    "not touching the ground yet"),
+    "bounce": (90, 2, "it has just slammed onto its back and bounces slightly: lying almost flat with the head on the "
+                      "left and the feet on the right, the back just above the ground, legs and arms jolted upward, "
+                      "head jerked up"),
+}
+KNOCK_PROMPT = (
+    "Redraw the grey silhouette in <Picture 1> as the fog zombie from <Picture 2>, as a clean pixel art game sprite "
+    "for a 2D side-scrolling zombie game, at exactly the position, size and angle of the silhouette: {pose}. Keep "
+    "the character of <Picture 2> (small head 3.5 heads tall, grey-green rotting skin, sunken dark eyes, torn plain "
+    "light grey shirt, dark blue-grey trousers, dark shoes), seen from the side. Draw it in exactly the pixel art "
+    "style of <Picture 3>: light from the upper left, 3 to 4 shading steps, a 1 pixel near-black outline. Only the "
+    "zombie: no weapon, no bat, no attacker, no object, no ground, no floor line, no cast shadow, no effects, no "
+    "blood, no motion lines. Plain solid magenta background, no text."
+)
+
+
+def knock_layouts():
+    w0 = walk_frames_final()[0]
+    a = np.array(w0)[..., 3] > 0
+    ys, xs = np.where(a)
+    fig = w0.crop((xs.min(), ys.min(), xs.max() + 1, ys.max() + 1))
+    cx = (xs.min() + xs.max()) / 2
+    for name, (rot, lf, _) in KNOCK_POSES.items():
+        # bounce: the lying death pose (death frame 8), lifted; the others: the walk pose rotated backward
+        src = Image.open(RAW / "deathlast.png").convert("RGBA") if name == "bounce" else fig
+        if name == "bounce":
+            yy, xx = np.where(np.array(src)[..., 3] > 0)
+            src = src.crop((xx.min(), yy.min(), xx.max() + 1, yy.max() + 1))
+        r = src.rotate(0 if name == "bounce" else rot, expand=True, resample=Image.NEAREST)
+        ry, rx = np.where(np.array(r)[..., 3] > 0)
+        r = r.crop((rx.min(), ry.min(), rx.max() + 1, ry.max() + 1))
+        lay = Image.new("RGBA", (64, 64), (0, 0, 0, 0))
+        x0 = int(round(cx - r.width / 2)) - (6 if rot >= 75 else 3)
+        x0 = max(1, min(63 - r.width, x0))
+        if name == "bounce":
+            x0 = int(np.where(np.array(Image.open(RAW / "deathlast.png"))[..., 3] > 0)[1].min())
+        lay.alpha_composite(r, (x0, max(1, FOOT + 1 - lf - r.height)))
+        g = np.array(lay)
+        g[..., :3] = np.where(g[..., 3:] > 0, 150, 0)
+        Image.fromarray(g, "RGBA").save(RAW / f"{name}_layout.png")
+        _x16(Image.fromarray(g, "RGBA"), RAW / f"{name}_layout_x16.png")
+
+
+def knock_gen(seeds):
+    knock_layouts()
+    for pose, (_, _, desc) in KNOCK_POSES.items():
+        for s in seeds:
+            if list((RAW / f"{pose}_s{s}").glob("zombie12_*.png")):
+                continue
+            print(pose, s, z9.run([PY, "-I", ROOT / "tools/art/ai/run_comfy.py", ROOT / "art/ai/workflows/h3_image_edit_3ref.json",
+                                   "--image", f"load1={RAW / (pose + '_layout_x16.png')}", "--image", f"load2={RAW / 'walk0_x16.png'}",
+                                   "--image", f"load3={RAW / 'ref_anchor_1024.png'}",
+                                   "--set", "scale1.width=1024", "--set", "scale1.height=1024",
+                                   "--set", "cond.width=1024", "--set", "cond.height=1024",
+                                   "--set", f"sampler.seed={s}", "--set", f"cond.prompt={KNOCK_PROMPT.format(pose=desc)}",
+                                   "--set", f"save.filename_prefix=ai_art/zombie12_{pose}_s{s}",
+                                   "--out", RAW / f"{pose}_s{s}", "--tag", f"r13 zombie react {pose} seed {s}"])[:90], flush=True)
+
+
+def lift(img: Image.Image, n: int) -> Image.Image:
+    out = Image.new("RGBA", img.size, (0, 0, 0, 0))
+    out.alpha_composite(img, (0, -n))
+    return out
+
+
+def knock_post():
+    rp = z9.region_palettes()
+    walk = walk_frames_final()
+    rows, summary = [], {}
+    for pose, (rot, lf, _) in KNOCK_POSES.items():
+        for s in range(1, 9):
+            raws = sorted((RAW / f"{pose}_s{s}").glob("zombie12_*.png"))
+            if not raws:
+                continue
+            _, q = z9.post_stand_raw(raws[-1], rp)
+            q, _ = remove_islands(q, 2)
+            q, nfix = z10.region_islands(q)
+            (f,) = snap([q], walk)
+            f = lift(f, lf)
+            fd = RAW / f"{pose}_s{s}"
+            f.save(fd / "pose_64.png")
+            ys, xs = np.where(np.array(f)[..., 3] > 0)
+            info = {"w": int(xs.max() - xs.min() + 1), "h": int(ys.max() - ys.min() + 1), "bottom": int(ys.max()),
+                    "regions": z9.region_stats(f), "region_px_fixed": nfix,
+                    "outside_palette": check(fd / "pose_64.png")["outside_palette"],
+                    "stray_object": stray_object(raws[-1])}
+            summary[f"{pose}_s{s}"] = info
+            rows.append((pose, s, f, info))
+            print(pose, s, info)
+    poses = list(KNOCK_POSES)
+    seeds = sorted({s for _, s, _, _ in rows})
+    sc, cw = 3, 64 * 3
+    sheet = Image.new("RGB", (len(poses) * 2 * cw, len(seeds) * (cw + 18)), (20, 20, 20))
+    dd = ImageDraw.Draw(sheet)
+    for pose, s, f, info in rows:
+        c, r = poses.index(pose), seeds.index(s)
+        x, y = c * 2 * cw, r * (cw + 18)
+        dd.text((x + 3, y + 3), f"{pose} s{s} {info['w']}x{info['h']} bottom {info['bottom']} obj {info['stray_object']}",
+                fill=(255, 255, 255))
+        sheet.paste(z9.tile(f, sc), (x, y + 18))
+        sheet.paste(z9.tile(z9.region_map(f), sc), (x + cw, y + 18))
+    sheet.save(OUT / "react_knock_seeds_x3.png")
+    (RAW / "knock_summary.json").write_text(json.dumps(summary, indent=1), encoding="utf-8")
 
 
 HIT_POSES = {
@@ -200,6 +319,13 @@ def refs():
     print("refs ->", RAW)
 
 
+def refs13():
+    d = Image.open(OUT / "death.png").convert("RGBA")
+    last = d.crop((d.width - 64, 0, d.width, 64))
+    last.save(RAW / "deathlast.png")
+    _x16(last, RAW / "deathlast_512.png", 512)
+
+
 def down_gen(seeds):
     for s in seeds:
         print("down", s, z9.run([PY, "-I", ROOT / "tools/art/ai/run_comfy.py", ROOT / "art/ai/workflows/h3_image_edit_3ref.json",
@@ -263,8 +389,8 @@ def down_pick(seed: int):
 
 def gen(action: str, seeds, steps: int):
     a = ACTIONS[action]
-    first = RAW / "walk0_512.png"
-    last = first if a["end"] == "walk0" else RAW / "down_512.png"
+    first = RAW / ("deathlast_512.png" if a.get("start") == "deathlast" else "walk0_512.png")
+    last = RAW / "walk0_512.png" if a["end"] == "walk0" else RAW / "down_512.png"
     tag = "" if steps == 8 else f"_q{steps}"
     for s in seeds:
         cmd = [PY, "-I", ROOT / "tools/art/ai/run_comfy.py", ROOT / "art/ai/workflows/h3_video_i2v.json",
@@ -297,6 +423,36 @@ def stray_object(path: Path) -> int:
     return int(br.sum())
 
 
+def sharpness(path: Path) -> float:
+    """Mean absolute 4-neighbour colour difference inside the figure (motion-blurred frames score low)."""
+    k = np.array(z10.key_magenta(Image.open(path))).astype(np.float32)
+    op = k[..., 3] > 128
+    c = k[..., :3]
+    dx = np.abs(np.diff(c, axis=1)).sum(-1)
+    dy = np.abs(np.diff(c, axis=0)).sum(-1)
+    m1 = op[:, 1:] & op[:, :-1]
+    m2 = op[1:] & op[:-1]
+    return float((dx[m1].sum() + dy[m2].sum()) / max(1, m1.sum() + m2.sum()))
+
+
+def unblur(idx: list[int], frames: list[Path], bad: list[int]) -> tuple[list[int], list]:
+    """Round 13: every inner pick may move one video frame (t-1, t, t+1) to the sharpest one, so a fast frame
+    (death frame 5: the head smeared into one blob) is replaced by its sharp neighbour. Order is kept."""
+    out, moves = list(idx), []
+    for i in range(1, len(idx) - 1):
+        lo, hi = out[i - 1] + 1, idx[i + 1] - 1
+        cand = [t for t in (idx[i] - 1, idx[i], idx[i] + 1) if lo <= t <= hi and t not in bad and 0 <= t < len(frames)]
+        if not cand:
+            continue
+        sh = {t: sharpness(frames[t]) for t in cand}
+        best = max(cand, key=lambda t: sh[t])
+        if best != idx[i] and sh[best] > 1.1 * sh.get(idx[i], 0):
+            moves.append({"frame": i, "from": idx[i], "to": best,
+                          "sharpness": {str(t): round(v, 1) for t, v in sh.items()}})
+            out[i] = best
+    return out, moves
+
+
 def pick_indices(action: str, frames: list[Path]) -> tuple[list[int], dict]:
     f = np.stack([features(p, 1.0) for p in frames])
     D = dist_matrix(f)
@@ -325,6 +481,21 @@ def pick_indices(action: str, frames: list[Path]) -> tuple[list[int], dict]:
         mid = [t for t in range(st, pk) if t not in bad]
         idx = [mid[len(mid) // 2] if mid else pk, pk, round((pk + en) / 2)]
         info = {"start": st, "peak": pk, "end": en}
+    elif action == "getup":
+        # figure height relative to the final standing frame: pushed up 0.55, sitting 0.75, one knee 0.9,
+        # standing = the last frame whose height is >= 0.98 before the video settles on the walk pose
+        hs = []
+        for p in frames:
+            ys_ = np.where((np.array(z10.key_magenta(Image.open(p)))[..., 3] > 128).any(1))[0]
+            hs.append(float(ys_.max() - ys_.min() + 1) if len(ys_) else 0.0)
+        r = np.array(hs) / max(hs[-1], 1)
+        idx, last = [], 0
+        for tgt in (0.55, 0.75, 0.9, 0.98):
+            cand = [t for t in range(last + 1, T) if t not in bad and r[t] >= tgt]
+            t = cand[0] if cand else T - 1
+            idx.append(t)
+            last = t
+        info = {"height_ratio": [round(float(x), 3) for x in r]}
     else:  # death
         dl = D[-1]
         thr0 = 0.15 * d0.max()
@@ -333,6 +504,9 @@ def pick_indices(action: str, frames: list[Path]) -> tuple[list[int], dict]:
         en = min([t for t in range(st + 1, T) if all(dl[u] <= thr1 for u in range(t, T))] or [T - 1])
         idx = [round(st + 1 + (en - st - 1) * k / (n - 1)) for k in range(n)]
         info = {"start": st, "end": en}
+    if action in ("death", "getup", "knock"):
+        idx, moves = unblur([int(i) for i in idx], frames, bad)
+        info["unblur"] = moves
     info.update(picked=[int(i) for i in idx], d_start=[round(float(x), 3) for x in d0],
                 stray_object_frames=bad, stray_in_picked=[int(i) for i in idx if obj[i] > 150])
     return [int(i) for i in idx], info
@@ -375,6 +549,11 @@ def post(action: str):
     walk = walk_frames_final()
     key = walk[0]
     hm, neck = z10.head_mask(key)
+    # round 13: paste only the skull, not the walk's 3-row neck stub. With the head shifted (attack lunge) the
+    # stub landed on the shirt/shoulder and showed as a green (skin-region) streak left of the neck; the frame's
+    # own neck pixels below the cut are kept instead
+    neck -= NECK_STUB
+    hm[neck:] = False
     head_px = np.where(hm)
     head_rgb = np.array(key)[head_px][:, :3].astype(np.int32)
     key_h8 = z9.measure(Image.open(ROOT / "art/ai/raw/zombie10/key.png"))["height"] * 8
@@ -385,7 +564,8 @@ def post(action: str):
         if not frames:
             continue
         idx, info = pick_indices(action, frames)
-        k0 = z10.key_magenta(Image.open(frames[0]))
+        # scale from the standing walk-0 frame: first frame for attack/hit/death, last frame for getup (starts lying)
+        k0 = z10.key_magenta(Image.open(frames[-1] if ACTIONS[action].get("start") == "deathlast" else frames[0]))
         ys = np.where(np.array(k0)[..., 3] > 128)[0]
         scale = key_h8 / (ys.max() - ys.min() + 1)
         ds = d / "ds"
@@ -485,7 +665,8 @@ def subprocess_run(cmd):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("cmd", choices=["refs", "down-gen", "down-post", "down-pick", "gen", "post", "pick", "hit-still-gen", "hit-still-post"])
+    ap.add_argument("cmd", choices=["refs", "refs13", "down-gen", "down-post", "down-pick", "gen", "post", "pick", "hit-still-gen", "hit-still-post",
+                                       "knock-gen", "knock-post"])
     ap.add_argument("arg", nargs="?")
     ap.add_argument("seed", nargs="?", type=int)
     ap.add_argument("--seeds", nargs="*", type=int, default=[1, 2, 3, 4])
@@ -493,6 +674,8 @@ def main():
     a = ap.parse_args()
     if a.cmd == "refs":
         refs()
+    elif a.cmd == "refs13":
+        refs13()
     elif a.cmd == "down-gen":
         down_gen(a.seeds)
     elif a.cmd == "down-post":
@@ -503,6 +686,10 @@ def main():
         gen(a.arg, a.seeds, a.steps)
     elif a.cmd == "post":
         post(a.arg)
+    elif a.cmd == "knock-gen":
+        knock_gen(a.seeds)
+    elif a.cmd == "knock-post":
+        knock_post()
     elif a.cmd == "hit-still-gen":
         hit_still_gen(a.seeds)
     elif a.cmd == "hit-still-post":

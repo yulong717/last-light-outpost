@@ -859,37 +859,37 @@
     {
      "dx": -1,
      "dy": 0,
-     "err": 3.2,
+     "err": 2.3,
      "locked": true
     },
     {
      "dx": -5,
      "dy": -1,
-     "err": 23.7,
+     "err": 18.1,
      "locked": true
     },
     {
      "dx": 0,
      "dy": 0,
-     "err": 37.5,
+     "err": 36.1,
      "locked": true
     },
     {
      "dx": 5,
      "dy": 2,
-     "err": 66.0,
+     "err": 58.4,
      "locked": false
     },
     {
      "dx": 1,
      "dy": 2,
-     "err": 31.9,
+     "err": 28.4,
      "locked": true
     },
     {
      "dx": 5,
      "dy": 2,
-     "err": 66.1,
+     "err": 58.3,
      "locked": false
     }
    ],
@@ -911,13 +911,13 @@
     61
    ],
    "regions": {
-    "outline": 2304,
-    "skin": 1011,
+    "outline": 2325,
+    "skin": 1001,
     "other": 243,
-    "shirt": 1296,
+    "shirt": 1305,
     "pants": 1100
    },
-   "region_px_fixed": 73,
+   "region_px_fixed": 81,
    "outside_palette": 0,
    "seconds": 30.5,
    "vram_peak_mib": 15364
@@ -942,37 +942,37 @@
      {
       "dx": 4,
       "dy": 0,
-      "err": 9.3,
+      "err": 6.6,
       "locked": true
      },
      {
       "dx": -2,
       "dy": -2,
-      "err": 27.1,
+      "err": 23.7,
       "locked": true
      },
      {
       "dx": -4,
       "dy": -3,
-      "err": 7.1,
+      "err": 2.0,
       "locked": true
      },
      {
       "dx": -4,
       "dy": -3,
-      "err": 6.2,
+      "err": 2.0,
       "locked": true
      },
      {
       "dx": -1,
       "dy": -2,
-      "err": 7.7,
+      "err": 1.7,
       "locked": true
      },
      {
       "dx": -1,
       "dy": -2,
-      "err": 7.8,
+      "err": 1.8,
       "locked": true
      }
     ],
@@ -994,13 +994,13 @@
      61
     ],
     "regions": {
-     "outline": 2349,
-     "skin": 1115,
+     "outline": 2362,
+     "skin": 1072,
      "other": 230,
-     "shirt": 1105,
+     "shirt": 1118,
      "pants": 1130
     },
-    "region_px_fixed": 58,
+    "region_px_fixed": 84,
     "outside_palette": 0,
     "seconds": 38.4,
     "vram_peak_mib": 15508
@@ -1024,37 +1024,37 @@
      {
       "dx": 1,
       "dy": 0,
-      "err": 3.4,
+      "err": 2.4,
       "locked": true
      },
      {
       "dx": -5,
       "dy": -2,
-      "err": 32.0,
+      "err": 26.0,
       "locked": true
      },
      {
       "dx": -5,
       "dy": -2,
-      "err": 31.1,
+      "err": 22.5,
       "locked": true
      },
      {
       "dx": 7,
       "dy": 2,
-      "err": 55.6,
+      "err": 52.6,
       "locked": false
      },
      {
       "dx": 0,
       "dy": 0,
-      "err": 32.6,
+      "err": 28.2,
       "locked": true
      },
      {
       "dx": 6,
       "dy": 2,
-      "err": 56.1,
+      "err": 47.6,
       "locked": false
      }
     ],
@@ -1076,13 +1076,13 @@
      61
     ],
     "regions": {
-     "outline": 2305,
-     "skin": 1109,
+     "outline": 2316,
+     "skin": 1101,
      "other": 240,
-     "shirt": 1088,
+     "shirt": 1089,
      "pants": 1124
     },
-    "region_px_fixed": 60,
+    "region_px_fixed": 69,
     "outside_palette": 0,
     "seconds": 30.5,
     "vram_peak_mib": 15364
@@ -1106,37 +1106,37 @@
      {
       "dx": -1,
       "dy": 0,
-      "err": 3.2,
+      "err": 2.3,
       "locked": true
      },
      {
       "dx": -5,
       "dy": -1,
-      "err": 23.7,
+      "err": 18.1,
       "locked": true
      },
      {
       "dx": 0,
       "dy": 0,
-      "err": 37.5,
+      "err": 36.1,
       "locked": true
      },
      {
       "dx": 5,
       "dy": 2,
-      "err": 66.0,
+      "err": 58.4,
       "locked": false
      },
      {
       "dx": 1,
       "dy": 2,
-      "err": 31.9,
+      "err": 28.4,
       "locked": true
      },
      {
       "dx": 5,
       "dy": 2,
-      "err": 66.1,
+      "err": 58.3,
       "locked": false
      }
     ],
@@ -1158,13 +1158,13 @@
      61
     ],
     "regions": {
-     "outline": 2304,
-     "skin": 1011,
+     "outline": 2325,
+     "skin": 1001,
      "other": 243,
-     "shirt": 1296,
+     "shirt": 1305,
      "pants": 1100
     },
-    "region_px_fixed": 73,
+    "region_px_fixed": 81,
     "outside_palette": 0,
     "seconds": 30.5,
     "vram_peak_mib": 15364
@@ -1188,38 +1188,38 @@
      {
       "dx": -2,
       "dy": 0,
-      "err": 26.3,
+      "err": 24.8,
       "locked": true
      },
      {
       "dx": -7,
       "dy": -1,
-      "err": 29.7,
+      "err": 28.4,
       "locked": true
      },
      {
       "dx": -7,
       "dy": -1,
-      "err": 29.2,
+      "err": 27.9,
       "locked": true
      },
      {
       "dx": 3,
       "dy": 2,
-      "err": 60.8,
+      "err": 57.0,
       "locked": false
      },
      {
       "dx": 3,
       "dy": 2,
-      "err": 61.7,
+      "err": 57.1,
       "locked": false
      },
      {
       "dx": 3,
       "dy": 2,
-      "err": 39.5,
-      "locked": true
+      "err": 41.7,
+      "locked": false
      }
     ],
     "colours": 15,
@@ -1229,7 +1229,7 @@
      57,
      53,
      53,
-     54
+     52
     ],
     "feet": [
      61,
@@ -1240,13 +1240,13 @@
      61
     ],
     "regions": {
-     "outline": 2424,
-     "skin": 1002,
-     "other": 217,
-     "shirt": 1309,
+     "outline": 2434,
+     "skin": 989,
+     "other": 215,
+     "shirt": 1313,
      "pants": 1112
     },
-    "region_px_fixed": 55,
+    "region_px_fixed": 66,
     "outside_palette": 0,
     "seconds": 30.5,
     "vram_peak_mib": 15364
@@ -1607,13 +1607,25 @@
   "pick": {
    "start": 13,
    "end": 48,
+   "unblur": [
+    {
+     "frame": 5,
+     "from": 35,
+     "to": 34,
+     "sharpness": {
+      "34": 23.9,
+      "35": 19.6,
+      "36": 17.2
+     }
+    }
+   ],
    "picked": [
     14,
     18,
     22,
     27,
     31,
-    35,
+    34,
     40,
     44,
     48
@@ -1630,39 +1642,39 @@
    "scale": 1.0,
    "heads": [
     {
-     "dx": -1,
+     "dx": 1,
+     "dy": -1,
+     "err": 38.7,
+     "locked": true
+    },
+    {
+     "dx": -5,
      "dy": -2,
-     "err": 41.9,
+     "err": 48.3,
      "locked": false
     },
     {
      "dx": -7,
-     "dy": -3,
-     "err": 54.5,
-     "locked": false
+     "dy": -2,
+     "err": 36.0,
+     "locked": true
+    },
+    {
+     "dx": -8,
+     "dy": -2,
+     "err": 37.4,
+     "locked": true
     },
     {
      "dx": -9,
-     "dy": -2,
-     "err": 45.8,
-     "locked": false
-    },
-    {
-     "dx": -10,
-     "dy": -2,
-     "err": 50.7,
-     "locked": false
-    },
-    {
-     "dx": -10,
      "dy": 0,
-     "err": 76.3,
+     "err": 53.9,
      "locked": false
     },
     {
-     "dx": 8,
+     "dx": -10,
      "dy": 8,
-     "err": 230.5,
+     "err": 175.1,
      "locked": false
     },
     {
@@ -1689,9 +1701,9 @@
     57,
     58,
     58,
-    57,
-    55,
-    35,
+    58,
+    56,
+    43,
     30,
     31,
     24
@@ -1708,13 +1720,13 @@
     61
    ],
    "regions": {
-    "outline": 3188,
-    "skin": 1291,
-    "other": 319,
-    "shirt": 1745,
-    "pants": 1429
+    "outline": 3330,
+    "skin": 1269,
+    "other": 312,
+    "shirt": 1796,
+    "pants": 1437
    },
-   "region_px_fixed": 103,
+   "region_px_fixed": 87,
    "outside_palette": 0,
    "seconds": 29.9,
    "vram_peak_mib": 15364
@@ -1723,12 +1735,24 @@
    "death_s1": {
     "start": 23,
     "end": 50,
+    "unblur": [
+     {
+      "frame": 4,
+      "from": 37,
+      "to": 38,
+      "sharpness": {
+       "36": 19.9,
+       "37": 18.2,
+       "38": 20.1
+      }
+     }
+    ],
     "picked": [
      24,
      27,
      30,
      34,
-     37,
+     38,
      40,
      44,
      47,
@@ -1748,49 +1772,49 @@
      {
       "dx": -10,
       "dy": 7,
-      "err": 77.1,
+      "err": 76.7,
       "locked": false
      },
      {
       "dx": -10,
       "dy": 8,
-      "err": 101.8,
+      "err": 107.5,
       "locked": false
      },
      {
       "dx": -10,
-      "dy": 8,
-      "err": 82.7,
+      "dy": 7,
+      "err": 85.1,
       "locked": false
      },
      {
       "dx": -7,
       "dy": 6,
-      "err": 83.5,
+      "err": 78.8,
       "locked": false
      },
      {
-      "dx": -6,
+      "dx": 5,
       "dy": 8,
-      "err": 98.2,
+      "err": 162.8,
       "locked": false
      },
      {
-      "dx": 3,
+      "dx": -2,
       "dy": 8,
-      "err": 215.3,
+      "err": 223.3,
       "locked": false
      },
      {
       "dx": -7,
       "dy": 8,
-      "err": 225.7,
+      "err": 233.7,
       "locked": false
      },
      {
-      "dx": 3,
+      "dx": 9,
       "dy": 8,
-      "err": 239.3,
+      "err": 252.8,
       "locked": false
      },
      {
@@ -1806,7 +1830,7 @@
      57,
      57,
      57,
-     53,
+     43,
      39,
      37,
      33,
@@ -1824,13 +1848,13 @@
      61
     ],
     "regions": {
-     "outline": 3264,
-     "skin": 1095,
-     "other": 312,
-     "shirt": 1747,
-     "pants": 1412
+     "outline": 3280,
+     "skin": 1099,
+     "other": 316,
+     "shirt": 1731,
+     "pants": 1413
     },
-    "region_px_fixed": 167,
+    "region_px_fixed": 161,
     "outside_palette": 0,
     "seconds": 36.5,
     "vram_peak_mib": 15524
@@ -1838,13 +1862,25 @@
    "death_s2": {
     "start": 13,
     "end": 48,
+    "unblur": [
+     {
+      "frame": 5,
+      "from": 35,
+      "to": 34,
+      "sharpness": {
+       "34": 23.9,
+       "35": 19.6,
+       "36": 17.2
+      }
+     }
+    ],
     "picked": [
      14,
      18,
      22,
      27,
      31,
-     35,
+     34,
      40,
      44,
      48
@@ -1861,39 +1897,39 @@
     "scale": 1.0,
     "heads": [
      {
-      "dx": -1,
+      "dx": 1,
+      "dy": -1,
+      "err": 38.7,
+      "locked": true
+     },
+     {
+      "dx": -5,
       "dy": -2,
-      "err": 41.9,
+      "err": 48.3,
       "locked": false
      },
      {
       "dx": -7,
-      "dy": -3,
-      "err": 54.5,
-      "locked": false
+      "dy": -2,
+      "err": 36.0,
+      "locked": true
+     },
+     {
+      "dx": -8,
+      "dy": -2,
+      "err": 37.4,
+      "locked": true
      },
      {
       "dx": -9,
-      "dy": -2,
-      "err": 45.8,
-      "locked": false
-     },
-     {
-      "dx": -10,
-      "dy": -2,
-      "err": 50.7,
-      "locked": false
-     },
-     {
-      "dx": -10,
       "dy": 0,
-      "err": 76.3,
+      "err": 53.9,
       "locked": false
      },
      {
-      "dx": 8,
+      "dx": -10,
       "dy": 8,
-      "err": 230.5,
+      "err": 175.1,
       "locked": false
      },
      {
@@ -1920,9 +1956,9 @@
      57,
      58,
      58,
-     57,
-     55,
-     35,
+     58,
+     56,
+     43,
      30,
      31,
      24
@@ -1939,13 +1975,13 @@
      61
     ],
     "regions": {
-     "outline": 3188,
-     "skin": 1291,
-     "other": 319,
-     "shirt": 1745,
-     "pants": 1429
+     "outline": 3330,
+     "skin": 1269,
+     "other": 312,
+     "shirt": 1796,
+     "pants": 1437
     },
-    "region_px_fixed": 103,
+    "region_px_fixed": 87,
     "outside_palette": 0,
     "seconds": 29.9,
     "vram_peak_mib": 15364
@@ -1953,6 +1989,7 @@
    "death_s3": {
     "start": 18,
     "end": 50,
+    "unblur": [],
     "picked": [
      19,
      23,
@@ -1979,31 +2016,31 @@
      {
       "dx": 0,
       "dy": -1,
-      "err": 51.4,
+      "err": 47.9,
       "locked": false
      },
      {
       "dx": -6,
       "dy": 0,
-      "err": 70.5,
+      "err": 67.0,
       "locked": false
      },
      {
       "dx": -10,
       "dy": 0,
-      "err": 90.1,
+      "err": 84.2,
       "locked": false
      },
      {
       "dx": -10,
       "dy": 8,
-      "err": 130.5,
+      "err": 145.9,
       "locked": false
      },
      {
       "dx": -10,
       "dy": 8,
-      "err": 171.4,
+      "err": 187.8,
       "locked": false
      },
      {
@@ -2069,6 +2106,7 @@
    "death_s4": {
     "start": 23,
     "end": 43,
+    "unblur": [],
     "picked": [
      24,
      26,
@@ -2097,25 +2135,25 @@
      {
       "dx": -10,
       "dy": 8,
-      "err": 129.0,
+      "err": 138.0,
       "locked": false
      },
      {
       "dx": -10,
       "dy": 8,
-      "err": 164.4,
+      "err": 178.4,
       "locked": false
      },
      {
       "dx": -10,
       "dy": 8,
-      "err": 161.4,
+      "err": 177.9,
       "locked": false
      },
      {
       "dx": -10,
       "dy": 8,
-      "err": 191.4,
+      "err": 212.7,
       "locked": false
      },
      {
@@ -2137,9 +2175,9 @@
       "locked": false
      },
      {
-      "dx": 4,
-      "dy": 8,
-      "err": 249.9,
+      "dx": -10,
+      "dy": -7,
+      "err": 255.0,
       "locked": false
      },
      {
@@ -2288,5 +2326,819 @@
    ]
   },
   "down_prompt": "Redraw <Picture 1> as a clean pixel art game sprite for a 2D side-scrolling zombie game: the dead fog zombie from <Picture 2> lying flat on its back on the ground, seen from the side, head on the LEFT, feet on the RIGHT, face up, arms lying limp beside the body, legs straight, exactly the position and size of the grey figure in <Picture 1>. Keep its grey-green rotting skin, small head (3.5 heads tall), sunken dark eyes, torn plain light grey shirt (neutral grey), dark blue-grey trousers, dark worn shoes. Draw it in exactly the pixel art style of <Picture 3>: light from the upper left, 3 to 4 shading steps, a 1 pixel near-black outline, muted grey-green colours. Plain solid magenta background, no ground, no floor line, no cast shadow, no blood, no text."
+ },
+ "react": {
+  "round": 13,
+  "order": "rise, fall, bounce, down, getup x4 (game REACT_FRAMES)",
+  "rise_fall_bounce": {
+   "method": "H3 Image stills, art/ai/workflows/h3_image_edit_3ref.json 1024x1024; Picture 1 = grey silhouette layout (walk frame 0 rotated 55 / 100 degrees, bounce = death frame 8), Picture 2 = walk frame 0 x16, Picture 3 = anchor",
+   "prompt": "Redraw the grey silhouette in <Picture 1> as the fog zombie from <Picture 2>, as a clean pixel art game sprite for a 2D side-scrolling zombie game, at exactly the position, size and angle of the silhouette: {pose}. Keep the character of <Picture 2> (small head 3.5 heads tall, grey-green rotting skin, sunken dark eyes, torn plain light grey shirt, dark blue-grey trousers, dark shoes), seen from the side. Draw it in exactly the pixel art style of <Picture 3>: light from the upper left, 3 to 4 shading steps, a 1 pixel near-black outline. Only the zombie: no weapon, no bat, no attacker, no object, no ground, no floor line, no cast shadow, no effects, no blood, no motion lines. Plain solid magenta background, no text.",
+   "poses": {
+    "rise": "it has just been knocked off its feet by a heavy blow from the right: the whole body is in the air leaning far backward to the left, about 30 degrees, head thrown back, arms flung forward and up, legs kicked forward, both feet clearly off the ground",
+    "fall": "it is flying backward through the air almost horizontal, back toward the ground, head on the left slightly lower than the feet on the right, arms and legs flung up, falling onto its back, not touching the ground yet",
+    "bounce": "it has just slammed onto its back and bounces slightly: lying almost flat with the head on the left and the feet on the right, the back just above the ground, legs and arms jolted upward, head jerked up"
+   },
+   "lift_px": {
+    "rise": 3,
+    "fall": 5,
+    "bounce": 2
+   },
+   "seeds": {
+    "rise": 3,
+    "fall": 2,
+    "bounce": 4
+   },
+   "all_seeds": {
+    "rise_s1": {
+     "w": 48,
+     "h": 57,
+     "bottom": 58,
+     "regions": {
+      "outline": 416,
+      "skin": 226,
+      "other": 24,
+      "shirt": 151,
+      "pants": 186
+     },
+     "region_px_fixed": 13,
+     "outside_palette": 0,
+     "stray_object": 44
+    },
+    "rise_s2": {
+     "w": 46,
+     "h": 56,
+     "bottom": 58,
+     "regions": {
+      "outline": 428,
+      "skin": 252,
+      "other": 7,
+      "shirt": 102,
+      "pants": 173
+     },
+     "region_px_fixed": 7,
+     "outside_palette": 0,
+     "stray_object": 45
+    },
+    "rise_s3": {
+     "w": 48,
+     "h": 58,
+     "bottom": 58,
+     "regions": {
+      "outline": 453,
+      "skin": 210,
+      "other": 22,
+      "shirt": 128,
+      "pants": 200
+     },
+     "region_px_fixed": 22,
+     "outside_palette": 0,
+     "stray_object": 33
+    },
+    "rise_s4": {
+     "w": 48,
+     "h": 58,
+     "bottom": 58,
+     "regions": {
+      "outline": 440,
+      "skin": 248,
+      "other": 29,
+      "shirt": 116,
+      "pants": 190
+     },
+     "region_px_fixed": 3,
+     "outside_palette": 0,
+     "stray_object": 54
+    },
+    "fall_s1": {
+     "w": 61,
+     "h": 43,
+     "bottom": 56,
+     "regions": {
+      "outline": 443,
+      "skin": 208,
+      "shirt": 147,
+      "other": 40,
+      "pants": 180
+     },
+     "region_px_fixed": 6,
+     "outside_palette": 0,
+     "stray_object": 74
+    },
+    "fall_s2": {
+     "w": 59,
+     "h": 44,
+     "bottom": 56,
+     "regions": {
+      "outline": 436,
+      "skin": 205,
+      "other": 33,
+      "pants": 162,
+      "shirt": 138
+     },
+     "region_px_fixed": 6,
+     "outside_palette": 0,
+     "stray_object": 0
+    },
+    "fall_s3": {
+     "w": 61,
+     "h": 43,
+     "bottom": 56,
+     "regions": {
+      "outline": 456,
+      "skin": 216,
+      "other": 36,
+      "shirt": 141,
+      "pants": 168
+     },
+     "region_px_fixed": 12,
+     "outside_palette": 0,
+     "stray_object": 61
+    },
+    "fall_s4": {
+     "w": 61,
+     "h": 43,
+     "bottom": 56,
+     "regions": {
+      "outline": 422,
+      "skin": 219,
+      "other": 35,
+      "shirt": 164,
+      "pants": 178
+     },
+     "region_px_fixed": 10,
+     "outside_palette": 0,
+     "stray_object": 69
+    },
+    "bounce_s1": {
+     "w": 48,
+     "h": 24,
+     "bottom": 59,
+     "regions": {
+      "outline": 282,
+      "pants": 99,
+      "skin": 118,
+      "shirt": 50,
+      "other": 2
+     },
+     "region_px_fixed": 10,
+     "outside_palette": 0,
+     "stray_object": 0
+    },
+    "bounce_s2": {
+     "w": 58,
+     "h": 24,
+     "bottom": 59,
+     "regions": {
+      "outline": 384,
+      "skin": 195,
+      "pants": 130,
+      "other": 16,
+      "shirt": 100
+     },
+     "region_px_fixed": 14,
+     "outside_palette": 0,
+     "stray_object": 70
+    },
+    "bounce_s3": {
+     "w": 56,
+     "h": 24,
+     "bottom": 59,
+     "regions": {
+      "outline": 386,
+      "skin": 197,
+      "other": 20,
+      "pants": 173,
+      "shirt": 97
+     },
+     "region_px_fixed": 0,
+     "outside_palette": 0,
+     "stray_object": 85
+    },
+    "bounce_s4": {
+     "w": 55,
+     "h": 26,
+     "bottom": 59,
+     "regions": {
+      "outline": 327,
+      "skin": 160,
+      "other": 18,
+      "pants": 119,
+      "shirt": 71
+     },
+     "region_px_fixed": 0,
+     "outside_palette": 0,
+     "stray_object": 4
+    }
+   }
+  },
+  "down": "death.png frame 8",
+  "getup": {
+   "seed": 4,
+   "prompt": "Pixel art game sprite animation of the fog zombie from <Picture 1>: keep its grey-green skin, small head, torn light grey shirt, dark blue-grey trousers, dark shoes, colours and near-black outlines exactly. Three-quarter view facing right, fixed camera, no zoom, no pan, full body visible at all times. The background stays plain solid magenta in every frame. The zombie lies flat on its back on the ground line, head on the left, feet on the right. It slowly comes back to life: it pushes its upper body up on its arms, sits up, pulls its legs in and gets onto one knee, then stands up into its hunched walking stance with both arms reaching forward to the right. Slow, heavy, jerky zombie movement. Only the zombie, nothing else appears. No effects, no blood. Flat colors.",
+   "workflow": "art/ai/workflows/h3_video_i2v.json 512x512, 56 frames, 8-step LoRA, 8 steps",
+   "first_last": "death frame 8 -> walk frame 0",
+   "pick": {
+    "height_ratio": [
+     0.429,
+     0.429,
+     0.429,
+     0.429,
+     0.429,
+     0.429,
+     0.429,
+     0.429,
+     0.429,
+     0.429,
+     0.429,
+     0.429,
+     0.429,
+     0.429,
+     0.518,
+     0.513,
+     0.607,
+     0.609,
+     0.643,
+     0.638,
+     0.694,
+     0.699,
+     0.723,
+     0.719,
+     0.792,
+     0.79,
+     0.815,
+     0.817,
+     0.788,
+     0.786,
+     0.786,
+     0.786,
+     0.786,
+     0.786,
+     0.786,
+     0.786,
+     0.777,
+     0.772,
+     0.786,
+     0.786,
+     0.817,
+     0.817,
+     0.9,
+     0.897,
+     0.929,
+     0.929,
+     0.933,
+     0.933,
+     0.929,
+     0.929,
+     0.922,
+     0.922,
+     0.933,
+     0.931,
+     1.0,
+     1.0
+    ],
+    "unblur": [],
+    "picked": [
+     16,
+     24,
+     44,
+     54
+    ],
+    "stray_object_frames": [],
+    "stray_in_picked": [],
+    "scale": 1.0,
+    "heads": [
+     {
+      "dx": -10,
+      "dy": -7,
+      "err": 255.0,
+      "locked": false
+     },
+     {
+      "dx": -10,
+      "dy": 8,
+      "err": 166.8,
+      "locked": false
+     },
+     {
+      "dx": 2,
+      "dy": 4,
+      "err": 19.5,
+      "locked": true
+     },
+     {
+      "dx": 6,
+      "dy": 0,
+      "err": 2.2,
+      "locked": true
+     }
+    ],
+    "colours": 16,
+    "heights": [
+     34,
+     43,
+     52,
+     56
+    ],
+    "feet": [
+     61,
+     61,
+     61,
+     61
+    ],
+    "regions": {
+     "outline": 1454,
+     "skin": 692,
+     "other": 107,
+     "shirt": 745,
+     "pants": 687
+    },
+    "region_px_fixed": 54,
+    "outside_palette": 0,
+    "seconds": 29.5,
+    "vram_peak_mib": 15330
+   },
+   "all_seeds": {
+    "getup_s1": {
+     "height_ratio": [
+      0.429,
+      0.429,
+      0.429,
+      0.429,
+      0.429,
+      0.429,
+      0.429,
+      0.429,
+      0.431,
+      0.52,
+      0.52,
+      0.511,
+      0.603,
+      0.598,
+      0.596,
+      0.658,
+      0.656,
+      0.656,
+      0.73,
+      0.721,
+      0.721,
+      0.759,
+      0.761,
+      0.759,
+      0.817,
+      0.812,
+      0.815,
+      0.815,
+      0.812,
+      0.808,
+      0.804,
+      0.799,
+      0.799,
+      0.79,
+      0.79,
+      0.792,
+      0.797,
+      0.795,
+      0.833,
+      0.837,
+      0.839,
+      0.815,
+      0.817,
+      0.812,
+      0.848,
+      0.85,
+      0.848,
+      0.857,
+      0.853,
+      0.853,
+      0.96,
+      0.958,
+      0.96,
+      1.0,
+      1.0,
+      1.0
+     ],
+     "unblur": [],
+     "picked": [
+      12,
+      21,
+      50,
+      53
+     ],
+     "stray_object_frames": [],
+     "stray_in_picked": [],
+     "scale": 1.0,
+     "heads": [
+      {
+       "dx": -10,
+       "dy": -7,
+       "err": 255.0,
+       "locked": false
+      },
+      {
+       "dx": -10,
+       "dy": 8,
+       "err": 189.2,
+       "locked": false
+      },
+      {
+       "dx": -1,
+       "dy": 2,
+       "err": 34.9,
+       "locked": true
+      },
+      {
+       "dx": -1,
+       "dy": 0,
+       "err": 2.3,
+       "locked": true
+      }
+     ],
+     "colours": 16,
+     "heights": [
+      32,
+      42,
+      54,
+      56
+     ],
+     "feet": [
+      61,
+      61,
+      61,
+      61
+     ],
+     "regions": {
+      "outline": 1458,
+      "skin": 784,
+      "other": 145,
+      "shirt": 761,
+      "pants": 709
+     },
+     "region_px_fixed": 43,
+     "outside_palette": 0,
+     "seconds": 42.7,
+     "vram_peak_mib": 15536
+    },
+    "getup_s2": {
+     "height_ratio": [
+      0.429,
+      0.429,
+      0.431,
+      0.431,
+      0.431,
+      0.433,
+      0.433,
+      0.433,
+      0.431,
+      0.433,
+      0.52,
+      0.522,
+      0.52,
+      0.522,
+      0.652,
+      0.652,
+      0.746,
+      0.746,
+      0.772,
+      0.772,
+      0.768,
+      0.768,
+      0.79,
+      0.79,
+      0.79,
+      0.79,
+      0.79,
+      0.79,
+      0.792,
+      0.792,
+      0.783,
+      0.783,
+      0.786,
+      0.786,
+      0.848,
+      0.85,
+      0.853,
+      0.926,
+      0.929,
+      0.929,
+      0.938,
+      0.938,
+      0.938,
+      0.938,
+      0.938,
+      0.938,
+      0.938,
+      0.938,
+      0.935,
+      0.935,
+      1.0,
+      0.998,
+      0.987,
+      0.982,
+      1.0,
+      1.0
+     ],
+     "unblur": [],
+     "picked": [
+      14,
+      18,
+      37,
+      50
+     ],
+     "stray_object_frames": [],
+     "stray_in_picked": [],
+     "scale": 1.0,
+     "heads": [
+      {
+       "dx": -10,
+       "dy": 8,
+       "err": 248.7,
+       "locked": false
+      },
+      {
+       "dx": -8,
+       "dy": 8,
+       "err": 142.8,
+       "locked": false
+      },
+      {
+       "dx": 0,
+       "dy": 4,
+       "err": 32.4,
+       "locked": true
+      },
+      {
+       "dx": 0,
+       "dy": 0,
+       "err": 6.5,
+       "locked": true
+      }
+     ],
+     "colours": 16,
+     "heights": [
+      36,
+      43,
+      52,
+      56
+     ],
+     "feet": [
+      61,
+      61,
+      61,
+      61
+     ],
+     "regions": {
+      "outline": 1336,
+      "skin": 606,
+      "other": 143,
+      "shirt": 706,
+      "pants": 672
+     },
+     "region_px_fixed": 44,
+     "outside_palette": 0,
+     "seconds": 29.8,
+     "vram_peak_mib": 15330
+    },
+    "getup_s3": {
+     "height_ratio": [
+      0.429,
+      0.429,
+      0.429,
+      0.429,
+      0.429,
+      0.429,
+      0.429,
+      0.429,
+      0.429,
+      0.429,
+      0.431,
+      0.431,
+      0.429,
+      0.694,
+      0.688,
+      0.685,
+      0.683,
+      0.763,
+      0.763,
+      0.759,
+      0.737,
+      0.737,
+      0.737,
+      0.835,
+      0.83,
+      0.828,
+      0.808,
+      0.812,
+      0.812,
+      0.797,
+      0.801,
+      0.804,
+      0.797,
+      0.797,
+      0.795,
+      0.804,
+      0.804,
+      0.804,
+      0.824,
+      0.826,
+      0.828,
+      0.877,
+      0.879,
+      0.877,
+      0.877,
+      0.938,
+      0.935,
+      1.011,
+      1.009,
+      1.013,
+      1.022,
+      1.013,
+      1.018,
+      1.004,
+      1.0,
+      1.0
+     ],
+     "unblur": [],
+     "picked": [
+      13,
+      17,
+      45,
+      47
+     ],
+     "stray_object_frames": [],
+     "stray_in_picked": [],
+     "scale": 1.0,
+     "heads": [
+      {
+       "dx": -10,
+       "dy": 8,
+       "err": 241.9,
+       "locked": false
+      },
+      {
+       "dx": -10,
+       "dy": 8,
+       "err": 176.9,
+       "locked": false
+      },
+      {
+       "dx": 0,
+       "dy": 4,
+       "err": 27.9,
+       "locked": true
+      },
+      {
+       "dx": 1,
+       "dy": 0,
+       "err": 29.5,
+       "locked": true
+      }
+     ],
+     "colours": 16,
+     "heights": [
+      38,
+      42,
+      52,
+      56
+     ],
+     "feet": [
+      61,
+      61,
+      61,
+      61
+     ],
+     "regions": {
+      "outline": 1465,
+      "skin": 821,
+      "other": 114,
+      "shirt": 716,
+      "pants": 727
+     },
+     "region_px_fixed": 60,
+     "outside_palette": 0,
+     "seconds": 29.6,
+     "vram_peak_mib": 15330
+    },
+    "getup_s4": {
+     "height_ratio": [
+      0.429,
+      0.429,
+      0.429,
+      0.429,
+      0.429,
+      0.429,
+      0.429,
+      0.429,
+      0.429,
+      0.429,
+      0.429,
+      0.429,
+      0.429,
+      0.429,
+      0.518,
+      0.513,
+      0.607,
+      0.609,
+      0.643,
+      0.638,
+      0.694,
+      0.699,
+      0.723,
+      0.719,
+      0.792,
+      0.79,
+      0.815,
+      0.817,
+      0.788,
+      0.786,
+      0.786,
+      0.786,
+      0.786,
+      0.786,
+      0.786,
+      0.786,
+      0.777,
+      0.772,
+      0.786,
+      0.786,
+      0.817,
+      0.817,
+      0.9,
+      0.897,
+      0.929,
+      0.929,
+      0.933,
+      0.933,
+      0.929,
+      0.929,
+      0.922,
+      0.922,
+      0.933,
+      0.931,
+      1.0,
+      1.0
+     ],
+     "unblur": [],
+     "picked": [
+      16,
+      24,
+      44,
+      54
+     ],
+     "stray_object_frames": [],
+     "stray_in_picked": [],
+     "scale": 1.0,
+     "heads": [
+      {
+       "dx": -10,
+       "dy": -7,
+       "err": 255.0,
+       "locked": false
+      },
+      {
+       "dx": -10,
+       "dy": 8,
+       "err": 166.8,
+       "locked": false
+      },
+      {
+       "dx": 2,
+       "dy": 4,
+       "err": 19.5,
+       "locked": true
+      },
+      {
+       "dx": 6,
+       "dy": 0,
+       "err": 2.2,
+       "locked": true
+      }
+     ],
+     "colours": 16,
+     "heights": [
+      34,
+      43,
+      52,
+      56
+     ],
+     "feet": [
+      61,
+      61,
+      61,
+      61
+     ],
+     "regions": {
+      "outline": 1454,
+      "skin": 692,
+      "other": 107,
+      "shirt": 745,
+      "pants": 687
+     },
+     "region_px_fixed": 54,
+     "outside_palette": 0,
+     "seconds": 29.5,
+     "vram_peak_mib": 15330
+    }
+   }
+  }
  }
 }

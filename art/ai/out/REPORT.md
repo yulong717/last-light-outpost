@@ -56,6 +56,81 @@ VRAM 峰值為 `nvidia-smi` 整卡用量（含桌面）。全程沒有 OOM。
 - 疊圖：`templates_contact.png`、`overlay_check.png`。
 - 失敗：`walk_pass_a`（過渡姿勢）兩個 seed 都畫成大步，沒有收腿；之後改提示詞重做。灰色人台的近腳／遠腳不易區分，contact_a / contact_b 看起來差不多。
 
+## 第十三輪：擊飛反應 8 格、death／attack 修正、26 格整合 sheet
+
+> 補齊一般霧屍 M 版，讓它可以整組換進遊戲。工具：`tools/art/ai/build_zombie12.py`（新增 knock、getup、refs13）、`tools/art/ai/build_zombie13.py`（react 組裝、26 格 sheet）。規格、調色盤、分區、頭部處理都沿用第十二輪；所有新影格同樣對到 walk 的 16 色。
+
+### 1. 擊飛反應 react（8 格，對應遊戲 REACT_FRAMES）
+
+| 格 | 名稱 | 做法 | 選定 |
+| --- | --- | --- | --- |
+| 0 | rise | H3 Image 靜態：版面＝walk 第 0 格剪影往後轉 55°，腳離地 3 px | s3 |
+| 1 | fall | H3 Image 靜態：剪影轉 100°（接近水平、頭在左），離地 5 px | s2 |
+| 2 | bounce | H3 Image 靜態：版面＝death 最後一格剪影，離地 2 px，腿和手往上彈 | s4 |
+| 3 | down | **直接用 death 第 8 格**（躺平、頭在左、背貼 y=61） | — |
+| 4–7 | getup | H3 影片：首幀＝death 第 8 格、尾幀＝walk 第 0 格，4 seed | s4 |
+
+- **rise／fall／bounce 為什麼用靜態圖**：第十二輪的 hit、death 影片幾乎每個 seed 都畫出打人的物件，擊飛也是「被打」，所以這三格直接用靜態姿勢。剪影版面讓 H3 照角度和位置畫，提示詞寫明只有殭屍、沒有武器。物件偵測值（乾淨約 0–85，有物件時是幾百）12 張都正常，沒有畫出物件。
+- **getup 挑格**：用人物高度相對最後站姿的比例挑。≥0.55 撐起、≥0.75 坐起、≥0.9 單膝跪、≥0.98 站起。
+  - s4 挑到影片第 16、24、44、54 幀，高度 34／43／52／56。
+  - 第 2 格是清楚的單膝跪，第 3 格接近 walk 第 0 格；第 2、3 格的頭是 walk 原本那組像素。
+- 對照表：
+  - `art/ai/out/zombie_m/react_knock_seeds_x3.png`（rise／fall／bounce 各 4 seed，每張右邊是分區）
+  - `art/ai/out/zombie_m/getup_seeds_x3.png`
+- 輸出：`react.png/json/gif`（10 fps、不循環）、`contact_react.png`、`react_regions_x4.png`。
+- 分區（8 格合計）：外框 3038、上衣 1276、褲子 1341、皮膚 1393、其他 212。0 色超出 master.gpl。
+
+![react](../out/zombie_m/contact_react.png)
+
+### 2. death 第 5 格頭糊成一塊 → 改挑相鄰的清楚幀
+
+- 原因：第 5 格挑到影片第 35 幀，正好是倒下最快的一幀，H3 自己就畫成動態模糊。
+- 做法（新增 `unblur`）：death、getup 中間的每一格，可以在前後各 1 幀裡換成最清楚的一幀。清晰度是人物內部相鄰像素的平均色差，至少要清楚 10% 才換。
+- 結果：第 5 格從第 35 幀換成第 34 幀（清晰度 19.6 → 23.9），頭和五官清楚了。其他格沒變。
+
+### 3. attack 第 1–2 格脖子左邊的綠色（皮膚區）像素
+
+查到兩個原因：
+1. **walk 頭的「脖子殘段」被貼到肩膀上**（已修）。貼頭用的是 walk 第 0 格頸部以上的像素，最下面 3 列其實是脖子和領口的皮膚。attack 前撲時頭被移到左邊 5 px，這 3 列就落在肩膀的上衣上，變成一條斜的綠線。
+   - 修法：貼頭時去掉最下面 3 列，只貼頭殼；脖子保留該格自己畫的。
+   - 第 2 格的綠線因此消失。
+2. **H3 自己把領口露出的脖子／胸口畫成灰綠色**（沒有修）。第 1 格還剩的那幾個像素，在原始影格裡就是皮膚色（飽和度 0.10–0.15，色相在綠色區）。
+   - 這和手臂皮膚的飽和度範圍（0.11–0.17）重疊，用顏色規則分不開，硬改會把手臂也改掉。
+   - 照規則它確實是皮膚，遊戲換膚色時會跟著變，看起來像露出的脖子。
+   - 若要清掉只能手修，或在 attack 第 1 格加一個「領口以下、軀幹範圍內一律算上衣」的區域遮罩。
+
+舊版保留在 `art/ai/raw/zombie12/attack_r12.png`、`death_r12.png` 對照。
+
+### 4. 26 格整合 sheet（`art/ai/out/zombie_m/zombie_basic_26.png`）
+
+64×64 × 26 格，**腳底 y=62**（全部往下移 1 px，對齊遊戲 ZombieComposer 的 FOOT_ROW），16 色，0 色超出 master.gpl。
+
+| 格 | 內容 | 來源 |
+| --- | --- | --- |
+| 0–3 | walk | walk.png 第 0、2、4、6 格 |
+| 4–5 | attack | attack.png 第 3、5 格（往右伸最遠，x 到 62） |
+| 6–14 | death | death.png 第 0–8 格 |
+| 15–17 | hit | hit.png 第 0–2 格 |
+| 18 | rise | react 第 0 格 |
+| 19 | fall | react 第 1 格 |
+| 20 | bounce | react 第 2 格 |
+| 21 | down | react 第 3 格（＝death 第 8 格） |
+| 22–25 | getup | react 第 4–7 格 |
+
+- `zombie_basic_26.json`：每段的格號範圍、每格的來源、每格最低像素列（站姿、躺姿都是 62；rise 59、fall 57、bounce 60 是離地）。
+- `contact_zombie_basic_26.png`：3 倍對照表，綠線是 y=62。
+- 另存完整原檔（同樣 y=62）：`zombie_basic_walk8.png`（8 格 walk）、`zombie_basic_attack6.png`（6 格 attack）。
+
+![26 格](../out/zombie_m/contact_zombie_basic_26.png)
+
+### 問題與注意
+
+- **bounce 比 down 小一號**：靜態圖的人物比例是 H3 自己定的，bounce 寬 55、down 寬 56–64，播放時躺下那一刻會稍微「長大」。
+- **rise 很高**：往後仰 55° 加雙手往上，高 56，頭頂到 y=2（26 格 sheet 裡）。沒有被切到。
+- **getup 第 0 格的上衣有幾塊綠色**：躺姿時 H3 把上衣陰影畫成偏綠，分區清雜點只清了小塊。
+- **attack 4–5 格用的是咬的兩格**：前撲最遠的剛好是第 3、5 格（張嘴咬），這兩格的頭是生成的，不是 walk 那組像素。
+- 接進遊戲時，頭飾錨點（HEAD_ANCHORS）仍要依新圖重量；腳底已經是 62，不用再改 FOOT_ROW。
+
 ## 第十二輪：一般霧屍 M 版 attack（抓咬 6 格）、hit（受擊 3 格）、death（倒地 9 格）
 
 > 基準：第十輪 walk 第 0 格（駝背、雙手前伸）＋第九輪站姿 seed 3。工具：`tools/art/ai/build_zombie12.py`；原始檔 `art/ai/raw/zombie12/`（不進 git）。規格同第十輪：腳底 y=61、3/4 側面、master.gpl、ZombieComposer 分區。**三個動作的顏色都對到 walk 的同一組 16 色**（逐像素對同區最近色），所以 walk＋三個動作合計也只有 16 色。
