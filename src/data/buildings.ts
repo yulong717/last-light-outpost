@@ -154,3 +154,14 @@ export function investedCost(kind: BuildingKind, level: number): number {
   for (let lv = 2; lv <= level; lv++) sum += c * (lv - 1);
   return sum;
 }
+
+let activeIds: string[] | null = null;
+
+/** 這個據點開放的槽位（窄巷只有高台和走道上的兩格）；null = 全部 */
+export function setActiveSlots(ids: string[] | null): void {
+  activeIds = ids;
+}
+
+export function activeSlots(): SlotDef[] {
+  return activeIds ? SLOTS.filter((s) => activeIds!.includes(s.id)) : SLOTS;
+}

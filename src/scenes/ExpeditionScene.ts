@@ -58,7 +58,7 @@ export class ExpeditionScene extends Phaser.Scene {
   create(): void {
     const exp = Expedition.current;
     if (!exp) {
-      this.scene.start('Defense', {} as DefenseSceneData);
+      this.scene.start(GameState.data.route ? 'ExploreMap' : 'Defense', {} as DefenseSceneData);
       return;
     }
     this.exp = exp;
@@ -519,6 +519,7 @@ export class ExpeditionScene extends Phaser.Scene {
   private leave(): void {
     AudioManager.ui('confirm');
     this.cameras.main.fadeOut(300, 0, 0, 0);
-    this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => this.scene.start('Defense', {} as DefenseSceneData));
+    // 路線圖模式：打完回路線圖繼續走（時間到了會在那裡天黑）
+    this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => this.scene.start(GameState.data.route ? 'ExploreMap' : 'Defense', {} as DefenseSceneData));
   }
 }

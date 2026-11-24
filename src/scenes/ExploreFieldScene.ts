@@ -38,7 +38,7 @@ import { PropSystem, type Interaction } from '../scenery/PropSystem';
 import { fieldScenery } from '../scenery/locations';
 import type { PlacedProp, SceneryResult } from '../scenery/SceneryBuilder';
 import type { PrologueStage, StageHint } from '../data/prologue';
-import { applyHiRes, setViewZoom } from '../render/RenderScale';
+import { addUiCamera, setViewZoom, splitUiObjects } from '../render/RenderScale';
 
 export interface FieldResult {
   /** clean：潛入全程沒被發現；win：達成目標；failed：保護目標陣亡；down：主角倒下 */
@@ -65,8 +65,7 @@ const SINGLE_VIEW_CY = 226;
  * 前面再加一排近景剪影——像窄走廊、窄巷，和 2.5D 的寬闊場地分得出來。
  */
 const SINGLE_DEPTH_SHIFT = 46;
-/** HUD、提示、畫面邊緣特效：畫在不拉近的鏡頭上（scrollFactor 0 且 depth ≥ 這個值） */
-const UI_DEPTH = 85;
+
 /** 潛入：霧屍基本視野 */
 const VISION = 120;
 const VISION_DY = 30;
@@ -226,8 +225,7 @@ export class ExploreFieldScene extends Phaser.Scene {
       setViewZoom(cam, SINGLE_ZOOM);
       cam.startFollow(this.player.sprite, true, 0.12, 1, 0, SINGLE_LANE_Y - SINGLE_VIEW_CY);
       cam.setDeadzone(100, 0);
-      this.uiCam = this.cameras.add(0, 0, cam.width, cam.height);
-      applyHiRes(this.uiCam);
+      this.uiCam = addUiCamera(this);
       this.uiCam.fadeIn(250, 0, 0, 0);
     } else {
       cam.startFollow(this.player.sprite, true, 0.12, 0);
@@ -1051,14 +1049,7 @@ export class ExploreFieldScene extends Phaser.Scene {
 
   /** 單軸模式：HUD 類物件只給不縮放的鏡頭畫，其他（世界、背景、霧）只給拉近的主鏡頭畫 */
   private splitCameras(): void {
-    const ui = this.uiCam;
-    if (!ui) return;
-    const main = this.cameras.main;
-    for (const o of this.children.list) {
-      const g = o as Phaser.GameObjects.GameObject & { scrollFactorX?: number; depth?: number };
-      const isUi = g.scrollFactorX === 0 && (g.depth ?? 0) >= UI_DEPTH;
-      g.cameraFilter = isUi ? main.id : ui.id;
-    }
+    if (this.uiCam) splitUiObjects(this, this.uiCam);
   }
 
   private context(): ZombieContext {

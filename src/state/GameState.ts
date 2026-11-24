@@ -1,7 +1,8 @@
 import { MAX_DEPLOYED, crewReady, deployedCrew, makeCrewMember, upgradeCrewMember, type CompanionRole, type CrewMember } from '../data/companions';
 import { randomSeed } from '../utils/rng';
 import { BACKGROUND_BY_ID, canWield } from '../data/crewBody';
-import { BARRICADE_LEVELS, ECONOMY, type BuildingKind } from '../data/buildings';
+import { BARRICADE_LEVELS, BUILDINGS, ECONOMY, type BuildingKind } from '../data/buildings';
+import { DAY_HOURS, getNode } from '../data/route';
 import { EXPLORE_TIME, SUPPLIES, ZONES, INTEL, type IntelKind, type Loot, type SupplyId } from '../data/explore';
 import { CHAPTERS, OPENINGS, START_SHOP, chaptersFor, startZones, type Chapter } from '../data/story';
 import { getHero, type HeroId } from '../data/heroes';
@@ -44,6 +45,15 @@ export interface GameStateData {
   hero: HeroId;
   /** 開局教學戰鬥打完或跳過了（見 src/data/tutorial.ts） */
   tutorialDone?: boolean;
+  /** 路線圖：現在在哪、今天還剩幾小時、最後經過的據點（見 src/data/route.ts）；序章之前的舊存檔沒有 */
+  route?: RouteState;
+}
+
+export interface RouteState {
+  node: string;
+  hours: number;
+  /** 今天最後經過（或睡過）的據點：時間用完就只能退回這裡防守 */
+  lastOutpost?: string;
 }
 
 export interface StoryProgress {
@@ -242,10 +252,48 @@ class GameStateStore {
   startNewDay(): void {
     const d = this.data;
     d.dayTime = EXPLORE_TIME.slotsPerDay;
+    if (d.route) d.route.hours = DAY_HOURS;
     d.exploredToday = [];
     d.intel = rollIntel(d.day, d.story.zones);
     for (const c of d.crew) if (c.injuredDays) c.injuredDays = Math.max(0, c.injuredDays - 1);
     this.normalizeDeploy();
+  }
+
+  // ── 路線圖 ──────────────────────────────────────
+
+  /** 沿路線走到相鄰的地點，扣掉路程時數；據點會記成「最後經過的據點」 */
+  travel(to: string, hours: number): void {
+    const r = this.data.route;
+    if (!r) return;
+    r.node = to;
+    r.hours = Math.max(0, r.hours - hours);
+    if (getNode(to)?.kind === 'outpost') r.lastOutpost = to;
+  }
+
+  /**
+   * 在這個據點過夜。換了據點的話，舊據點的建築拆掉、退回一半的廢料，路障重新架（不帶走升級）。
+   * 回傳退回的廢料（沒換據點是 0）。
+   */
+  settleAt(nodeId: string): number {
+    const d = this.data;
+    const node = getNode(nodeId);
+    if (!node?.map) return 0;
+    if (d.route) {
+      d.route.node = nodeId;
+      d.route.lastOutpost = nodeId;
+    }
+    if (d.outpostMap === node.map) return 0;
+    let refund = 0;
+    for (const b of d.buildings) refund += BUILDINGS[b.kind].cost * (1 + (b.level * (b.level - 1)) / 2);
+    refund = Math.floor(refund / 2);
+    d.scrap += refund;
+    d.buildings = [];
+    d.barricadeLevel = 1;
+    d.barricadeMaxHp = BARRICADE_LEVELS[0].maxHp;
+    d.barricadeHp = d.barricadeMaxHp;
+    d.baseHp = d.baseMaxHp;
+    d.outpostMap = node.map;
+    return refund;
   }
 
   // ── 出戰名單 ──────────────────────────────────────

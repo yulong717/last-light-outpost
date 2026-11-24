@@ -4,7 +4,9 @@ import { AudioManager } from '../audio/AudioManager';
 import { ensureCrewTexture } from '../art/CrewArt';
 import { ensureCityMap, ensureZoneIcons, ZONE_ICON_KEY, zoneIconFrame } from '../art/MapArt';
 import { COMPANION_ROLES, crewReady, type CrewMember } from '../data/companions';
-import { EXPLORE_TIME, INTEL, SUPPLIES, ZONES, type SupplyId, type ZoneDef } from '../data/explore';
+import { EXPLORE_TIME, INTEL, SUPPLIES, getZone, type SupplyId } from '../data/explore';
+import { DAY_HOURS, ROUTE_EDGES, ROUTE_NODES, clockText, exploreHours, getNode, nearestOutpost, travelHours, type RouteNode } from '../data/route';
+import { getOutpostMap } from '../data/scenery';
 import { Expedition } from '../explore/Expedition';
 import { stars, uiButton, uiPanel, uiTopBar } from '../explore/ui';
 import { GameState } from '../state/GameState';
@@ -19,16 +21,18 @@ const PANEL_X = 408;
 const PANEL_W = GAME_WIDTH - PANEL_X - 8;
 
 export interface ExploreMapData {
-  /** 一定要出發（序章剛結束、無處可回）：沒有「返回據點」 */
+  /** 剛逃出學校：還沒有據點可回（序章結束時帶入） */
   forced?: boolean;
 }
 
 /**
- * 城市地圖：選一個區域、挑同行隊員，然後出發。
- * 近區花 1 個時段、遠區 2 個；每區一天只能去一次。
+ * 路線圖：主角帶著隊伍沿路線移動，一邊搜刮、一邊找能過夜的據點。
+ * 上方是今天的時間條（08:00～18:00）。走到相鄰地點要花路程時數，搜刮探索點再花 2～4 小時；
+ * 走到據點可以在那裡過夜；時間用完就只能退回最後經過的據點防守。
+ * 資料在 src/data/route.ts，說明見 docs/ROUTE.md。
  */
 export class ExploreMapScene extends Phaser.Scene {
-  private selected: ZoneDef | null = null;
+  private selected: RouteNode | null = null;
   private squad: string[] = [];
   private panel!: Phaser.GameObjects.Container;
   private markers = new Map<string, Phaser.GameObjects.Container>();
@@ -37,36 +41,49 @@ export class ExploreMapScene extends Phaser.Scene {
     super('ExploreMap');
   }
 
-  private forced = false;
-
-  create(data: ExploreMapData = {}): void {
-    this.forced = !!data.forced;
+  create(): void {
     this.selected = null;
     this.squad = [];
     this.markers.clear();
     AudioManager.setMood('menu');
     const st = GameState.data;
+    // 序章之前的舊存檔：從據點出發
+    st.route ??= { node: 'street', hours: DAY_HOURS, lastOutpost: 'street' };
+    // 預設帶上能出戰的前兩位
+    this.squad = st.crew.filter((c) => crewReady(c) && !c.standby).slice(0, EXPLORE_TIME.maxSquad).map((c) => c.id);
 
     this.add.rectangle(0, 0, GAME_WIDTH, GAME_HEIGHT, 0x111318).setOrigin(0);
     this.drawMap();
-
-    // 上方資訊列
-    uiTopBar(this, 26);
-    pixelText(this, 8, 6, `第 ${st.day} 天・白天　城市地圖`, 9, '#f5d76e');
-    const slots = '●'.repeat(st.dayTime) + '○'.repeat(Math.max(0, EXPLORE_TIME.slotsPerDay - st.dayTime));
-    pixelText(this, 190, 6, `剩餘時段 ${slots}`, 9, st.dayTime > 0 ? '#e8e8e8' : '#ff8a80');
-    pixelText(this, 340, 7, this.suppliesLine(), 8, '#b0bec5');
-    if (this.forced) {
-      // 剛逃出學校：沒有據點可回，一定要選個方向出發
-      const t = pixelText(this, MAP_X + MAP_W / 2, MAP_Y + 8, '學校回不去了：選一個方向出發', 9, '#ffb74d').setOrigin(0.5, 0).setDepth(50);
-      this.add.rectangle(t.x, t.y + t.height / 2, t.width + 16, t.height + 6, 0x000000, 0.7).setStrokeStyle(1, 0xffb74d, 0.6).setDepth(49);
-    } else {
-      uiButton(this, GAME_WIDTH - 92, 2, 88, 22, '◀ 返回據點', () => this.back(), { fill: 0x3a3f4a });
-      this.input.keyboard?.once('keydown-ESC', () => this.back());
-    }
-
+    this.drawTopBar();
     this.panel = this.add.container(0, 0).setDepth(100);
+    this.selected = getNode(st.route.node) ?? null;
     this.refresh();
+    if (st.route.hours <= 0) this.time.delayedCall(400, () => this.nightfall());
+  }
+
+  private get route() {
+    return GameState.data.route!;
+  }
+
+  // ── 上方：天數、時間條、用品 ──
+
+  private drawTopBar(): void {
+    const st = GameState.data;
+    const r = this.route;
+    uiTopBar(this, 26);
+    pixelText(this, 8, 6, `第 ${st.day} 天`, 9, '#f5d76e');
+    const x0 = 64;
+    const w = 220;
+    pixelText(this, x0, 7, '08:00', 7, '#9aa3ad');
+    const bx = x0 + 34;
+    const bw = w - 68;
+    const used = (DAY_HOURS - r.hours) / DAY_HOURS;
+    this.add.rectangle(bx, 8, bw, 9, 0x000000).setOrigin(0).setDepth(99);
+    this.add.rectangle(bx + 1, 9, (bw - 2) * (1 - used), 7, r.hours <= 2 ? 0xef6c3a : 0xf5d76e).setOrigin(0).setDepth(99);
+    for (let h = 1; h < DAY_HOURS; h++) this.add.rectangle(bx + (bw * h) / DAY_HOURS, 9, 1, 7, 0x000000, 0.5).setOrigin(0).setDepth(99);
+    pixelText(this, bx + bw + 4, 7, '18:00', 7, '#9aa3ad');
+    pixelText(this, x0 + w + 6, 6, `${clockText(r.hours)}・剩 ${r.hours} 小時`, 9, r.hours <= 2 ? '#ff8a65' : '#e8e8e8');
+    pixelText(this, 420, 7, this.suppliesLine(), 8, '#b0bec5');
   }
 
   private suppliesLine(): string {
@@ -74,170 +91,173 @@ export class ExploreMapScene extends Phaser.Scene {
     return (Object.keys(SUPPLIES) as SupplyId[]).map((id) => `${SUPPLIES[id].name}${s[id]}`).join(' ');
   }
 
-  private back(): void {
-    AudioManager.ui('back');
-    const d: DefenseSceneData = {};
-    this.scene.start('Defense', d);
+  private toMap(n: { x: number; y: number }): { x: number; y: number } {
+    return { x: MAP_X + 24 + (n.x / 600) * (MAP_W - 48), y: MAP_Y + 10 + ((n.y - 90) / 190) * (MAP_H - 50) };
   }
 
-  private toMap(z: ZoneDef): { x: number; y: number } {
-    return { x: MAP_X + 24 + (z.mapX / 600) * (MAP_W - 48), y: MAP_Y + 10 + ((z.mapY - 90) / 190) * (MAP_H - 50) };
+  private locked(n: RouteNode): boolean {
+    return n.kind === 'explore' && !GameState.zoneOpen(n.zone!);
   }
 
-  /** 手繪風的城市：街區、道路、霧，據點在左下 */
+  // ── 地圖：路線、地點、目前位置 ──
+
   private drawMap(): void {
-    // 俯視的像素城市（街區屋頂、公園、河、霧），見 src/art/MapArt.ts
     this.add.image(MAP_X, MAP_Y, ensureCityMap(this, MAP_W, MAP_H)).setOrigin(0);
     ensureZoneIcons(this);
+    const here = this.route.node;
     const g = this.add.graphics();
-    // 主要路線：從據點連到每一區（深色外框＋路面＋虛線，開放的區域路線較亮）
-    const base = { x: MAP_X + 26, y: MAP_Y + MAP_H - 26 };
-    const routes = ZONES.map((z) => {
-      const p = this.toMap(z);
-      return { open: GameState.zoneOpen(z.id), pts: [base, { x: p.x, y: base.y - (base.y - p.y) * 0.3 }, p] };
-    });
-    for (const [width, color, alpha] of [
-      [7, 0x0a0b0e, 0.9],
-      [4, 0x55504a, 1],
+    for (const [width, color] of [
+      [7, 0x0a0b0e],
+      [4, 0x55504a],
     ] as const) {
-      for (const r of routes) {
-        g.lineStyle(width, r.open || width === 7 ? color : 0x2e3036, alpha);
-        g.beginPath();
-        g.moveTo(r.pts[0].x, r.pts[0].y);
-        for (const q of r.pts.slice(1)) g.lineTo(q.x, q.y);
-        g.strokePath();
+      for (const [a, b] of ROUTE_EDGES) {
+        const pa = this.toMap(getNode(a)!);
+        const pb = this.toMap(getNode(b)!);
+        g.lineStyle(width, color, 0.95).lineBetween(pa.x, pa.y, pb.x, pb.y);
       }
     }
-    for (const r of routes.filter((x) => x.open)) {
-      for (let i = 0; i < r.pts.length - 1; i++) {
-        const a = r.pts[i];
-        const b = r.pts[i + 1];
-        const len = Math.hypot(b.x - a.x, b.y - a.y);
-        for (let d = 4; d < len - 2; d += 8) {
-          const t = d / len;
-          g.fillStyle(0xf5d76e, 0.55).fillRect(Math.round(a.x + (b.x - a.x) * t), Math.round(a.y + (b.y - a.y) * t), 2, 2);
-        }
+    // 從目前位置出去的路：金色虛線＋路程時數
+    for (const [a, b, h] of ROUTE_EDGES) {
+      if (a !== here && b !== here) continue;
+      const pa = this.toMap(getNode(a)!);
+      const pb = this.toMap(getNode(b)!);
+      const len = Math.hypot(pb.x - pa.x, pb.y - pa.y);
+      for (let d = 4; d < len - 2; d += 7) {
+        const t = d / len;
+        g.fillStyle(0xf5d76e, 0.85).fillRect(Math.round(pa.x + (pb.x - pa.x) * t), Math.round(pa.y + (pb.y - pa.y) * t), 2, 2);
       }
+      // 標籤放在偏向目的地那一側，避免壓到目前位置的名字
+      const [from, to] = a === here ? [pa, pb] : [pb, pa];
+      const mx = from.x + (to.x - from.x) * 0.6;
+      const my = from.y + (to.y - from.y) * 0.6;
+      this.add.rectangle(mx, my, 22, 11, 0x000000, 0.75).setStrokeStyle(1, 0xf5d76e, 0.6);
+      pixelText(this, mx, my, `${h}h`, 7, '#f5d76e').setOrigin(0.5);
     }
     g.lineStyle(1, 0xf5d76e, 0.4).strokeRect(MAP_X, MAP_Y, MAP_W, MAP_H);
-    // 據點：圍牆＋燈光
-    this.add.circle(base.x, base.y, 22, 0xf5d76e, 0.08);
-    this.add.circle(base.x, base.y, 13, 0xf5d76e, 0.1);
-    this.add.rectangle(base.x, base.y, 16, 16, 0x2e4a2a).setStrokeStyle(2, 0x9ad17a, 0.95);
-    this.add.rectangle(base.x, base.y, 6, 6, 0xf5d76e);
-    pixelText(this, base.x + 12, base.y - 4, '據點', 8, '#9ad17a');
 
     const st = GameState.data;
-    for (const z of ZONES) {
-      const p = this.toMap(z);
-      const locked = !GameState.zoneOpen(z.id);
-      const done = st.exploredToday.includes(z.id);
+    for (const n of ROUTE_NODES) {
+      const p = this.toMap(n);
+      const locked = this.locked(n);
+      const done = n.kind === 'explore' && st.exploredToday.includes(n.zone!);
       const c = this.add.container(p.x, p.y);
-      const r = z.time === 2 ? 11 : 9;
-      const dot = this.add.circle(0, 0, r, locked ? 0x3a3d44 : z.color, done ? 0.35 : 0.95).setStrokeStyle(2, locked ? 0x000000 : 0xffffff, locked ? 0.8 : 0.7);
-      const ring = this.add.circle(0, 0, r + 4).setStrokeStyle(2, 0xffffff, 0.9).setVisible(false);
-      const name = pixelText(this, 0, r + 4, z.name, 8, locked ? '#6b7280' : done ? '#8a8f99' : '#ffffff').setOrigin(0.5, 0);
-      const sub = pixelText(this, 0, r + 17, locked ? '主線推進後開放' : done ? '今天已去過' : stars(z.risk), 7, locked ? '#6b7280' : '#ff8a6a').setOrigin(0.5, 0);
-      const nameBg = this.add.rectangle(0, r + 4, Math.max(40, z.name.length * 9 + 8), 26, 0x000000, 0.55).setOrigin(0.5, 0);
-      c.add([nameBg, ring, dot, name, sub]);
-      const icon = zoneIconFrame(z.id);
-      if (icon >= 0) c.add(this.add.image(0, 0, ZONE_ICON_KEY, icon).setAlpha(locked ? 0.45 : done ? 0.6 : 1));
-      if (st.intel?.zone === z.id && !locked) {
-        const bang = pixelText(this, r + 2, -r - 10, '!', 12, '#ffd24a');
-        c.add(bang);
-        this.tweens.add({ targets: bang, y: bang.y - 3, duration: 500, yoyo: true, repeat: -1 });
+      const ring = this.add.circle(0, 0, 14).setStrokeStyle(2, 0xffffff, 0.9).setVisible(false);
+      c.add(ring);
+      let hit: Phaser.GameObjects.Shape;
+      if (n.kind === 'outpost') {
+        // 據點：方形圍牆＋燈光；最後經過的據點多一圈光
+        if (this.route.lastOutpost === n.id) c.add(this.add.circle(0, 0, 18, 0xf5d76e, 0.12));
+        hit = this.add.rectangle(0, 0, 16, 16, 0x2e4a2a).setStrokeStyle(2, 0x9ad17a, 0.95);
+        c.add([hit, this.add.rectangle(0, 0, 6, 6, 0xf5d76e)]);
+      } else if (n.kind === 'start') {
+        hit = this.add.circle(0, 0, 7, 0x3a3d44).setStrokeStyle(2, 0x9aa3ad, 0.8);
+        c.add(hit);
+      } else {
+        const z = getZone(n.zone!)!;
+        const r = z.time === 2 ? 11 : 9;
+        hit = this.add.circle(0, 0, r, locked ? 0x3a3d44 : z.color, done ? 0.35 : 0.95).setStrokeStyle(2, locked ? 0x000000 : 0xffffff, locked ? 0.8 : 0.7);
+        c.add(hit);
+        const icon = zoneIconFrame(z.id);
+        if (icon >= 0) c.add(this.add.image(0, 0, ZONE_ICON_KEY, icon).setAlpha(locked ? 0.45 : done ? 0.6 : 1));
+        if (st.intel?.zone === z.id && !locked) {
+          const bang = pixelText(this, r + 2, -r - 10, '!', 12, '#ffd24a');
+          c.add(bang);
+          this.tweens.add({ targets: bang, y: bang.y - 3, duration: 500, yoyo: true, repeat: -1 });
+        }
+        if (GameState.isStoryZone(z.id) && !done) {
+          const flag = pixelText(this, -r - 4, -r - 14, '★主線', 8, '#f5d76e').setOrigin(1, 0);
+          c.add(flag);
+          this.tweens.add({ targets: flag, alpha: 0.4, duration: 600, yoyo: true, repeat: -1 });
+        }
       }
-      // 主線劇情的地點：金色旗子
-      if (GameState.isStoryZone(z.id) && !done) {
-        const flag = pixelText(this, -r - 4, -r - 14, '★主線', 8, '#f5d76e').setOrigin(1, 0);
-        c.add(flag);
-        this.tweens.add({ targets: flag, alpha: 0.4, duration: 600, yoyo: true, repeat: -1 });
-      }
+      const color = n.kind === 'outpost' ? '#9ad17a' : locked ? '#6b7280' : done ? '#8a8f99' : '#ffffff';
+      const name = pixelText(this, 0, 12, n.name, 7, color).setOrigin(0.5, 0);
+      c.add([this.add.rectangle(0, 12, name.width + 6, 11, 0x000000, 0.6).setOrigin(0.5, 0), name]);
       c.setData('ring', ring);
-      dot.setInteractive({ useHandCursor: true }).on('pointerdown', () => {
+      hit.setInteractive({ useHandCursor: true }).on('pointerdown', () => {
         AudioManager.ui('tap');
-        this.selected = z;
+        this.selected = n;
         this.refresh();
       });
-      this.markers.set(z.id, c);
+      this.markers.set(n.id, c);
     }
+    // 目前位置：主角的小旗子
+    const hp = this.toMap(getNode(here)!);
+    const me = this.add.container(hp.x, hp.y - 18);
+    me.add([this.add.rectangle(0, 0, 3, 14, 0xe8e8e8).setOrigin(0.5, 0), this.add.triangle(6, 3, 0, 0, 10, 4, 0, 8, 0xef5350)]);
+    pixelText(this, hp.x, hp.y - 30, '你在這裡', 7, '#ffcc80').setOrigin(0.5);
+    this.tweens.add({ targets: me, y: me.y - 2, duration: 500, yoyo: true, repeat: -1 });
   }
+
+  // ── 右側面板 ──
 
   private refresh(): void {
     this.panel.removeAll(true);
     for (const [id, c] of this.markers) (c.getData('ring') as Phaser.GameObjects.Arc).setVisible(this.selected?.id === id);
     const add = (o: Phaser.GameObjects.GameObject | Phaser.GameObjects.GameObject[]) => this.panel.add(o);
-    const st = GameState.data;
+    const r = this.route;
     const y0 = MAP_Y;
     add(uiPanel(this, PANEL_X, y0, PANEL_W, MAP_H));
-    const z = this.selected;
-    if (!z) {
-      add(pixelText(this, PANEL_X + 10, y0 + 10, '選一個區域出發搜刮', 9, '#f5d76e'));
-      const lines = [
-        '近的區域花 1 個時段，遠的花 2 個。',
-        '沒用完的時段，入夜時換成免費修路障',
-        '和少量廢料。',
-        '',
-        '每走一站會遇到隨機事件：QTE、',
-        '無聲潛入或條件戰鬥。噪音越高越危險，',
-        '隨時可以撤退，帶著背包回家。',
-        '主角倒下的話，這趟搜到的全部丟失。',
-      ];
-      lines.forEach((l, i) => add(pixelText(this, PANEL_X + 10, y0 + 32 + i * 15, l, 8, '#c8c8c8')));
-      const ch = GameState.chapter;
-      if (ch) {
-        const zn = ZONES.find((q) => q.id === ch.zone)?.name ?? '';
-        add(pixelText(this, PANEL_X + 10, y0 + 216, `主線　${ch.title}`, 8, '#f5d76e'));
-        const when = GameState.chapterReady() ? `到「${zn}」走完全程：${ch.objective}` : `第 ${ch.minDay} 天開始。先四處搜刮、壯大隊伍。`;
-        add(pixelText(this, PANEL_X + 10, y0 + 230, when, 7, '#e0d4a0').setWordWrapWidth(PANEL_W - 20, true));
-      }
-      if (st.intel) {
-        const iz = ZONES.find((q) => q.id === st.intel!.zone);
-        const info = INTEL[st.intel.kind];
-        add(pixelText(this, PANEL_X + 10, y0 + 170, `今日情報：${iz?.name ?? ''}`, 8, '#ffd24a'));
-        add(pixelText(this, PANEL_X + 10, y0 + 184, `${info.name}　${info.desc}`, 7, '#e0c070').setWordWrapWidth(PANEL_W - 20, true));
-      }
+    const n = this.selected;
+    if (!n) return;
+    const here = n.id === r.node;
+    const hours = here ? 0 : travelHours(r.node, n.id);
+    const locked = this.locked(n);
+    const kindLabel = n.kind === 'outpost' ? '據點' : n.kind === 'start' ? '' : '探索點';
+    add(pixelText(this, PANEL_X + 10, y0 + 8, n.name, 10, n.kind === 'outpost' ? '#9ad17a' : '#f5d76e'));
+    add(pixelText(this, PANEL_X + PANEL_W - 10, y0 + 10, here ? '目前位置' : hours === null ? '不相鄰' : `${kindLabel}・路程 ${hours} 小時`, 8, '#c8c8c8').setOrigin(1, 0));
+    let y = y0 + 26;
+    const text = (t: string, color = '#c8c8c8', size = 8) => {
+      const o = pixelText(this, PANEL_X + 10, y, t, size, color).setWordWrapWidth(PANEL_W - 20, true);
+      add(o);
+      y += o.height + 4;
+    };
+
+    if (n.kind === 'outpost') {
+      const map = getOutpostMap(n.map);
+      text(map.blurb);
+      for (const p of map.perks) text(`・${p}`, '#9ad17a');
+      if (GameState.data.outpostMap !== map.id && GameState.data.buildings.length) text('換到這裡過夜：舊據點的建築拆掉，退回一半廢料。', '#ffcc80', 7);
+    } else if (n.kind === 'explore') {
+      const z = getZone(n.zone!)!;
+      text(z.blurb);
+      text(`風險 ${stars(z.risk)}　搜刮 ${exploreHours(z)} 小時　${z.nodes} 個地點`, '#ff8a6a');
+      text(`可能找到：${z.tags.join('、')}`, '#9ad17a');
+      if (GameState.isStoryZone(z.id)) text(`★主線　${GameState.chapter!.title}：${GameState.chapter!.objective}`, '#f5d76e', 7);
+      const st = GameState.data;
+      if (st.intel?.zone === z.id) text(`情報：${INTEL[st.intel.kind].name}　${INTEL[st.intel.kind].desc}`, '#ffd24a', 7);
+    } else if (n.blurb) text(n.blurb);
+
+    // 動作按鈕（由下往上排）
+    const bw = PANEL_W - 16;
+    let by = y0 + MAP_H - 34;
+    const button = (label: string, why: string, fn: () => void, fill = 0x7a2a22) => {
+      add(uiButton(this, PANEL_X + 8, by, bw, 26, why || label, fn, { enabled: !why, fill, size: 9 }));
+      by -= 32;
+    };
+    if (!here && hours === null) {
+      text('要從相鄰的地點過去（金色虛線是現在能走的路）。', '#90a4ae', 7);
       return;
     }
-
-    const locked = !GameState.zoneOpen(z.id);
-    const done = st.exploredToday.includes(z.id);
-    add(pixelText(this, PANEL_X + 10, y0 + 8, z.name, 10, '#f5d76e'));
-    add(pixelText(this, PANEL_X + PANEL_W - 10, y0 + 10, z.time === 2 ? '遠・2 時段' : '近・1 時段', 8, '#c8c8c8').setOrigin(1, 0));
-    add(pixelText(this, PANEL_X + 10, y0 + 26, z.blurb, 8, '#c8c8c8').setWordWrapWidth(PANEL_W - 20, true));
-    add(pixelText(this, PANEL_X + 10, y0 + 62, `風險 ${stars(z.risk)}`, 8, '#ff8a6a'));
-    add(pixelText(this, PANEL_X + 110, y0 + 62, `${z.nodes} 個地點`, 8, '#c8c8c8'));
-    add(pixelText(this, PANEL_X + 10, y0 + 76, `可能找到：${z.tags.join('、')}`, 8, '#9ad17a'));
-    let y = y0 + 92;
-    if (GameState.isStoryZone(z.id)) {
-      const ch = GameState.chapter!;
-      add(pixelText(this, PANEL_X + 10, y, `★主線　${ch.title}`, 8, '#f5d76e'));
-      add(pixelText(this, PANEL_X + 10, y + 13, `最後一站：${ch.objective}`, 7, '#e0d4a0').setWordWrapWidth(PANEL_W - 20, true));
-      y += 30;
+    const left = r.hours;
+    if (n.kind === 'outpost') {
+      if (here) button('在這裡過夜 ▶', '', () => this.settle(n), 0x2e4a2a);
+      else button(`前往（${hours} 小時）`, hours! > left ? '時間不夠' : '', () => this.move(n, hours!), 0x2a3a5a);
+    } else if (n.kind === 'explore') {
+      const z = getZone(n.zone!)!;
+      const cost = (hours ?? 0) + exploreHours(z);
+      const done = GameState.data.exploredToday.includes(z.id);
+      const why = locked ? '主線推進後開放' : done ? '今天已經搜過' : cost > left ? `時間不夠（要 ${cost} 小時）` : '';
+      button(here ? `搜刮（${exploreHours(z)} 小時）▶` : `前往並搜刮（共 ${cost} 小時）▶`, why, () => this.explore(n, hours ?? 0));
+      if (!here) button(`只是路過（${hours} 小時）`, locked ? '主線推進後開放' : hours! > left ? '時間不夠' : '', () => this.move(n, hours!), 0x2a3a5a);
+      // 同行隊員
+      if (!locked && !done) {
+        add(pixelText(this, PANEL_X + 10, y + 2, `同行隊員（最多 ${EXPLORE_TIME.maxSquad} 位）`, 8, '#f5d76e'));
+        const crew = GameState.data.crew.slice(0, Math.max(0, Math.floor((by + 26 - (y + 18)) / 22)));
+        if (crew.length === 0) add(pixelText(this, PANEL_X + 10, y + 16, '沒有隊員，只能獨自出發。', 8, '#90a4ae'));
+        crew.forEach((m, i) => this.crewRow(m, PANEL_X + 8, y + 16 + i * 22));
+      }
     }
-    if (st.intel?.zone === z.id) {
-      const info = INTEL[st.intel.kind];
-      add(pixelText(this, PANEL_X + 10, y, `情報：${info.name}`, 8, '#ffd24a'));
-      add(pixelText(this, PANEL_X + 10, y + 13, info.desc, 7, '#e0c070').setWordWrapWidth(PANEL_W - 20, true));
-      y += 30;
-    }
-
-    // 同行隊員
-    add(pixelText(this, PANEL_X + 10, y, `同行隊員（最多 ${EXPLORE_TIME.maxSquad} 位）`, 8, '#f5d76e'));
-    y += 14;
-    const crew = st.crew;
-    if (crew.length === 0) add(pixelText(this, PANEL_X + 10, y, '沒有隊員，只能獨自出發。', 8, '#90a4ae'));
-    crew.slice(0, 6).forEach((m, i) => this.crewRow(m, PANEL_X + 8, y + i * 22));
-    y += Math.min(6, crew.length) * 22 + 4;
-
-    const reason = locked ? '主線推進後開放' : done ? '今天已經去過' : st.dayTime < z.time ? '時段不夠' : '';
-    add(
-      uiButton(this, PANEL_X + 8, y0 + MAP_H - 34, PANEL_W - 16, 26, reason || `出發 ▶`, () => this.depart(z), {
-        enabled: !reason,
-        fill: 0x7a2a22,
-        size: 9,
-      }),
-    );
   }
 
   private crewRow(m: CrewMember, x: number, y: number): void {
@@ -254,8 +274,8 @@ export class ExploreMapScene extends Phaser.Scene {
     if (key === 'player') img.setTint(COMPANION_ROLES[m.role].tint);
     this.panel.add(img);
     this.panel.add(pixelText(this, x + 36, y + 4, m.name, 8, ready ? '#ffffff' : '#6b7280'));
-    const attrs = `腳${m.attrs.agi} 手${m.attrs.hand} 膽${m.attrs.nerve}`;
     this.panel.add(pixelText(this, x + 90, y + 4, COMPANION_ROLES[m.role].title, 8, ready ? '#c8c8c8' : '#6b7280'));
+    const attrs = `腳${m.attrs.agi} 手${m.attrs.hand} 膽${m.attrs.nerve}`;
     this.panel.add(pixelText(this, x + w - 6, y + 4, ready ? attrs : `負傷・休養 ${m.injuredDays} 天`, 7, ready ? '#b0bec5' : '#ef9a9a').setOrigin(1, 0));
     if (!ready) return;
     bg.setInteractive({ useHandCursor: true }).on('pointerdown', () => {
@@ -266,11 +286,53 @@ export class ExploreMapScene extends Phaser.Scene {
     });
   }
 
-  private depart(z: ZoneDef): void {
+  // ── 動作 ──
+
+  /** 沿路線移動到相鄰地點 */
+  private move(n: RouteNode, hours: number): void {
     AudioManager.ui('confirm');
+    GameState.travel(n.id, hours);
+    GameState.save();
+    this.scene.restart();
+  }
+
+  /** 走過去（如果不在那裡）並搜刮這一區：時數先扣，打完回到路線圖 */
+  private explore(n: RouteNode, hours: number): void {
+    AudioManager.ui('confirm');
+    const z = getZone(n.zone!)!;
+    GameState.travel(n.id, hours + exploreHours(z));
     const squad = GameState.data.crew.filter((c) => this.squad.includes(c.id));
     Expedition.start(z, squad);
     this.cameras.main.fadeOut(300, 0, 0, 0);
     this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => this.scene.start('Expedition'));
+  }
+
+  /** 在這個據點過夜：換據點就拆舊建築退一半廢料，然後進入據點的白天布置 → 入夜 */
+  private settle(n: RouteNode): void {
+    AudioManager.ui('confirm');
+    const refund = GameState.settleAt(n.id);
+    GameState.data.dayTime = 0;
+    GameState.save();
+    const d: DefenseSceneData = refund > 0 ? { refund } : {};
+    this.cameras.main.fadeOut(300, 0, 0, 0);
+    this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => this.scene.start('Defense', d));
+  }
+
+  /** 天黑了：只能退回最後經過的據點（今天還沒經過據點就去最近的一個） */
+  private nightfall(): void {
+    const r = this.route;
+    const to = getNode(r.lastOutpost) ?? nearestOutpost(r.node);
+    if (!to) return;
+    const w = 340;
+    const x = (GAME_WIDTH - w) / 2;
+    const y = 120;
+    this.add.rectangle(0, 0, GAME_WIDTH, GAME_HEIGHT, 0x000000, 0.6).setOrigin(0).setDepth(200).setInteractive();
+    const panel = uiPanel(this, x, y, w, 110, 0xef6c3a).setDepth(201);
+    void panel;
+    pixelText(this, GAME_WIDTH / 2, y + 14, '天黑了', 12, '#ff8a65').setOrigin(0.5, 0).setDepth(202);
+    pixelText(this, GAME_WIDTH / 2, y + 40, `來不及再找地方。你們退回「${to.name}」守夜。`, 8, '#e0e0e0').setOrigin(0.5, 0).setDepth(202);
+    for (const o of uiButton(this, GAME_WIDTH / 2 - 70, y + 72, 140, 26, '守住今晚 ▶', () => this.settle(to), { fill: 0x7a2a22, size: 9 })) {
+      (o as unknown as Phaser.GameObjects.Components.Depth).setDepth(203);
+    }
   }
 }

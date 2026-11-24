@@ -116,3 +116,24 @@ export function syncCanvasSmoothing(game: Phaser.Game): void {
   window.addEventListener('resize', () => requestAnimationFrame(update));
   game.events.once(Phaser.Core.Events.READY, update);
 }
+
+/** 單軸模式拉近時，HUD 類物件（scrollFactor 0 且 depth ≥ 這個值）改由不縮放的鏡頭畫 */
+export const UI_DEPTH = 85;
+
+/** 加一個不縮放的鏡頭，專門畫 HUD；之後每幀呼叫 splitUiObjects 分配物件 */
+export function addUiCamera(scene: Phaser.Scene): Phaser.Cameras.Scene2D.Camera {
+  const main = scene.cameras.main;
+  const ui = scene.cameras.add(0, 0, main.width, main.height);
+  applyHiRes(ui);
+  return ui;
+}
+
+/** HUD 類物件只給 ui 鏡頭畫，其他（世界、背景、霧）只給拉近的主鏡頭畫 */
+export function splitUiObjects(scene: Phaser.Scene, ui: Phaser.Cameras.Scene2D.Camera): void {
+  const main = scene.cameras.main;
+  for (const o of scene.children.list) {
+    const g = o as Phaser.GameObjects.GameObject & { scrollFactorX?: number; depth?: number };
+    const isUi = g.scrollFactorX === 0 && (g.depth ?? 0) >= UI_DEPTH;
+    g.cameraFilter = isUi ? main.id : ui.id;
+  }
+}

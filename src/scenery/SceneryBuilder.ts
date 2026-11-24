@@ -358,6 +358,9 @@ function drawFacade(
       case 'rooftop':
         facadeRooftop(p, W, rnd, signs);
         break;
+      case 'alley':
+        facadeAlley(p, W, rnd, signs);
+        break;
       case 'street':
       default:
         facadeStreet(p, W, t, rnd, signs);
@@ -715,6 +718,47 @@ function facadeRooftop(p: Painter, W: number, rnd: Phaser.Math.RandomDataGenerat
   p.rect(hx + 96, B - 76, 40, 2, 0x3a3a34);
   p.box(hx + 20, B - 92, 34, 14, 0x2e6b3a);
   signs.push({ x: hx + 37, y: B - 85, text: '樓梯', color: '#ffffff', size: 7 });
+  sidewalkTrim(p, W);
+}
+
+/**
+ * 後巷：兩側高牆夾出來的窄巷。磚牆、鐵窗、冷氣主機、排水管、掛在頭上的電線，
+ * 據點那一頭（左邊）是拉下一半的鐵捲門。
+ */
+function facadeAlley(p: Painter, W: number, rnd: Phaser.Math.RandomDataGenerator, signs: Sign[]): void {
+  // 磚牆（整片蓋滿，看不到天空的下半）
+  p.rect(0, 30, W, B - 30, 0x4a3a34);
+  for (let y = 34; y < B; y += 8) {
+    const off = (y / 8) % 2 ? 0 : 12;
+    p.rect(0, y, W, 1, 0x3a2c28);
+    for (let x = off; x < W; x += 24) p.rect(x, y, 1, 8, 0x3a2c28);
+  }
+  for (let x = 0; x < W; x += 37) p.dither(x, 40 + ((x * 13) % 120), 20 + (x % 30), 10, 0x2a201c, 0.3);
+  // 二、三樓的鐵窗與冷氣
+  for (let x = rnd.between(30, 90); x < W - 60; x += rnd.between(150, 230)) {
+    const top = rnd.between(48, 70);
+    p.window(x, top, 40, 44, { bars: true, glass: 0x1e252e, lit: rnd.frac() < 0.08, broken: rnd.frac() < 0.3 });
+    if (rnd.frac() < 0.6) acUnit(p, x + 6, top + 48);
+  }
+  // 排水管
+  for (let x = rnd.between(80, 160); x < W; x += rnd.between(220, 340)) {
+    p.rect(x, 30, 5, B - 30, 0x5a5e64);
+    p.rect(x - 1, B - 10, 7, 10, 0x4a4e54);
+  }
+  // 頭上的電線
+  for (let k = 0; k < 3; k++) {
+    const y0 = 34 + k * 9;
+    for (let x = 0; x < W; x += 2) p.rect(x, y0 + Math.round(Math.sin(x / 90 + k) * 4), 2, 1, 0x101114);
+  }
+  // 後門與鐵捲門
+  for (let x = rnd.between(300, 420); x < W - 80; x += rnd.between(260, 380)) {
+    if (rnd.frac() < 0.5) shutter(p, x, B - 70, 64, 68, rnd.frac() * 0.3);
+    else {
+      p.box(x, B - 72, 34, 72, 0x3a4048);
+      p.rect(x + 26, B - 38, 3, 3, 0xc8b070);
+    }
+  }
+  signs.push({ x: Math.min(W - 80, 700), y: 46, text: '禁止停車', color: '#e8e0d0', size: 8 });
   sidewalkTrim(p, W);
 }
 

@@ -74,10 +74,11 @@ export class BuildUIScene extends Phaser.Scene {
     this.button(GAME_WIDTH - 172, 2, 62, 22, `隊伍 ${GameState.data.crew.length}`, true, () => this.toggleRoster());
     // 軍械庫：買槍、買彈、配置上場武器
     this.button(GAME_WIDTH - 240, 2, 62, 22, '軍械庫', true, () => this.openArmory(), 0x3a4a2a);
-    // 白天探索：剩幾個時段就能出門幾趟（近區 1、遠區 2）
-    const left = GameState.data.dayTime;
-    const slots = '●'.repeat(left) + '○'.repeat(Math.max(0, EXPLORE_TIME.slotsPerDay - left));
-    this.button(GAME_WIDTH - 358, 2, 112, 22, `出發探索 ${slots}`, left > 0, () => this.onExplore(), 0x2a3a5a);
+    // 白天出發：回到路線圖（今天還有時間、還沒決定在這裡過夜才能出發）
+    const route = GameState.data.route;
+    const left = route ? (GameState.data.dayTime > 0 ? route.hours : 0) : GameState.data.dayTime;
+    const label = route ? (left > 0 ? `出發（剩 ${route.hours} 小時）` : '今晚在此過夜') : `出發探索 ${'●'.repeat(left)}${'○'.repeat(Math.max(0, EXPLORE_TIME.slotsPerDay - left))}`;
+    this.button(GAME_WIDTH - 358, 2, 112, 22, label, left > 0, () => this.onExplore(), 0x2a3a5a);
 
     this.hint = pixelText(
       this,

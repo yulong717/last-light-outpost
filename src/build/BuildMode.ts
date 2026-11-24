@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { GROUND_Y, LANE_BOTTOM, LANE_TOP } from '../config';
-import { BUILDINGS, SLOTS, type BuildingKind } from '../data/buildings';
+import { BUILDINGS, activeSlots, type BuildingKind } from '../data/buildings';
 import { Fx } from '../fx/Fx';
 import { isPointerOverUI } from '../input/InputManager';
 import type { Outpost } from './Outpost';
@@ -116,7 +116,7 @@ export class BuildMode {
   private draw(): void {
     const g = this.gfx.clear();
     const a = 0.45 + Math.sin(this.pulse * 5) * 0.15;
-    for (const s of SLOTS) {
+    for (const s of activeSlots()) {
       const selected = this.selection?.type === 'slot' && this.selection.id === s.id;
       const hovered = this.hover?.type === 'slot' && this.hover.id === s.id;
       const built = this.outpost.buildings.has(s.id);
@@ -177,7 +177,7 @@ export class BuildMode {
     // 槽位：以腳底為準，往上涵蓋建築本身（照明燈比較高）
     let best: Selection = null;
     let bestD = Infinity;
-    for (const s of SLOTS) {
+    for (const s of activeSlots()) {
       const dx = Math.abs(w.x - s.x);
       if (dx > 20 || w.y > s.y + 10 || w.y < s.y - 40) continue;
       const d = dx + Math.abs(w.y - (s.y - 6)) * 0.5;
@@ -211,7 +211,7 @@ export class BuildMode {
   private anchor(): { x: number; y: number } {
     const sel = this.selection;
     if (sel?.type === 'slot') {
-      const s = SLOTS.find((x) => x.id === sel.id)!;
+      const s = activeSlots().find((x) => x.id === sel.id)!;
       return { x: s.x, y: s.y - 40 };
     }
     if (sel?.type === 'barricade') return { x: this.geom.barricadeX, y: LANE_TOP - 50 };

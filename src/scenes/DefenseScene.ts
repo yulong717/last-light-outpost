@@ -7,8 +7,14 @@ import {
   GROUND_Y,
   LANE_BOTTOM,
   LANE_TOP,
+  SINGLE_LANE_Y,
   WORLD_WIDTH,
+  setSingleLane,
 } from '../config';
+import { getOutpostMap } from '../data/scenery';
+import { setActiveSlots } from '../data/buildings';
+import { addUiCamera, setViewZoom, splitUiObjects } from '../render/RenderScale';
+import type { WaveDef } from '../data/waves';
 import { BuildMode } from '../build/BuildMode';
 import { Outpost } from '../build/Outpost';
 import { ECONOMY } from '../data/buildings';
@@ -60,6 +66,8 @@ import type { SupplyId } from '../data/explore';
 /** 從結算畫面進來時帶的資料：newDay 代表撐過一夜、進入新的一天 */
 export interface DefenseSceneData {
   newDay?: boolean;
+  /** 換據點時拆掉舊建築退回的廢料（顯示用） */
+  refund?: number;
   /** 新遊戲：看完序章先打一場開局教學，打完才進入第一天白天 */
   tutorial?: boolean;
 }
@@ -158,6 +166,8 @@ export class DefenseScene extends Phaser.Scene {
   private rescue?: RescueEvent;
   /** 開局教學（只有新遊戲第一場） */
   private tutorial?: Tutorial;
+  /** 單軸據點：不縮放的 HUD 鏡頭 */
+  private uiCam?: Phaser.Cameras.Scene2D.Camera;
   private tutorialSnap?: TutorialSnapshot;
 
   constructor() {
@@ -175,6 +185,15 @@ export class DefenseScene extends Phaser.Scene {
     this.phase = 'day';
     this.scrapEarned = 0;
 
+    // 單軸據點（窄巷）：大家都在同一條線上、只開放部分槽位；場景結束還原
+    const map = getOutpostMap(GameState.data.outpostMap);
+    setSingleLane(!!map.single);
+    setActiveSlots(map.single?.slots ?? null);
+    this.uiCam = undefined;
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      setSingleLane(false);
+      setActiveSlots(null);
+    });
     // 先設好世界範圍：Fx 的地面血跡畫布依鏡頭範圍決定大小
     this.cameras.main.setBounds(0, 0, WORLD_WIDTH, GAME_HEIGHT);
     this.drawBackdrop();
@@ -211,6 +230,13 @@ export class DefenseScene extends Phaser.Scene {
     cam.startFollow(this.player.sprite, true, 0.12, 0);
     cam.setDeadzone(160, GAME_HEIGHT);
     cam.setFollowOffset(-90, 0);
+    if (map.single) {
+      // 單軸：鏡頭拉近，HUD 類物件另用不縮放的鏡頭畫（同探索的單軸關卡）
+      setViewZoom(cam, 1.5);
+      cam.startFollow(this.player.sprite, true, 0.12, 1, -60, SINGLE_LANE_Y - 226);
+      cam.setDeadzone(110, 0);
+      this.uiCam = addUiCamera(this);
+    }
     this.fx.attachShadow(this.player.sprite, 22);
     this.rig = new WeaponRig(this, heroRigColors(GameState.data.hero ?? 'soldier'));
     this.rig.setWeapon(GameState.data.armory.loadout[0] ?? 'm1911');
@@ -228,7 +254,7 @@ export class DefenseScene extends Phaser.Scene {
       barricadeX: BARRICADE_X,
     });
     // 夜晚強度依可出戰的隊員人數縮放（單人開局比較溫和）
-    const night = buildNight(GameState.data.day, Math.random, deployedCrew(GameState.data.crew).length);
+    const night = singleLaneNight(buildNight(GameState.data.day, Math.random, deployedCrew(GameState.data.crew).length), map.single);
     prewarmLooks(this, night.flatMap((w) => w.groups.map((g) => g.enemy)));
     this.spawner = new WaveSpawner(this, night, (id) => this.spawnZombie(id));
 
@@ -238,6 +264,7 @@ export class DefenseScene extends Phaser.Scene {
     });
     if (data.tutorial) this.startTutorial();
     else this.startDay(!!data.newDay);
+    if (data.refund) this.time.delayedCall(500, () => this.fx.popText(PLAYER_X + 40, LANE_TOP - 40, `換據點：舊建築拆回 +${data.refund} 廢料`, '#f5d76e'));
   }
 
   /**
@@ -564,6 +591,7 @@ export class DefenseScene extends Phaser.Scene {
   }
 
   update(_time: number, deltaMs: number): void {
+    if (this.uiCam) splitUiObjects(this, this.uiCam);
     if (this.ended) return;
     // 卡肉（hit-stop）期間 timeScale 為 0，整個戰場停頓一下
     const dt = Math.min(deltaMs / 1000, 0.05) * this.fx.timeScale;
@@ -845,4 +873,23 @@ export class DefenseScene extends Phaser.Scene {
     };
     this.time.delayedCall(800, () => this.scene.start('GameOver', data));
   }
+}
+
+/**
+ * 窄巷這種單軸據點：只有一個入口好守，所以霧屍更多、更快——
+ * 每組數量乘上倍率，平民霧屍有一部分換成跑者。
+ */
+function singleLaneNight(night: WaveDef[], single?: { waves: number; runners: number }): WaveDef[] {
+  if (!single) return night;
+  return night.map((w) => ({
+    ...w,
+    groups: w.groups.flatMap((g) => {
+      const count = Math.max(1, Math.round(g.count * single.waves));
+      if (g.enemy !== 'basic') return [{ ...g, count }];
+      const runners = Math.round(count * single.runners);
+      const out = [{ ...g, count: count - runners, interval: g.interval / single.waves }];
+      if (runners > 0) out.push({ ...g, enemy: 'runner', count: runners, interval: (g.interval * 2) / single.waves, startDelay: (g.startDelay ?? 0) + 1 });
+      return out;
+    }),
+  }));
 }

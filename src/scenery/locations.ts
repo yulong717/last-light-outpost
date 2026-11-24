@@ -70,6 +70,7 @@ export function outpostScenery(scene: Phaser.Scene, mapId: string | undefined, w
   const res = buildScenery(scene, {
     theme,
     setting: 'ext',
+    facade: map.facade,
     mood: 'dim',
     worldW,
     seed: `outpost-${map.id}`,

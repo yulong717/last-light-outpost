@@ -8,7 +8,6 @@ import { Expedition } from '../explore/Expedition';
 import { GameState } from '../state/GameState';
 import { pixelText } from '../utils/text';
 import type { ExploreFieldData, FieldResult } from './ExploreFieldScene';
-import type { ExploreMapData } from './ExploreMapScene';
 import type { StoryData } from './StoryScene';
 
 export interface PrologueData {
@@ -115,6 +114,8 @@ export class PrologueScene extends Phaser.Scene {
     gs.data.story.introSeen = 1;
     gs.data.tutorialDone = true;
     gs.data.day = 2;
+    // 路線圖從學校後門出發，還沒有任何據點
+    gs.data.route = { node: 'school_gate', hours: 0 };
     gs.startNewDay();
     gs.save();
     const outro: StoryData = {
@@ -133,8 +134,7 @@ export class PrologueScene extends Phaser.Scene {
     const leave = () => {
       this.cameras.main.fadeOut(300, 0, 0, 0);
       this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => {
-        const d: ExploreMapData = { forced: true };
-        this.scene.start('ExploreMap', d);
+        this.scene.start('ExploreMap');
       });
     };
     if (!ch) return leave();
