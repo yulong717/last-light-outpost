@@ -8,9 +8,9 @@
 export type Setting = 'ext' | 'int';
 
 /** 室外的主建築立面 */
-export type FacadeStyle = 'gas' | 'market' | 'homes' | 'hospital' | 'police' | 'military' | 'street' | 'school' | 'parking';
+export type FacadeStyle = 'gas' | 'market' | 'homes' | 'hospital' | 'police' | 'military' | 'street' | 'school' | 'parking' | 'rooftop';
 /** 室內的牆面風格 */
-export type InteriorStyle = 'garage' | 'store' | 'house' | 'ward' | 'precinct' | 'bunker' | 'warehouse' | 'lobby';
+export type InteriorStyle = 'garage' | 'store' | 'house' | 'ward' | 'precinct' | 'bunker' | 'warehouse' | 'lobby' | 'classroom';
 export type FarStyle = 'city' | 'hills' | 'industrial';
 export type FloorStyle = 'asphalt' | 'dirt' | 'concrete' | 'court' | 'tile' | 'linoleum' | 'wood' | 'checker';
 
@@ -354,6 +354,71 @@ export const EVENT_SETS: Record<string, SetDressing> = {
       { prop: 'tripwire', x: 0.5, lane: 'back' },
       { prop: 'door', x: 0.42, lane: 'wall', kind: null },
     ],
+  },
+
+  // ── 序章：阿凱的學校，一層一層往下逃（src/data/prologue.ts） ──
+  pro_roof: {
+    setting: 'ext',
+    facade: 'rooftop',
+    mood: 'dim',
+    pieces: [
+      { prop: 'debris', x: 0.3, lane: 'back', kind: null },
+      { prop: 'bench', x: 0.12, lane: 'back', kind: null },
+    ],
+    noExtras: true,
+  },
+  pro_4f: {
+    setting: 'int',
+    interior: 'classroom',
+    mood: 'dim',
+    pieces: [
+      { prop: 'locker', x: 0.18, lane: 'wall' },
+      { prop: 'locker', x: 0.21, lane: 'wall' },
+      { prop: 'desk', x: 0.42, lane: 'back', kind: null },
+      { prop: 'corpse', x: 0.6, lane: 'back', kind: null },
+      { prop: 'locker', x: 0.78, lane: 'wall' },
+    ],
+    noExtras: true,
+  },
+  pro_3f: {
+    setting: 'int',
+    interior: 'classroom',
+    mood: 'dark',
+    pieces: [
+      { prop: 'locker', x: 0.1, lane: 'wall' },
+      { prop: 'desk', x: 0.3, lane: 'back', kind: null },
+      { prop: 'locker', x: 0.52, lane: 'wall' },
+      { prop: 'desk', x: 0.66, lane: 'back', kind: null },
+      { prop: 'noticeboard', x: 0.84, lane: 'wall' },
+    ],
+    noExtras: true,
+  },
+  pro_2f: {
+    setting: 'int',
+    interior: 'classroom',
+    mood: 'dim',
+    pieces: [
+      // 對準走廊牆上畫的教室前門（每 300px 一扇，門寬 32）
+      { prop: 'door', x: 376, lane: 'wall' },
+      { prop: 'door', x: 676, lane: 'wall' },
+      { prop: 'door', x: 976, lane: 'wall' },
+      { prop: 'locker', x: 0.15, lane: 'wall' },
+      { prop: 'desk', x: 0.68, lane: 'back', kind: null },
+    ],
+    noExtras: true,
+  },
+  pro_1f: {
+    setting: 'int',
+    interior: 'lobby',
+    mood: 'dim',
+    pieces: [
+      { prop: 'noticeboard', x: 0.2, lane: 'wall' },
+      { prop: 'plant', x: 0.35, lane: 'wall' },
+      { prop: 'shutter', x: 0.5, lane: 'wall', kind: null },
+      { prop: 'plant', x: 0.65, lane: 'wall' },
+      { prop: 'bench', x: 0.8, lane: 'back', kind: null },
+    ],
+    noExtras: true,
   },
 
   // ── 會進戰鬥／潛入的事件 ──

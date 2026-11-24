@@ -18,6 +18,11 @@ const MAP_H = 320;
 const PANEL_X = 408;
 const PANEL_W = GAME_WIDTH - PANEL_X - 8;
 
+export interface ExploreMapData {
+  /** 一定要出發（序章剛結束、無處可回）：沒有「返回據點」 */
+  forced?: boolean;
+}
+
 /**
  * 城市地圖：選一個區域、挑同行隊員，然後出發。
  * 近區花 1 個時段、遠區 2 個；每區一天只能去一次。
@@ -32,7 +37,10 @@ export class ExploreMapScene extends Phaser.Scene {
     super('ExploreMap');
   }
 
-  create(): void {
+  private forced = false;
+
+  create(data: ExploreMapData = {}): void {
+    this.forced = !!data.forced;
     this.selected = null;
     this.squad = [];
     this.markers.clear();
@@ -48,8 +56,14 @@ export class ExploreMapScene extends Phaser.Scene {
     const slots = '●'.repeat(st.dayTime) + '○'.repeat(Math.max(0, EXPLORE_TIME.slotsPerDay - st.dayTime));
     pixelText(this, 190, 6, `剩餘時段 ${slots}`, 9, st.dayTime > 0 ? '#e8e8e8' : '#ff8a80');
     pixelText(this, 340, 7, this.suppliesLine(), 8, '#b0bec5');
-    uiButton(this, GAME_WIDTH - 92, 2, 88, 22, '◀ 返回據點', () => this.back(), { fill: 0x3a3f4a });
-    this.input.keyboard?.once('keydown-ESC', () => this.back());
+    if (this.forced) {
+      // 剛逃出學校：沒有據點可回，一定要選個方向出發
+      const t = pixelText(this, MAP_X + MAP_W / 2, MAP_Y + 8, '學校回不去了：選一個方向出發', 9, '#ffb74d').setOrigin(0.5, 0).setDepth(50);
+      this.add.rectangle(t.x, t.y + t.height / 2, t.width + 16, t.height + 6, 0x000000, 0.7).setStrokeStyle(1, 0xffb74d, 0.6).setDepth(49);
+    } else {
+      uiButton(this, GAME_WIDTH - 92, 2, 88, 22, '◀ 返回據點', () => this.back(), { fill: 0x3a3f4a });
+      this.input.keyboard?.once('keydown-ESC', () => this.back());
+    }
 
     this.panel = this.add.container(0, 0).setDepth(100);
     this.refresh();

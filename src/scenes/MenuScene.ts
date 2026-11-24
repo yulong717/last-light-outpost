@@ -2,8 +2,8 @@ import Phaser from 'phaser';
 import { GAME_HEIGHT, GAME_WIDTH } from '../config';
 import { AudioManager, type AudioSettings } from '../audio/AudioManager';
 import { pixelText } from '../utils/text';
-import { OUTPOST_MAPS } from '../data/scenery';
-import { uiButton, uiPanel } from '../explore/ui';
+import { GameState } from '../state/GameState';
+import type { PrologueData } from './PrologueScene';
 import { ensureMenuBackdrop } from '../art/IllustrationArt';
 import { ensureHeroTexture, heroBuild } from '../art/HeroArt';
 import { HERO_ORDER } from '../data/heroes';
@@ -49,14 +49,12 @@ export class MenuScene extends Phaser.Scene {
     this.buildVolumeControls();
 
     let started = false;
-    // 先選據點地圖，再開始
     const go = () => {
       if (started) return;
       started = true;
       AudioManager.ui('confirm');
       start.destroy();
-      // 先選據點，再選主角，選完才開新局
-      this.pickOutpost();
+      this.newGame();
     };
     // 點到音量按鈕時不要開始遊戲
     this.input.on('pointerdown', (_p: Phaser.Input.Pointer, over: Phaser.GameObjects.GameObject[]) => {
@@ -72,29 +70,19 @@ export class MenuScene extends Phaser.Scene {
     });
   }
 
-  /** 開新遊戲：選一個據點（整局固定），每個據點的場景與可互動物件不同 */
-  private pickOutpost(): void {
-    // 收起標題畫面的字，換成三張據點卡
-    for (const o of [...this.children.list]) (o as unknown as Phaser.GameObjects.Components.Visible).setVisible?.(false);
-    const shade = this.add.rectangle(0, 0, GAME_WIDTH, GAME_HEIGHT, 0x000000, 0.75).setOrigin(0).setInteractive();
-    void shade;
-    pixelText(this, GAME_WIDTH / 2, 40, '選擇你的據點', 14, '#f5d76e').setOrigin(0.5);
-    const w = 192;
-    const gap = 12;
-    const x0 = (GAME_WIDTH - w * 3 - gap * 2) / 2;
-    OUTPOST_MAPS.forEach((m, i) => {
-      const x = x0 + i * (w + gap);
-      const y = 70;
-      uiPanel(this, x, y, w, 230);
-      pixelText(this, x + 10, y + 10, m.name, 11, '#f5d76e');
-      pixelText(this, x + 10, y + 32, m.blurb, 8, '#e0e0e0').setWordWrapWidth(w - 20, true).setLineSpacing(3);
-      m.perks.forEach((p, k) => pixelText(this, x + 10, y + 100 + k * 16, `・${p}`, 8, '#9ad17a').setWordWrapWidth(w - 20, true));
-      uiButton(this, x + 10, y + 190, w - 20, 28, '在這裡落腳 ▶', () => {
-        AudioManager.ui('confirm');
-        this.registry.set('outpostMap', m.id);
-        this.scene.start('HeroSelect');
-      }, { fill: 0x7a2a22, size: 9 });
-    });
+  /**
+   * 開新遊戲：不選角、不選據點，直接以阿凱進入序章（學校＝第一夜）。
+   * 其他兩位主角之後在劇情裡會合（見 docs/PROLOGUE.md）。
+   * 開發用：網址加 ?floor=N（1～5）可以直接從第 N 層開始。
+   */
+  private newGame(): void {
+    GameState.reset('student');
+    // 逃出學校後的第一個落腳處（之後由路線圖決定）
+    GameState.data.outpostMap = 'street';
+    const floor = Number(new URLSearchParams(window.location.search).get('floor'));
+    const data: PrologueData = floor > 0 ? { from: floor - 1 } : {};
+    this.cameras.main.fadeOut(400, 0, 0, 0);
+    this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => this.scene.start('Prologue', data));
   }
 
   /** 右下角：音樂／音效音量（0–10），設定會記住 */
