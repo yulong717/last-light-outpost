@@ -1,0 +1,552 @@
+{
+ "spec": {
+  "S": {
+   "height": 48,
+   "head": 14,
+   "width_vs_M": null
+  },
+  "M": {
+   "height": 56,
+   "head": 16,
+   "width_vs_M": null
+  },
+  "L": {
+   "height": 60,
+   "head": 17,
+   "width_vs_M": null
+  },
+  "XL": {
+   "height": 62,
+   "head": 18,
+   "width_vs_M": 1.4
+  }
+ },
+ "workflow": "art/ai/workflows/h3_image_edit.json",
+ "references": {
+  "Picture 1": "art/ai/raw/mannequins/ref_<size>.png: M profile stand_512 cut at the neck, head/body rescaled by make_mannequin_ref.py (1024, 16x)",
+  "Picture 2": "art/ai/style/anchor.png x5 centred on 1024 magenta"
+ },
+ "palette": "art/ai/palette/master.gpl (main 48 only)",
+ "post": "grid phase (16) -> key -> k_centroid /16 -> largest blob -> foot y=61 -> quantize -> cleanup (selout outline) -> quantize -> islands <=2px -> <=10 colours -> islands",
+ "prompt": "Redraw <Picture 1> as a clean pixel art game sprite for a 2D side-scrolling game: a faceless grey artist's mannequin with {extra}; no face, no eyes, no mouth, no hair, no clothes, no shoes, smooth plain head. Pure side view facing right, standing upright and relaxed, arms hanging straight down at the sides, legs straight. Keep exactly the same position, total height, head size and body width as in <Picture 1>, feet on the same ground line. Draw it in exactly the pixel art style of <Picture 2>, as if by the same artist: a single light source from the upper left at 45 degrees, lit surfaces on the upper left and shadowed surfaces on the lower right, 3 to 4 shading steps, a 1 pixel dark coloured outline that is darker on the bottom and right side, muted grey-green colours. Plain solid magenta background, no ground, no floor line, no cast shadow, no text.",
+ "picked": {
+  "S": {
+   "seed": 2,
+   "generation": {
+    "workflow": "C:/AI/last-light-outpost/art/ai/workflows/h3_image_edit.json",
+    "overrides": {
+     "load1.image": "C:\\AI\\last-light-outpost\\art\\ai\\raw\\mannequins\\ref_S.png",
+     "load2.image": "C:\\AI\\last-light-outpost\\art\\ai\\raw\\mannequins\\anchor_ref_1024.png",
+     "sampler.seed": 2,
+     "cond.prompt": "Redraw <Picture 1> as a clean pixel art game sprite for a 2D side-scrolling game: a faceless grey artist's mannequin with a small, slim child-sized body; no face, no eyes, no mouth, no hair, no clothes, no shoes, smooth plain head. Pure side view facing right, standing upright and relaxed, arms hanging straight down at the sides, legs straight. Keep exactly the same position, total height, head size and body width as in <Picture 1>, feet on the same ground line. Draw it in exactly the pixel art style of <Picture 2>, as if by the same artist: a single light source from the upper left at 45 degrees, lit surfaces on the upper left and shadowed surfaces on the lower right, 3 to 4 shading steps, a 1 pixel dark coloured outline that is darker on the bottom and right side, muted grey-green colours. Plain solid magenta background, no ground, no floor line, no cast shadow, no text.",
+     "save.filename_prefix": "ai_art/mannequin_S_s2"
+    },
+    "models": {
+     "unet": {
+      "unet_name": "minimax_h3_image_pruned_int8_convrot.safetensors",
+      "weight_dtype": "default"
+     },
+     "clip": {
+      "clip_name": "qwen3vl_32b_minimax_h3_int8_convrot.safetensors",
+      "type": "minimax",
+      "device": "default"
+     },
+     "vae": {
+      "vae_name": "minimax_h3_image_vae_fp16.safetensors"
+     }
+    },
+    "tag": "r7 mannequin S seed 2",
+    "time": "2026-11-24 19:05:41",
+    "prompt_id": "c31756e1-2c9f-4224-8091-1cd7e7729104",
+    "seconds": 15.2,
+    "vram_peak_mib": 15246,
+    "files": [
+     "C:\\AI\\last-light-outpost\\art\\ai\\raw\\mannequins\\S_s2\\mannequin_S_s2_00001_.png"
+    ]
+   }
+  },
+  "M": {
+   "seed": 2,
+   "generation": {
+    "workflow": "C:/AI/last-light-outpost/art/ai/workflows/h3_image_edit.json",
+    "overrides": {
+     "load1.image": "C:\\AI\\last-light-outpost\\art\\ai\\raw\\mannequins\\ref_M.png",
+     "load2.image": "C:\\AI\\last-light-outpost\\art\\ai\\raw\\mannequins\\anchor_ref_1024.png",
+     "sampler.seed": 2,
+     "cond.prompt": "Redraw <Picture 1> as a clean pixel art game sprite for a 2D side-scrolling game: a faceless grey artist's mannequin with an average adult body; no face, no eyes, no mouth, no hair, no clothes, no shoes, smooth plain head. Pure side view facing right, standing upright and relaxed, arms hanging straight down at the sides, legs straight. Keep exactly the same position, total height, head size and body width as in <Picture 1>, feet on the same ground line. Draw it in exactly the pixel art style of <Picture 2>, as if by the same artist: a single light source from the upper left at 45 degrees, lit surfaces on the upper left and shadowed surfaces on the lower right, 3 to 4 shading steps, a 1 pixel dark coloured outline that is darker on the bottom and right side, muted grey-green colours. Plain solid magenta background, no ground, no floor line, no cast shadow, no text.",
+     "save.filename_prefix": "ai_art/mannequin_M_s2"
+    },
+    "models": {
+     "unet": {
+      "unet_name": "minimax_h3_image_pruned_int8_convrot.safetensors",
+      "weight_dtype": "default"
+     },
+     "clip": {
+      "clip_name": "qwen3vl_32b_minimax_h3_int8_convrot.safetensors",
+      "type": "minimax",
+      "device": "default"
+     },
+     "vae": {
+      "vae_name": "minimax_h3_image_vae_fp16.safetensors"
+     }
+    },
+    "tag": "r7 mannequin M seed 2",
+    "time": "2026-11-24 19:06:58",
+    "prompt_id": "22c6dc89-5cb6-4e09-9abe-4736302ffefb",
+    "seconds": 15.2,
+    "vram_peak_mib": 15246,
+    "files": [
+     "C:\\AI\\last-light-outpost\\art\\ai\\raw\\mannequins\\M_s2\\mannequin_M_s2_00001_.png"
+    ]
+   }
+  },
+  "L": {
+   "seed": 2,
+   "generation": {
+    "workflow": "C:/AI/last-light-outpost/art/ai/workflows/h3_image_edit.json",
+    "overrides": {
+     "load1.image": "C:\\AI\\last-light-outpost\\art\\ai\\raw\\mannequins\\ref_L.png",
+     "load2.image": "C:\\AI\\last-light-outpost\\art\\ai\\raw\\mannequins\\anchor_ref_1024.png",
+     "sampler.seed": 2,
+     "cond.prompt": "Redraw <Picture 1> as a clean pixel art game sprite for a 2D side-scrolling game: a faceless grey artist's mannequin with a tall, slightly broader adult body; no face, no eyes, no mouth, no hair, no clothes, no shoes, smooth plain head. Pure side view facing right, standing upright and relaxed, arms hanging straight down at the sides, legs straight. Keep exactly the same position, total height, head size and body width as in <Picture 1>, feet on the same ground line. Draw it in exactly the pixel art style of <Picture 2>, as if by the same artist: a single light source from the upper left at 45 degrees, lit surfaces on the upper left and shadowed surfaces on the lower right, 3 to 4 shading steps, a 1 pixel dark coloured outline that is darker on the bottom and right side, muted grey-green colours. Plain solid magenta background, no ground, no floor line, no cast shadow, no text.",
+     "save.filename_prefix": "ai_art/mannequin_L_s2"
+    },
+    "models": {
+     "unet": {
+      "unet_name": "minimax_h3_image_pruned_int8_convrot.safetensors",
+      "weight_dtype": "default"
+     },
+     "clip": {
+      "clip_name": "qwen3vl_32b_minimax_h3_int8_convrot.safetensors",
+      "type": "minimax",
+      "device": "default"
+     },
+     "vae": {
+      "vae_name": "minimax_h3_image_vae_fp16.safetensors"
+     }
+    },
+    "tag": "r7 mannequin L seed 2",
+    "time": "2026-11-24 19:08:16",
+    "prompt_id": "087d9f13-3ba6-45d1-beb6-3ba12153c080",
+    "seconds": 15.2,
+    "vram_peak_mib": 15246,
+    "files": [
+     "C:\\AI\\last-light-outpost\\art\\ai\\raw\\mannequins\\L_s2\\mannequin_L_s2_00001_.png"
+    ]
+   }
+  },
+  "XL": {
+   "seed": 3,
+   "generation": {
+    "workflow": "C:/AI/last-light-outpost/art/ai/workflows/h3_image_edit.json",
+    "overrides": {
+     "load1.image": "C:\\AI\\last-light-outpost\\art\\ai\\raw\\mannequins\\ref_XL.png",
+     "load2.image": "C:\\AI\\last-light-outpost\\art\\ai\\raw\\mannequins\\anchor_ref_1024.png",
+     "sampler.seed": 3,
+     "cond.prompt": "Redraw <Picture 1> as a clean pixel art game sprite for a 2D side-scrolling game: a faceless grey artist's mannequin with a very heavy, broad, big-bellied body, 1.4 times as wide as an average adult; no face, no eyes, no mouth, no hair, no clothes, no shoes, smooth plain head. Pure side view facing right, standing upright and relaxed, arms hanging straight down at the sides, legs straight. Keep exactly the same position, total height, head size and body width as in <Picture 1>, feet on the same ground line. Draw it in exactly the pixel art style of <Picture 2>, as if by the same artist: a single light source from the upper left at 45 degrees, lit surfaces on the upper left and shadowed surfaces on the lower right, 3 to 4 shading steps, a 1 pixel dark coloured outline that is darker on the bottom and right side, muted grey-green colours. Plain solid magenta background, no ground, no floor line, no cast shadow, no text.",
+     "save.filename_prefix": "ai_art/mannequin_XL_s3"
+    },
+    "models": {
+     "unet": {
+      "unet_name": "minimax_h3_image_pruned_int8_convrot.safetensors",
+      "weight_dtype": "default"
+     },
+     "clip": {
+      "clip_name": "qwen3vl_32b_minimax_h3_int8_convrot.safetensors",
+      "type": "minimax",
+      "device": "default"
+     },
+     "vae": {
+      "vae_name": "minimax_h3_image_vae_fp16.safetensors"
+     }
+    },
+    "tag": "r7 mannequin XL seed 3",
+    "time": "2026-11-24 19:09:48",
+    "prompt_id": "d69003b2-64f2-4f10-93a2-bdc3fb9e94ea",
+    "seconds": 15.1,
+    "vram_peak_mib": 15246,
+    "files": [
+     "C:\\AI\\last-light-outpost\\art\\ai\\raw\\mannequins\\XL_s3\\mannequin_XL_s3_00001_.png"
+    ]
+   }
+  }
+ },
+ "seeds": {
+  "S": {
+   "1": {
+    "grid_phase": [
+     0,
+     0
+    ],
+    "foot_shift": 0,
+    "colours": [
+     15,
+     10
+    ],
+    "island_px_fixed": 12,
+    "measure": {
+     "height": 48,
+     "head": 14,
+     "neck_row": 28,
+     "top": 14,
+     "bottom": 61,
+     "width": 15,
+     "torso_width": 11
+    },
+    "light_ul_minus_lr": 0.086,
+    "outside_palette": 0
+   },
+   "2": {
+    "grid_phase": [
+     0,
+     0
+    ],
+    "foot_shift": 0,
+    "colours": [
+     22,
+     10
+    ],
+    "island_px_fixed": 24,
+    "measure": {
+     "height": 48,
+     "head": 14,
+     "neck_row": 28,
+     "top": 14,
+     "bottom": 61,
+     "width": 15,
+     "torso_width": 11
+    },
+    "light_ul_minus_lr": 0.089,
+    "outside_palette": 0
+   },
+   "3": {
+    "grid_phase": [
+     0,
+     0
+    ],
+    "foot_shift": 0,
+    "colours": [
+     9,
+     9
+    ],
+    "island_px_fixed": 33,
+    "measure": {
+     "height": 48,
+     "head": 14,
+     "neck_row": 28,
+     "top": 14,
+     "bottom": 61,
+     "width": 15,
+     "torso_width": 11
+    },
+    "light_ul_minus_lr": 0.078,
+    "outside_palette": 0
+   },
+   "4": {
+    "grid_phase": [
+     0,
+     0
+    ],
+    "foot_shift": 0,
+    "colours": [
+     9,
+     9
+    ],
+    "island_px_fixed": 9,
+    "measure": {
+     "height": 48,
+     "head": 14,
+     "neck_row": 28,
+     "top": 14,
+     "bottom": 61,
+     "width": 15,
+     "torso_width": 11
+    },
+    "light_ul_minus_lr": 0.058,
+    "outside_palette": 0
+   }
+  },
+  "M": {
+   "1": {
+    "grid_phase": [
+     4,
+     0
+    ],
+    "foot_shift": 0,
+    "colours": [
+     9,
+     9
+    ],
+    "island_px_fixed": 2,
+    "measure": {
+     "height": 56,
+     "head": 16,
+     "neck_row": 22,
+     "top": 6,
+     "bottom": 61,
+     "width": 17,
+     "torso_width": 13
+    },
+    "light_ul_minus_lr": 0.031,
+    "outside_palette": 0
+   },
+   "2": {
+    "grid_phase": [
+     4,
+     0
+    ],
+    "foot_shift": 0,
+    "colours": [
+     10,
+     10
+    ],
+    "island_px_fixed": 24,
+    "measure": {
+     "height": 56,
+     "head": 16,
+     "neck_row": 22,
+     "top": 6,
+     "bottom": 61,
+     "width": 17,
+     "torso_width": 13
+    },
+    "light_ul_minus_lr": 0.057,
+    "outside_palette": 0
+   },
+   "3": {
+    "grid_phase": [
+     14,
+     0
+    ],
+    "foot_shift": 0,
+    "colours": [
+     11,
+     10
+    ],
+    "island_px_fixed": 14,
+    "measure": {
+     "height": 56,
+     "head": 16,
+     "neck_row": 22,
+     "top": 6,
+     "bottom": 61,
+     "width": 17,
+     "torso_width": 13
+    },
+    "light_ul_minus_lr": 0.08,
+    "outside_palette": 0
+   },
+   "4": {
+    "grid_phase": [
+     14,
+     0
+    ],
+    "foot_shift": 0,
+    "colours": [
+     17,
+     10
+    ],
+    "island_px_fixed": 29,
+    "measure": {
+     "height": 56,
+     "head": 16,
+     "neck_row": 22,
+     "top": 6,
+     "bottom": 61,
+     "width": 17,
+     "torso_width": 13
+    },
+    "light_ul_minus_lr": 0.057,
+    "outside_palette": 0
+   }
+  },
+  "L": {
+   "1": {
+    "grid_phase": [
+     0,
+     0
+    ],
+    "foot_shift": 0,
+    "colours": [
+     8,
+     8
+    ],
+    "island_px_fixed": 1,
+    "measure": {
+     "height": 60,
+     "head": 17,
+     "neck_row": 19,
+     "top": 2,
+     "bottom": 61,
+     "width": 18,
+     "torso_width": 14
+    },
+    "light_ul_minus_lr": 0.042,
+    "outside_palette": 0
+   },
+   "2": {
+    "grid_phase": [
+     0,
+     0
+    ],
+    "foot_shift": 0,
+    "colours": [
+     11,
+     10
+    ],
+    "island_px_fixed": 18,
+    "measure": {
+     "height": 60,
+     "head": 17,
+     "neck_row": 19,
+     "top": 2,
+     "bottom": 61,
+     "width": 19,
+     "torso_width": 14
+    },
+    "light_ul_minus_lr": 0.055,
+    "outside_palette": 0
+   },
+   "3": {
+    "grid_phase": [
+     0,
+     0
+    ],
+    "foot_shift": 0,
+    "colours": [
+     11,
+     10
+    ],
+    "island_px_fixed": 10,
+    "measure": {
+     "height": 60,
+     "head": 17,
+     "neck_row": 19,
+     "top": 2,
+     "bottom": 61,
+     "width": 18,
+     "torso_width": 14
+    },
+    "light_ul_minus_lr": 0.064,
+    "outside_palette": 0
+   },
+   "4": {
+    "grid_phase": [
+     0,
+     0
+    ],
+    "foot_shift": 0,
+    "colours": [
+     13,
+     10
+    ],
+    "island_px_fixed": 25,
+    "measure": {
+     "height": 60,
+     "head": 17,
+     "neck_row": 19,
+     "top": 2,
+     "bottom": 61,
+     "width": 18,
+     "torso_width": 14
+    },
+    "light_ul_minus_lr": 0.057,
+    "outside_palette": 0
+   }
+  },
+  "XL": {
+   "1": {
+    "grid_phase": [
+     0,
+     0
+    ],
+    "foot_shift": 0,
+    "colours": [
+     16,
+     10
+    ],
+    "island_px_fixed": 15,
+    "measure": {
+     "height": 62,
+     "head": 13,
+     "neck_row": 13,
+     "top": 0,
+     "bottom": 61,
+     "width": 25,
+     "torso_width": 22
+    },
+    "light_ul_minus_lr": 0.032,
+    "outside_palette": 0
+   },
+   "2": {
+    "grid_phase": [
+     4,
+     0
+    ],
+    "foot_shift": 0,
+    "colours": [
+     11,
+     10
+    ],
+    "island_px_fixed": 35,
+    "measure": {
+     "height": 62,
+     "head": 15,
+     "neck_row": 15,
+     "top": 0,
+     "bottom": 61,
+     "width": 27,
+     "torso_width": 24
+    },
+    "light_ul_minus_lr": 0.027,
+    "outside_palette": 0
+   },
+   "3": {
+    "grid_phase": [
+     4,
+     0
+    ],
+    "foot_shift": 0,
+    "colours": [
+     14,
+     10
+    ],
+    "island_px_fixed": 31,
+    "measure": {
+     "height": 62,
+     "head": 15,
+     "neck_row": 15,
+     "top": 0,
+     "bottom": 61,
+     "width": 24,
+     "torso_width": 22
+    },
+    "light_ul_minus_lr": 0.058,
+    "outside_palette": 0
+   },
+   "4": {
+    "grid_phase": [
+     0,
+     0
+    ],
+    "foot_shift": 0,
+    "colours": [
+     13,
+     10
+    ],
+    "island_px_fixed": 26,
+    "measure": {
+     "height": 62,
+     "head": 16,
+     "neck_row": 16,
+     "top": 0,
+     "bottom": 61,
+     "width": 25,
+     "torso_width": 22
+    },
+    "light_ul_minus_lr": 0.034,
+    "outside_palette": 0
+   }
+  }
+ }
+}
