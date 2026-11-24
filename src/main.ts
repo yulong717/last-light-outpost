@@ -9,6 +9,7 @@ import { ArmoryScene } from './scenes/ArmoryScene';
 import { GameOverScene } from './scenes/GameOverScene';
 import { BestiaryScene } from './scenes/BestiaryScene';
 import { ExploreMapScene } from './scenes/ExploreMapScene';
+import { PrologueScene } from './scenes/PrologueScene';
 import { ExpeditionScene } from './scenes/ExpeditionScene';
 import { QteScene } from './scenes/QteScene';
 import { ExploreFieldScene } from './scenes/ExploreFieldScene';
@@ -42,7 +43,7 @@ const game = new Phaser.Game({
   plugins: {
     scene: [{ key: 'HiResPlugin', plugin: HiResPlugin, mapping: 'hiRes' }],
   },
-  scene: [BootScene, MenuScene, DefenseScene, UIScene, BuildUIScene, ArmoryScene, GameOverScene, BestiaryScene, ExploreMapScene, ExpeditionScene, QteScene, ExploreFieldScene, StoryScene, HeroSelectScene],
+  scene: [BootScene, MenuScene, DefenseScene, UIScene, BuildUIScene, ArmoryScene, GameOverScene, BestiaryScene, ExploreMapScene, ExpeditionScene, QteScene, ExploreFieldScene, StoryScene, HeroSelectScene, PrologueScene],
 });
 
 syncCanvasSmoothing(game);

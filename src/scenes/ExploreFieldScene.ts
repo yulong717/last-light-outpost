@@ -37,6 +37,7 @@ import { describeLoot, mergeLoot } from '../explore/Expedition';
 import { PropSystem, type Interaction } from '../scenery/PropSystem';
 import { fieldScenery } from '../scenery/locations';
 import type { PlacedProp, SceneryResult } from '../scenery/SceneryBuilder';
+import type { PrologueStage, StageHint } from '../data/prologue';
 
 export interface FieldResult {
   /** clean：潛入全程沒被發現；win：達成目標；failed：保護目標陣亡；down：主角倒下 */
@@ -49,6 +50,8 @@ export interface ExploreFieldData {
   /** 哪個事件：決定場景佈置（停車場、公車、倉庫…） */
   eventId?: string;
   onDone: (r: FieldResult) => void;
+  /** 序章的一層樓：擺好位置的霧屍、陰影、教學提示（src/data/prologue.ts） */
+  stage?: PrologueStage;
 }
 
 const FIELD_W = 960;
@@ -93,6 +96,13 @@ interface Follower {
 export class ExploreFieldScene extends Phaser.Scene {
   private spec!: FieldSpec;
   private eventId?: string;
+  private stage?: PrologueStage;
+  /** 序章：已經醒來的霧屍（走近 wakeRange 才醒，醒了就不會再站著） */
+  private awake = new Set<Zombie>();
+  private hintText?: Phaser.GameObjects.Text;
+  private hintBg?: Phaser.GameObjects.Rectangle;
+  private hintsShown = new Set<StageHint>();
+  private hintTimer = 0;
   /** 關卡寬度與出口位置（沿街前進比較長） */
   private worldW = FIELD_W;
   private exitX = FIELD_W - 34;
@@ -147,7 +157,8 @@ export class ExploreFieldScene extends Phaser.Scene {
 
   init(data: ExploreFieldData): void {
     this.spec = data.spec;
-    this.eventId = data.eventId;
+    this.stage = data.stage;
+    this.eventId = data.stage?.set ?? data.eventId;
     this.onDone = data.onDone;
   }
 
@@ -165,7 +176,13 @@ export class ExploreFieldScene extends Phaser.Scene {
     this.survivor = undefined;
     this.unregister = [];
     this.walkDot = undefined;
-    this.worldW = this.spec.walk ? WALK.worldW : FIELD_W;
+    this.awake = new Set();
+    this.hintsShown = new Set();
+    this.hintTimer = 0;
+    // 場景物件每次重開都是新的，舊的提示框已經被銷毀
+    this.hintText = undefined;
+    this.hintBg = undefined;
+    this.worldW = this.stage?.worldW ?? (this.spec.walk ? WALK.worldW : FIELD_W);
     this.exitX = this.worldW - 34;
     this.single = this.spec.axis === 'single' || !!this.spec.walk;
     setSingleLane(this.single);
@@ -179,8 +196,9 @@ export class ExploreFieldScene extends Phaser.Scene {
     this.camFeel = CameraFeel.attach(this);
     createAtmosphere(this, { groundY: LANE_TOP + 14 });
 
-    this.player = new Player(this, 60, this.single ? SINGLE_LANE_Y : (LANE_TOP + LANE_BOTTOM) / 2, GameState.hero.maxHp);
-    this.player.hp = Math.max(1, exp.hp);
+    this.player = new Player(this, this.stage?.startX ?? 60, this.single ? SINGLE_LANE_Y : (LANE_TOP + LANE_BOTTOM) / 2, GameState.hero.maxHp);
+    // 序章每一層都從滿血開始（樓梯間喘口氣）
+    this.player.hp = this.stage ? this.player.maxHp : Math.max(1, exp.hp);
     this.fx.attachShadow(this.player.sprite, 22);
     this.rig = new WeaponRig(this, heroRigColors(GameState.data.hero ?? 'soldier'));
     this.rig.setWeapon(GameState.data.armory.loadout[0] ?? 'm1911');
@@ -224,10 +242,14 @@ export class ExploreFieldScene extends Phaser.Scene {
     }, this.scenery);
     const zone = exp.zone;
     prewarmLooks(this, Object.keys(zone.zombies));
-    const count = exp.zombieCount(this.spec);
-    if (this.spec.mode === 'stealth') this.setupStealth(count);
-    else this.setupFight(count);
+    if (this.stage) this.setupStage(this.stage);
+    else {
+      const count = exp.zombieCount(this.spec);
+      if (this.spec.mode === 'stealth') this.setupStealth(count);
+      else this.setupFight(count);
+    }
     this.buildHud();
+    this.fireHints((w) => w === 'start');
 
     this.input.keyboard?.on('keydown-H', this.medkit, this);
     this.input.keyboard?.on('keydown-F', this.interact, this);
@@ -250,10 +272,15 @@ export class ExploreFieldScene extends Phaser.Scene {
     // 出口（潛入目標）：一扇亮著綠光的門
     else if (this.spec.goal === 'reach') {
       const y = GROUND_Y + 1;
-      this.add.image(this.exitX, y, propKey('door'), 1).setOrigin(0.5, 1).setDepth(5);
+      // 頂樓的樓梯間小屋本身就有門
+      if (this.stage?.id !== 'roof') this.add.image(this.exitX, y, propKey('door'), 1).setOrigin(0.5, 1).setDepth(5);
       const glow = this.add.rectangle(this.exitX, y - 24, 30, 52, 0x9ad17a, 0.14).setDepth(6);
       this.tweens.add({ targets: glow, alpha: 0.03, duration: 700, yoyo: true, repeat: -1 });
-      pixelText(this, this.exitX, y - 58, '出口', 8, '#9ad17a').setOrigin(0.5).setDepth(70).setStroke('#000000', 3);
+      pixelText(this, this.exitX, y - 58, this.stage?.exitLabel ?? '出口', 8, '#9ad17a').setOrigin(0.5).setDepth(70).setStroke('#000000', 3);
+    }
+    // 序章：牆上漆著樓層的大字
+    if (this.stage && this.stage.id !== 'roof') {
+      pixelText(this, 200, GROUND_Y - 96, this.stage.floor, 14, '#2a3a30').setOrigin(0.5).setDepth(-50).setAlpha(0.7);
     }
   }
 
@@ -333,6 +360,107 @@ export class ExploreFieldScene extends Phaser.Scene {
       first ??= z;
     }
     return first!;
+  }
+
+  // ── 序章 ──
+
+  /** 指定職業的霧屍（序章的位置、種類都是設計好的） */
+  private placeZombie(id: string, x: number, y: number): Zombie {
+    const z = spawnEnemy(this, id, x, clampLaneY(y), { day: 1 });
+    this.zombies.push(z);
+    return z;
+  }
+
+  private setupStage(st: PrologueStage): void {
+    const y = this.single ? SINGLE_LANE_Y : (LANE_TOP + LANE_BOTTOM) / 2;
+    prewarmLooks(this, [...new Set([...(st.zombies ?? []), ...(st.sleepers ?? [])].map((z) => z.id).concat(st.reinforce?.ids ?? []))]);
+    if (this.spec.mode === 'stealth') {
+      this.player.speedMul = 0.75;
+      for (const [x, w] of st.shadows ?? []) {
+        const r = new Phaser.Geom.Rectangle(x, LANE_TOP - 6, w, LANE_BOTTOM - LANE_TOP + 12);
+        this.shadows.push(r);
+        this.add.rectangle(r.x, r.y, r.width, r.height, 0x000000, 0.42).setOrigin(0).setDepth(9);
+      }
+      for (const s of st.sleepers ?? []) {
+        const z = this.placeZombie(s.id, s.x, y);
+        const dir = s.facing ?? 1;
+        z.setFlipX(dir < 0);
+        const range = s.patrol ?? 0;
+        const icon = pixelText(this, s.x, y - 70, '', 10, '#ffd24a').setOrigin(0.5).setDepth(70).setStroke('#000000', 3);
+        const cone = this.add.graphics().setDepth(8);
+        // 站崗不動的：只會停下來轉頭
+        this.sleepers.push({ z, minX: s.x - range, maxX: s.x + range, dir, pause: range ? this.rng.float(0.5, 2) : this.rng.float(2.5, 4), alert: 0, icon, cone });
+      }
+    } else {
+      for (const s of st.zombies ?? []) {
+        const z = this.placeZombie(s.id, s.x, y);
+        z.setFlipX(s.x > this.player.footX);
+      }
+    }
+    if (st.reinforce) {
+      this.toSpawn = st.reinforce.count;
+      this.spawnEvery = st.reinforce.every;
+      this.spawnTimer = st.reinforce.delay ?? st.reinforce.every;
+    }
+  }
+
+  /** 序章：還沒醒的霧屍在原地晃，主角走近才撲過來 */
+  private dormant(z: Zombie): boolean {
+    const st = this.stage;
+    if (!st?.wakeRange || this.awake.has(z)) return false;
+    if (Math.abs(z.footX - this.player.footX) <= st.wakeRange || z.hp < z.maxHp) {
+      this.awake.add(z);
+      return false;
+    }
+    return true;
+  }
+
+  /** 教學提示：符合條件的第一次跳出來，蓋掉上一則 */
+  private fireHints(match: (w: StageHint['when']) => boolean): void {
+    const st = this.stage;
+    if (!st) return;
+    for (const h of st.hints) {
+      if (this.hintsShown.has(h) || !match(h.when)) continue;
+      this.hintsShown.add(h);
+      this.showHint(this.sys.game.device.input.touch ? h.touch ?? h.text : h.text);
+    }
+  }
+
+  private showHint(text: string): void {
+    if (!this.hintText) {
+      this.hintBg = this.add.rectangle(GAME_WIDTH / 2, 62, 10, 20, 0x000000, 0.62).setStrokeStyle(1, 0xf5d76e, 0.6).setScrollFactor(0).setDepth(205);
+      this.hintText = pixelText(this, GAME_WIDTH / 2, 62, '', 9, '#fff3c4').setOrigin(0.5).setScrollFactor(0).setDepth(206);
+    }
+    const t = this.hintText;
+    const bg = this.hintBg!;
+    t.setText(text);
+    bg.setSize(t.width + 20, t.height + 10);
+    bg.setPosition(GAME_WIDTH / 2, 62);
+    this.tweens.killTweensOf([t, bg]);
+    t.setAlpha(1);
+    bg.setAlpha(1);
+    t.setScale(0.9);
+    this.tweens.add({ targets: t, scale: 1, duration: 160, ease: 'Back.easeOut' });
+    AudioManager.ui('confirm');
+    this.hintTimer = 8;
+  }
+
+  private updateHints(dt: number): void {
+    if (!this.stage) return;
+    const p = this.player;
+    const grabbed = !!this.heroSys.hud()?.grabbed;
+    this.fireHints((w) => {
+      if (w === 'grab') return grabbed;
+      if (w === 'kill') return this.kills > 0;
+      if (w === 'alert') return this.alerted && this.spec.mode === 'stealth';
+      if (typeof w === 'object' && 'x' in w) return p.footX >= w.x;
+      if (typeof w === 'object' && 'seconds' in w) return this.elapsed >= w.seconds;
+      return false;
+    });
+    if (this.hintTimer > 0) {
+      this.hintTimer -= dt;
+      if (this.hintTimer <= 0 && this.hintText) this.tweens.add({ targets: [this.hintText, this.hintBg], alpha: 0, duration: 500 });
+    }
   }
 
   // ── 潛入 ──
@@ -489,7 +617,8 @@ export class ExploreFieldScene extends Phaser.Scene {
     }
     AudioManager.play('wave_horn', { volume: 0.6 });
     this.exp.addNoise(15);
-    this.goalText.setText('被發現了！殺光牠們，或衝到出口').setColor('#ff8a80');
+    this.goalText.setText(this.stage ? '被發現了！衝到樓梯口' : '被發現了！殺光牠們，或衝到出口').setColor('#ff8a80');
+    this.fireHints((w) => w === 'alert');
   }
 
   // ── 戰鬥 ──
@@ -563,15 +692,25 @@ export class ExploreFieldScene extends Phaser.Scene {
   private spawnEdge(): void {
     // 室內：有門的話，霧屍有時候破門而出（封住的門不會）
     const doors = this.props.spawnDoors().filter((d) => Math.abs(d.x - this.player.footX) > 90);
-    if (doors.length && this.rng.chance(0.45)) {
+    const ids = this.stage?.reinforce?.ids;
+    const spawn = (x: number, y: number) => {
+      if (ids) this.awake.add(this.placeZombie(this.rng.pick(ids), x, y));
+      else this.makeZombie(x, y);
+    };
+    if (doors.length && this.rng.chance(this.stage ? 0.8 : 0.45)) {
       const at = this.props.burstDoor(this.rng.pick(doors));
-      this.makeZombie(at.x, at.y);
+      spawn(at.x, at.y);
+      return;
+    }
+    // 序章的走廊：門都封住了，就從身後的樓梯追下來
+    if (this.stage && this.stage.spec.goal === 'reach') {
+      spawn(Math.max(-30, this.cameras.main.scrollX - 24), this.rng.int(LANE_TOP, LANE_BOTTOM));
       return;
     }
     const cam = this.cameras.main;
-    const left = this.rng.chance(0.35);
+    const left = this.rng.chance(this.stage ? 0.5 : 0.35);
     const x = left ? Math.max(-30, cam.scrollX - 24) : Math.min(this.worldW + 30, cam.scrollX + GAME_WIDTH + 24);
-    this.makeZombie(x, this.rng.int(LANE_TOP, LANE_BOTTOM));
+    spawn(x, this.rng.int(LANE_TOP, LANE_BOTTOM));
   }
 
   // ── HUD ──
@@ -585,9 +724,17 @@ export class ExploreFieldScene extends Phaser.Scene {
     fix(this.add.rectangle(0, 0, GAME_WIDTH, 24, 0x000000, 0.5).setOrigin(0));
     fix(pixelText(this, 6, 6, '生命', 8));
     this.setHp = this.hudBar(32, 8, 70, 7, 0xef5350);
-    fix(pixelText(this, 110, 6, '噪音', 8, '#ffcc80'));
-    this.setNoise = this.hudBar(136, 8, 60, 7, 0xffa726);
-    const title = this.spec.mode === 'stealth' ? `潛入：${this.spec.title}` : this.spec.meleeOnly ? `${this.spec.title}（禁止開槍）` : this.spec.title;
+    if (this.stage) {
+      // 序章沒有噪音系統：左上改成樓層
+      fix(pixelText(this, 110, 6, `市立高中・${this.stage.floor}`, 8, '#f5d76e'));
+      this.setNoise = () => {};
+    } else {
+      fix(pixelText(this, 110, 6, '噪音', 8, '#ffcc80'));
+      this.setNoise = this.hudBar(136, 8, 60, 7, 0xffa726);
+    }
+    const title = this.stage
+      ? this.spec.title
+      : this.spec.mode === 'stealth' ? `潛入：${this.spec.title}` : this.spec.meleeOnly ? `${this.spec.title}（禁止開槍）` : this.spec.title;
     this.goalText = fix(pixelText(this, GAME_WIDTH / 2, 30, title, 9, '#ffd24a').setOrigin(0.5, 0).setStroke('#000000', 3));
     this.infoText = fix(pixelText(this, GAME_WIDTH - 6, 6, '', 8).setOrigin(1, 0));
     if (this.spec.walk) {
@@ -601,7 +748,13 @@ export class ExploreFieldScene extends Phaser.Scene {
     const touch = this.sys.game.device.input.touch;
     const wx = touch ? 210 : 6;
     this.ammoText = fix(pixelText(this, wx, GAME_HEIGHT - 28, '', 9));
-    const help = this.single
+    const help = this.stage
+      ? touch
+        ? ''
+        : this.spec.mode === 'stealth'
+          ? 'A／D 左右移動・躲進陰影・從背後按 E 暗殺・H 醫療包'
+          : 'A／D 左右移動・左鍵揮棒（按住連揮）・F 互動・H 醫療包'
+      : this.single
       ? touch
         ? '只能左右移動・路邊的箱子可以打開'
         : this.spec.walk
@@ -780,7 +933,7 @@ export class ExploreFieldScene extends Phaser.Scene {
       const ctx = this.context();
       for (const z of this.zombies) {
         // 沿街前進：前方遠處的霧屍先站著晃，走近了才醒
-        if (this.spec.walk && z.footX - p.footX > WALK.wakeRange) z.idle(dt);
+        if ((this.spec.walk && z.footX - p.footX > WALK.wakeRange) || this.dormant(z)) z.idle(dt);
         else z.update(dt, ctx);
       }
       if (this.toSpawn > 0) {
@@ -797,6 +950,7 @@ export class ExploreFieldScene extends Phaser.Scene {
       for (let j = i + 1; j < this.zombies.length; j++) Zombie.separate(this.zombies[i], this.zombies[j]);
     }
     this.refreshHud();
+    this.updateHints(realDt);
     this.checkEnd();
   }
 
@@ -941,7 +1095,8 @@ export class ExploreFieldScene extends Phaser.Scene {
     if (this.survivor && this.survivor.hp <= 0) return this.finish('failed');
     if (s.goal === 'reach' && p.footX >= this.exitX - 10) return this.finish(this.alerted ? 'win' : 'clean');
     if (s.walk) return;
-    if (this.alerted && (s.goal === 'clear' || s.goal === 'reach') && this.zombies.length === 0 && this.toSpawn === 0) {
+    // 序章一定要走到樓梯口才算過關
+    if (!this.stage && this.alerted && (s.goal === 'clear' || s.goal === 'reach') && this.zombies.length === 0 && this.toSpawn === 0) {
       return this.finish(s.mode === 'stealth' ? 'win' : 'win');
     }
     if ((s.goal === 'survive' || s.goal === 'protect') && this.elapsed >= (s.seconds ?? 25)) return this.finish('win');
@@ -953,7 +1108,11 @@ export class ExploreFieldScene extends Phaser.Scene {
     this.exp.hp = Math.max(0, this.player.hp);
     this.exp.kills += this.kills;
     this.weapons.unloadAll();
-    const msg = this.spec.walk && result !== 'down' ? `抵達${this.spec.exitLabel ?? '下一站'}` : { clean: '神不知鬼不覺', win: '任務完成', failed: '倖存者沒能撐住……', down: '你倒下了' }[result];
+    const msg = this.spec.walk && result !== 'down'
+      ? `抵達${this.spec.exitLabel ?? '下一站'}`
+      : this.stage && result !== 'down' && result !== 'failed'
+        ? result === 'clean' && this.spec.mode === 'stealth' ? '神不知鬼不覺' : this.stage.doneText
+        : { clean: '神不知鬼不覺', win: '任務完成', failed: '倖存者沒能撐住……', down: '你倒下了' }[result];
     const ok = result === 'clean' || result === 'win';
     const t = pixelText(this, GAME_WIDTH / 2, 140, msg, 16, ok ? '#9ad17a' : '#ff6b6b').setOrigin(0.5).setScrollFactor(0).setDepth(250).setStroke('#000000', 4);
     t.setScale(0.6);

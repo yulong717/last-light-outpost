@@ -100,7 +100,8 @@ export function buildScenery(scene: Phaser.Scene, o: SceneryOptions): SceneryRes
     drawFar(scene, t.far, t, W, uid, rnd);
     drawMid(scene, t, W, uid, rnd);
     drawFacade(scene, o.facade ?? t.facade, t, W, uid, rnd, signs);
-    drawGround(scene, t.floorExt, t, W, uid, rnd, o.facade ?? t.facade);
+    // 頂樓：腳下是水泥樓板，不是操場
+    drawGround(scene, o.facade === 'rooftop' ? 'concrete' : t.floorExt, t, W, uid, rnd, o.facade ?? t.facade);
     darkness = o.mood === 'dark' ? 0.4 : o.mood === 'dim' ? 0.2 : 0.08;
   } else {
     drawInterior(scene, o.interior ?? t.interior, t, W, uid, rnd, signs);
@@ -353,6 +354,9 @@ function drawFacade(
         break;
       case 'parking':
         facadeParking(p, W, t, rnd, signs);
+        break;
+      case 'rooftop':
+        facadeRooftop(p, W, rnd, signs);
         break;
       case 'street':
       default:
@@ -672,6 +676,48 @@ function facadeSchool(p: Painter, W: number, _t: LocationTheme, rnd: Phaser.Math
   sidewalkTrim(p, W);
 }
 
+/**
+ * 頂樓：沒有建築立面，看出去是天空和遠方的城市。
+ * 前景是女兒牆＋1.2m 鐵欄杆、水塔、冷氣主機，最右邊是樓梯間的小屋。
+ */
+function facadeRooftop(p: Painter, W: number, rnd: Phaser.Math.RandomDataGenerator, signs: Sign[]): void {
+  const wallH = Math.round(0.6 * M);
+  const railH = Math.round(1.1 * M);
+  // 水塔（架高的圓桶）
+  for (let x = 180; x < W - 300; x += 520) {
+    const tx = x + rnd.between(-40, 40);
+    p.rect(tx + 6, B - 150, 4, 110, 0x3a3e44);
+    p.rect(tx + 70, B - 150, 4, 110, 0x3a3e44);
+    p.rect(tx + 6, B - 100, 68, 3, 0x3a3e44);
+    p.box(tx, B - 210, 80, 62, 0x8a9aa8, { light: 0.2 });
+    for (let k = 0; k < 4; k++) p.rect(tx, B - 200 + k * 14, 80, 2, 0x6a7a88);
+    p.rect(tx + 34, B - 220, 12, 10, 0x6a7a88);
+  }
+  // 冷氣主機
+  for (let x = 420; x < W - 260; x += 380) {
+    p.box(x, B - 44, 52, 30, 0xb8bcc0);
+    p.circle(x + 18, B - 29, 10, 0x6a7076);
+    p.circle(x + 18, B - 29, 3, 0x3a3e44);
+  }
+  // 女兒牆＋欄杆
+  p.box(0, B - wallH, W, wallH, 0x9a968a, { light: 0.1 });
+  p.rect(0, B - wallH, W, 3, 0xb8b4a8);
+  for (let x = 0; x < W; x += 6) p.rect(x, B - wallH - railH, 2, railH, 0x4a5058);
+  p.rect(0, B - wallH - railH, W, 3, 0x5a6068);
+  p.rect(0, B - wallH - railH / 2, W, 2, 0x4a5058);
+  // 樓梯間（右邊的小屋，門開著，裡面是黑的）
+  // 門的中心對準關卡出口（世界寬 − 34）
+  const hx = W - 150;
+  const hh = Math.round(3 * M);
+  p.box(hx, B - hh, 150, hh, 0xc8c0a8, { light: 0.12 });
+  p.rect(hx, B - hh, 150, 6, 0x8a8470);
+  p.rect(hx + 96, B - 76, 40, 76, 0x07080a);
+  p.rect(hx + 96, B - 76, 40, 2, 0x3a3a34);
+  p.box(hx + 20, B - 92, 34, 14, 0x2e6b3a);
+  signs.push({ x: hx + 37, y: B - 85, text: '樓梯', color: '#ffffff', size: 7 });
+  sidewalkTrim(p, W);
+}
+
 /** 建築底下的人行道邊緣與路緣 */
 function sidewalkTrim(p: Painter, W: number, c = 0x4a4c50): void {
   p.rect(0, B, W, 2, c);
@@ -748,6 +794,7 @@ const CEIL_M: Record<InteriorStyle, number> = {
   bunker: 2.6,
   warehouse: 5.8,
   lobby: 4.2,
+  classroom: 3.2,
 };
 
 /** 這種室內的天花板 y（日光燈掛在這裡） */
@@ -875,6 +922,34 @@ function drawInterior(
           }
         }
         break;
+      case 'classroom': {
+        // 學校走廊：上米白下綠（1m 牆裙）、每間教室一扇前門＋班級牌、門與門之間是教室的窗、公布欄
+        const split = lowerH(1);
+        wallTwoTone(p, W, top, 0xd8d0b8, 0x4a6a58, split);
+        p.rect(0, split - 3, W, 3, 0x2a3a30);
+        for (let x = 60; x < W; x += 300) {
+          // 前門（0.9 × 2.1m）
+          const dh = Math.round(2.1 * M);
+          p.box(x, B - dh, 32, dh, 0x7a5a3a, { light: 0.1 });
+          p.rect(x + 6, B - dh + 8, 20, 18, 0x2a3440);
+          p.rect(x + 26, B - dh / 2, 3, 3, 0xc8b070);
+          p.box(x - 6, B - dh - 20, 44, 14, 0x2e4a3a);
+          signs.push({ x: x + 16, y: B - dh - 13, text: `${rnd.between(1, 3)}年${rnd.between(1, 9)}班`, color: '#f0ece0', size: 8 });
+          // 教室窗（看進去是暗的）
+          p.window(x + 56, lowerH(2.3), 150, 44, { glass: 0x1e252e, broken: rnd.frac() < 0.3, blinds: rnd.frac() < 0.3 });
+          // 公布欄或消防栓箱
+          if (rnd.frac() < 0.5) {
+            p.box(x + 222, lowerH(2), 46, 30, 0x9a6a3a);
+            for (let k = 0; k < 4; k++) p.rect(x + 226 + (k % 2) * 20, lowerH(2) + 4 + Math.floor(k / 2) * 13, 16, 10, rnd.pick([0xe8e4d8, 0xf0d890, 0xc8e0f0]));
+          } else {
+            p.box(x + 236, lowerH(1.6), 18, 26, 0xb82a22);
+            p.rect(x + 240, lowerH(1.6) + 4, 10, 10, 0xe8d8c8);
+          }
+        }
+        // 地上的血拖痕、翻倒的書包
+        for (let x = rnd.between(100, 300); x < W; x += rnd.between(280, 460)) p.dither(x, B - 30, rnd.between(30, 60), 5, 0x5a0a08, 0.35);
+        break;
+      }
       case 'lobby':
       default: {
         wallTwoTone(p, W, top, 0xa8a49a, 0x7a766c, lowerH(0.6));
