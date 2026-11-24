@@ -50,6 +50,10 @@ export class UIScene extends Phaser.Scene {
   private touchUI = false;
   private stick!: Phaser.GameObjects.Graphics;
   private rotateHint!: Phaser.GameObjects.Container;
+  /** 轉向後補查的計時器 */
+  private orientTimers: number[] = [];
+  /** 是不是因為直向才暫停戰鬥（只解除自己造成的暫停） */
+  private pausedForRotate = false;
   private unregister: (() => void)[] = [];
   private last?: HudData;
 
@@ -139,7 +143,26 @@ export class UIScene extends Phaser.Scene {
     this.buttonRects.fire = { x: 300, y: 150, w: 180, h: 110 };
 
     this.buildRotateHint();
-    this.scale.on(Phaser.Scale.Events.ORIENTATION_CHANGE, this.checkOrientation, this);
+    // 轉向偵測：Phaser 的 ORIENTATION_CHANGE 觸發時，手機瀏覽器（尤其 iOS）的視窗尺寸常常還沒更新，
+    // 讀到的是轉向前的寬高，提示就會卡住、要再轉一次才對。所以同時聽瀏覽器的各種轉向／尺寸事件，
+    // 並在之後幾個時間點再補查幾次，等尺寸穩定。
+    const onTurn = () => this.queueOrientationCheck();
+    const portraitMq = window.matchMedia?.('(orientation: portrait)');
+    this.scale.on(Phaser.Scale.Events.ORIENTATION_CHANGE, onTurn);
+    window.addEventListener('resize', onTurn);
+    window.addEventListener('orientationchange', onTurn);
+    window.visualViewport?.addEventListener('resize', onTurn);
+    screen.orientation?.addEventListener?.('change', onTurn);
+    portraitMq?.addEventListener?.('change', onTurn);
+    this.unregister.push(() => {
+      this.scale.off(Phaser.Scale.Events.ORIENTATION_CHANGE, onTurn);
+      window.removeEventListener('resize', onTurn);
+      window.removeEventListener('orientationchange', onTurn);
+      window.visualViewport?.removeEventListener('resize', onTurn);
+      screen.orientation?.removeEventListener?.('change', onTurn);
+      portraitMq?.removeEventListener?.('change', onTurn);
+      this.orientTimers.forEach((t) => window.clearTimeout(t));
+    });
     this.checkOrientation();
 
     const defense = this.scene.get('Defense');
@@ -154,7 +177,6 @@ export class UIScene extends Phaser.Scene {
       defense.events.off('wave-start', this.onWaveStart, this);
       defense.events.off('horde-warning', this.onHordeWarning, this);
       defense.events.off('tutorial', this.onTutorial, this);
-      this.scale.off(Phaser.Scale.Events.ORIENTATION_CHANGE, this.checkOrientation, this);
       this.unregister.forEach((fn) => fn());
     });
   }
@@ -675,11 +697,39 @@ export class UIScene extends Phaser.Scene {
     this.rotateHint = this.add.container(0, 0, [bg, text]).setDepth(1000);
   }
 
+  /** 現在是不是直向：優先用 screen.orientation（轉向事件發生時就已更新），其次 media query，最後才比視窗寬高 */
+  private isPortrait(): boolean {
+    if (!this.sys.game.device.input.touch) return false;
+    const type = screen.orientation?.type;
+    if (type) return type.startsWith('portrait');
+    const mq = window.matchMedia?.('(orientation: portrait)');
+    if (mq) return mq.matches;
+    return window.innerHeight > window.innerWidth;
+  }
+
+  /** 轉向／尺寸改變：馬上查一次，之後再補查幾次（瀏覽器轉完才更新尺寸），順便讓 Phaser 重新算縮放 */
+  private queueOrientationCheck(): void {
+    this.orientTimers.forEach((t) => window.clearTimeout(t));
+    this.checkOrientation();
+    this.orientTimers = [120, 350, 800].map((ms) =>
+      window.setTimeout(() => {
+        if (!this.sys.isActive() && !this.sys.isPaused()) return;
+        this.scale.refresh();
+        this.checkOrientation();
+      }, ms),
+    );
+  }
+
   private checkOrientation(): void {
-    const portrait = this.sys.game.device.input.touch && window.innerHeight > window.innerWidth;
+    const portrait = this.isPortrait();
     this.rotateHint.setVisible(portrait);
     const defense = this.scene.get('Defense');
-    if (portrait && defense.scene.isActive()) defense.scene.pause();
-    else if (!portrait && defense.scene.isPaused()) defense.scene.resume();
+    if (portrait && defense.scene.isActive()) {
+      defense.scene.pause();
+      this.pausedForRotate = true;
+    } else if (!portrait && this.pausedForRotate) {
+      this.pausedForRotate = false;
+      if (defense.scene.isPaused()) defense.scene.resume();
+    }
   }
 }
