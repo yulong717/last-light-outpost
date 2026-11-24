@@ -1,0 +1,2596 @@
+{
+ "walk": {
+  "round": 14,
+  "seed": 1,
+  "prompt": "Pixel art game sprite animation of the huge brute fog zombie from <Picture 1>: keep its massive build, broad shoulders, thick arms, small head, grey-green skin, torn light grey shirt, dark navy trousers, dark boots, colours and near-black outlines exactly. Three-quarter view facing right, fixed camera, no zoom, no pan, full body visible at all times. The background stays plain solid magenta in every frame. Only the zombie, nothing else appears: no weapon, no object, no person. It lumbers forward in place on a treadmill with a slow, very heavy zombie walk: strongly hunched the whole time, head pushed forward, both thick arms stay stretched forward at shoulder height reaching to the right and only sway, the heavy body rocks from side to side with every step, long dragging strides, the legs clearly alternate with even, equal steps, the feet stomp and scrape along the ground line. Two full steps at a constant pace. Seamless loop. No effects. Flat colors.",
+  "first": "walkkey",
+  "last": "walkkey",
+  "workflow": "art/ai/workflows/h3_video_i2v.json 576x576, 56 frames, 8-step LoRA, 8 steps",
+  "pick": {
+   "period": 26,
+   "start": 25,
+   "closure": 0.015427292817491958,
+   "motion": 0.19070048007496232,
+   "mode": "loop",
+   "picked": [
+    27,
+    31,
+    35,
+    37,
+    40,
+    44,
+    47,
+    50
+   ],
+   "spread": [
+    357.0,
+    381.0,
+    373.0,
+    372.0,
+    350.0,
+    274.0,
+    265.0,
+    213.0,
+    199.0,
+    118.0,
+    118.0,
+    192.0,
+    198.0,
+    308.0,
+    312.0,
+    326.0,
+    322.0,
+    299.0,
+    255.0,
+    251.0,
+    196.0,
+    152.0,
+    148.0,
+    148.0,
+    153.0,
+    264.0
+   ],
+   "contact": [
+    2,
+    15
+   ],
+   "crossing": [
+    10,
+    22
+   ],
+   "step_frames": [
+    4,
+    4,
+    2,
+    3,
+    4,
+    3,
+    3,
+    3
+   ],
+   "colours": [
+    29,
+    16
+   ],
+   "island_px_fixed": 5,
+   "head_track": [
+    {
+     "dx": 5,
+     "dy": 0,
+     "err": 4.0
+    },
+    {
+     "dx": 5,
+     "dy": 0,
+     "err": 3.5
+    },
+    {
+     "dx": 5,
+     "dy": -2,
+     "err": 8.0
+    },
+    {
+     "dx": 5,
+     "dy": -2,
+     "err": 22.6
+    },
+    {
+     "dx": 5,
+     "dy": -2,
+     "err": 3.9
+    },
+    {
+     "dx": 5,
+     "dy": 0,
+     "err": 10.2
+    },
+    {
+     "dx": 5,
+     "dy": -2,
+     "err": 31.5
+    },
+    {
+     "dx": 5,
+     "dy": -3,
+     "err": 29.9
+    }
+   ],
+   "region_px_fixed": 29,
+   "out_spread": [
+    46,
+    33,
+    13,
+    24,
+    40,
+    31,
+    15,
+    33
+   ],
+   "head_identical": true,
+   "heights": [
+    56,
+    56,
+    58,
+    58,
+    58,
+    56,
+    58,
+    59
+   ],
+   "feet": [
+    69,
+    69,
+    69,
+    69,
+    69,
+    69,
+    69,
+    69
+   ],
+   "widths": [
+    65,
+    59,
+    51,
+    51,
+    58,
+    58,
+    51,
+    56
+   ],
+   "regions": {
+    "outline": 4336,
+    "skin": 1938,
+    "shirt": 2559,
+    "pants": 1931,
+    "other": 240
+   },
+   "outside_palette": 0,
+   "n_colours": 16,
+   "seconds": 58.7,
+   "vram_peak_mib": 15533
+  },
+  "seeds": {
+   "walk_s1": {
+    "period": 26,
+    "start": 25,
+    "closure": 0.015427292817491958,
+    "motion": 0.19070048007496232,
+    "mode": "loop",
+    "picked": [
+     27,
+     31,
+     35,
+     37,
+     40,
+     44,
+     47,
+     50
+    ],
+    "spread": [
+     357.0,
+     381.0,
+     373.0,
+     372.0,
+     350.0,
+     274.0,
+     265.0,
+     213.0,
+     199.0,
+     118.0,
+     118.0,
+     192.0,
+     198.0,
+     308.0,
+     312.0,
+     326.0,
+     322.0,
+     299.0,
+     255.0,
+     251.0,
+     196.0,
+     152.0,
+     148.0,
+     148.0,
+     153.0,
+     264.0
+    ],
+    "contact": [
+     2,
+     15
+    ],
+    "crossing": [
+     10,
+     22
+    ],
+    "step_frames": [
+     4,
+     4,
+     2,
+     3,
+     4,
+     3,
+     3,
+     3
+    ],
+    "colours": [
+     29,
+     16
+    ],
+    "island_px_fixed": 5,
+    "head_track": [
+     {
+      "dx": 5,
+      "dy": 0,
+      "err": 4.0
+     },
+     {
+      "dx": 5,
+      "dy": 0,
+      "err": 3.5
+     },
+     {
+      "dx": 5,
+      "dy": -2,
+      "err": 8.0
+     },
+     {
+      "dx": 5,
+      "dy": -2,
+      "err": 22.6
+     },
+     {
+      "dx": 5,
+      "dy": -2,
+      "err": 3.9
+     },
+     {
+      "dx": 5,
+      "dy": 0,
+      "err": 10.2
+     },
+     {
+      "dx": 5,
+      "dy": -2,
+      "err": 31.5
+     },
+     {
+      "dx": 5,
+      "dy": -3,
+      "err": 29.9
+     }
+    ],
+    "region_px_fixed": 29,
+    "out_spread": [
+     46,
+     33,
+     13,
+     24,
+     40,
+     31,
+     15,
+     33
+    ],
+    "head_identical": true,
+    "heights": [
+     56,
+     56,
+     58,
+     58,
+     58,
+     56,
+     58,
+     59
+    ],
+    "feet": [
+     69,
+     69,
+     69,
+     69,
+     69,
+     69,
+     69,
+     69
+    ],
+    "widths": [
+     65,
+     59,
+     51,
+     51,
+     58,
+     58,
+     51,
+     56
+    ],
+    "regions": {
+     "outline": 4336,
+     "skin": 1938,
+     "shirt": 2559,
+     "pants": 1931,
+     "other": 240
+    },
+    "outside_palette": 0,
+    "n_colours": 16,
+    "seconds": 58.7,
+    "vram_peak_mib": 15533
+   },
+   "walk_s2": {
+    "period": 24,
+    "start": 14,
+    "closure": 0.1038005439915094,
+    "motion": 0.11776022201109956,
+    "mode": "loop",
+    "picked": [
+     25,
+     32,
+     36,
+     36,
+     37,
+     14,
+     16,
+     21
+    ],
+    "spread": [
+     158.0,
+     135.0,
+     142.0,
+     144.0,
+     164.0,
+     180.0,
+     212.0,
+     213.0,
+     272.0,
+     272.0,
+     296.0,
+     322.0,
+     326.0,
+     322.0,
+     318.0,
+     317.0,
+     282.0,
+     282.0,
+     242.0,
+     242.0,
+     198.0,
+     199.0,
+     174.0,
+     176.0
+    ],
+    "contact": [
+     11,
+     23
+    ],
+    "crossing": [
+     22,
+     2
+    ],
+    "step_frames": [
+     7,
+     4,
+     0,
+     1,
+     1,
+     2,
+     5,
+     4
+    ],
+    "colours": [
+     28,
+     16
+    ],
+    "island_px_fixed": 5,
+    "head_track": [
+     {
+      "dx": 5,
+      "dy": -1,
+      "err": 3.2
+     },
+     {
+      "dx": 5,
+      "dy": -1,
+      "err": 3.1
+     },
+     {
+      "dx": 5,
+      "dy": -2,
+      "err": 26.7
+     },
+     {
+      "dx": 5,
+      "dy": -2,
+      "err": 26.7
+     },
+     {
+      "dx": 5,
+      "dy": -2,
+      "err": 30.0
+     },
+     {
+      "dx": 4,
+      "dy": -2,
+      "err": 7.4
+     },
+     {
+      "dx": 4,
+      "dy": -2,
+      "err": 11.9
+     },
+     {
+      "dx": 5,
+      "dy": -1,
+      "err": 18.9
+     }
+    ],
+    "region_px_fixed": 26,
+    "out_spread": [
+     40,
+     31,
+     21,
+     21,
+     21,
+     20,
+     17,
+     27
+    ],
+    "head_identical": true,
+    "heights": [
+     57,
+     57,
+     58,
+     58,
+     58,
+     58,
+     58,
+     57
+    ],
+    "feet": [
+     69,
+     69,
+     69,
+     69,
+     69,
+     69,
+     69,
+     69
+    ],
+    "widths": [
+     60,
+     58,
+     53,
+     53,
+     53,
+     51,
+     51,
+     55
+    ],
+    "regions": {
+     "outline": 4619,
+     "skin": 2045,
+     "shirt": 2469,
+     "other": 157,
+     "pants": 1402
+    },
+    "outside_palette": 0,
+    "n_colours": 16,
+    "seconds": 43.5,
+    "vram_peak_mib": 15533
+   },
+   "walk_s3": {
+    "period": 25,
+    "start": 26,
+    "closure": 0.10839018828037597,
+    "motion": 0.13717287750161414,
+    "mode": "loop",
+    "picked": [
+     29,
+     35,
+     40,
+     41,
+     42,
+     43,
+     44,
+     48
+    ],
+    "spread": [
+     377.0,
+     390.0,
+     390.0,
+     389.0,
+     336.0,
+     336.0,
+     289.0,
+     289.0,
+     238.0,
+     238.0,
+     238.0,
+     178.0,
+     178.0,
+     106.0,
+     106.0,
+     106.0,
+     178.0,
+     177.0,
+     176.0,
+     176.0,
+     269.0,
+     268.0,
+     268.0,
+     326.0,
+     326.0
+    ],
+    "contact": [
+     3,
+     16
+    ],
+    "crossing": [
+     14,
+     18
+    ],
+    "step_frames": [
+     6,
+     5,
+     1,
+     1,
+     1,
+     1,
+     4,
+     6
+    ],
+    "colours": [
+     27,
+     16
+    ],
+    "island_px_fixed": 29,
+    "head_track": [
+     {
+      "dx": 5,
+      "dy": 0,
+      "err": 26.1
+     },
+     {
+      "dx": 6,
+      "dy": -2,
+      "err": 20.4
+     },
+     {
+      "dx": 6,
+      "dy": -4,
+      "err": 22.7
+     },
+     {
+      "dx": 6,
+      "dy": -4,
+      "err": 21.4
+     },
+     {
+      "dx": 6,
+      "dy": -4,
+      "err": 55.3
+     },
+     {
+      "dx": 6,
+      "dy": -4,
+      "err": 53.1
+     },
+     {
+      "dx": 6,
+      "dy": -4,
+      "err": 53.4
+     },
+     {
+      "dx": 6,
+      "dy": -4,
+      "err": 33.6
+     }
+    ],
+    "region_px_fixed": 39,
+    "out_spread": [
+     48,
+     30,
+     13,
+     13,
+     22,
+     22,
+     22,
+     34
+    ],
+    "head_identical": true,
+    "heights": [
+     56,
+     58,
+     60,
+     60,
+     60,
+     60,
+     60,
+     60
+    ],
+    "feet": [
+     69,
+     69,
+     69,
+     69,
+     69,
+     69,
+     69,
+     69
+    ],
+    "widths": [
+     65,
+     57,
+     50,
+     50,
+     51,
+     51,
+     51,
+     56
+    ],
+    "regions": {
+     "outline": 4511,
+     "skin": 1902,
+     "shirt": 2538,
+     "pants": 1987,
+     "other": 237
+    },
+    "outside_palette": 0,
+    "n_colours": 16,
+    "seconds": 43.5,
+    "vram_peak_mib": 15565
+   },
+   "walk_s4": {
+    "period": 17,
+    "start": 19,
+    "closure": 0.07880525011500242,
+    "motion": 0.1994823992379981,
+    "mode": "loop",
+    "picked": [
+     24,
+     26,
+     28,
+     31,
+     33,
+     22,
+     23,
+     23
+    ],
+    "spread": [
+     324.0,
+     324.0,
+     306.0,
+     268.0,
+     267.0,
+     222.0,
+     221.0,
+     174.0,
+     148.0,
+     147.0,
+     137.0,
+     183.0,
+     183.0,
+     270.0,
+     269.0,
+     348.0,
+     348.0
+    ],
+    "contact": [
+     5,
+     14
+    ],
+    "crossing": [
+     9,
+     4
+    ],
+    "step_frames": [
+     2,
+     2,
+     3,
+     2,
+     6,
+     1,
+     0,
+     1
+    ],
+    "colours": [
+     31,
+     16
+    ],
+    "island_px_fixed": 15,
+    "head_track": [
+     {
+      "dx": 4,
+      "dy": -1,
+      "err": 5.7
+     },
+     {
+      "dx": 4,
+      "dy": -2,
+      "err": 4.5
+     },
+     {
+      "dx": 4,
+      "dy": -3,
+      "err": 14.6
+     },
+     {
+      "dx": 4,
+      "dy": -2,
+      "err": 22.5
+     },
+     {
+      "dx": 4,
+      "dy": -1,
+      "err": 9.9
+     },
+     {
+      "dx": 4,
+      "dy": 0,
+      "err": 3.5
+     },
+     {
+      "dx": 4,
+      "dy": 0,
+      "err": 3.6
+     },
+     {
+      "dx": 4,
+      "dy": 0,
+      "err": 3.6
+     }
+    ],
+    "region_px_fixed": 43,
+    "out_spread": [
+     28,
+     22,
+     16,
+     23,
+     34,
+     33,
+     33,
+     33
+    ],
+    "head_identical": true,
+    "heights": [
+     57,
+     58,
+     59,
+     58,
+     57,
+     56,
+     56,
+     56
+    ],
+    "feet": [
+     69,
+     69,
+     69,
+     69,
+     69,
+     69,
+     69,
+     69
+    ],
+    "widths": [
+     57,
+     54,
+     52,
+     52,
+     55,
+     60,
+     60,
+     60
+    ],
+    "regions": {
+     "outline": 4810,
+     "skin": 1789,
+     "shirt": 2755,
+     "pants": 1402,
+     "other": 169
+    },
+    "outside_palette": 0,
+    "n_colours": 15,
+    "seconds": 43.5,
+    "vram_peak_mib": 15533
+   }
+  }
+ },
+ "canvas": {
+  "w": 72,
+  "h": 72,
+  "foot_row": 69,
+  "centre_x": 36
+ },
+ "attack": {
+  "round": 14,
+  "seed": 1,
+  "prompt": "Pixel art game sprite animation of the huge brute fog zombie from <Picture 1>: keep its massive build, broad shoulders, thick arms, small head, grey-green skin, torn light grey shirt, dark navy trousers, dark boots, colours and near-black outlines exactly. Three-quarter view facing right, fixed camera, no zoom, no pan, full body visible at all times. The background stays plain solid magenta in every frame. Only the zombie, nothing else appears: no weapon, no object, no person. The hunched brute attacks empty air just in front of it to the right (there is nothing there): it pulls back, then lunges forward with both huge arms outstretched, grabs at the air with both hands, pulls them in and bites with its head thrust forward and mouth wide open, then slowly returns to its hunched stance with arms forward. The feet stay planted on the ground line. One single attack. No effects, no blood. Flat colors.",
+  "first": "walk0",
+  "last": "walk0",
+  "workflow": "art/ai/workflows/h3_video_i2v.json 576x576, 56 frames, 8-step LoRA, 8 steps",
+  "pick": {
+   "start": 2,
+   "peak": 36,
+   "end": 54,
+   "picked": [
+    2,
+    13,
+    25,
+    36,
+    42,
+    48
+   ],
+   "stray_object_frames": [],
+   "stray_in_picked": [],
+   "heads": [
+    {
+     "dx": -1,
+     "dy": 0,
+     "err": 4.5,
+     "locked": true
+    },
+    {
+     "dx": -9,
+     "dy": -2,
+     "err": 13.9,
+     "locked": true
+    },
+    {
+     "dx": -4,
+     "dy": 0,
+     "err": 9.8,
+     "locked": true
+    },
+    {
+     "dx": -9,
+     "dy": -2,
+     "err": 10.3,
+     "locked": true
+    },
+    {
+     "dx": 4,
+     "dy": 3,
+     "err": 37.0,
+     "locked": true
+    },
+    {
+     "dx": 4,
+     "dy": 3,
+     "err": 38.7,
+     "locked": true
+    }
+   ],
+   "region_px_fixed": 83,
+   "heights": [
+    56,
+    58,
+    56,
+    58,
+    53,
+    53
+   ],
+   "feet": [
+    69,
+    69,
+    69,
+    69,
+    69,
+    69
+   ],
+   "widths": [
+    65,
+    47,
+    58,
+    47,
+    61,
+    61
+   ],
+   "regions": {
+    "outline": 3311,
+    "skin": 1084,
+    "shirt": 2174,
+    "other": 222,
+    "pants": 1554
+   },
+   "outside_palette": 0,
+   "n_colours": 16,
+   "seconds": 57.7,
+   "vram_peak_mib": 15533
+  },
+  "seeds": {
+   "attack_s1": {
+    "start": 2,
+    "peak": 36,
+    "end": 54,
+    "picked": [
+     2,
+     13,
+     25,
+     36,
+     42,
+     48
+    ],
+    "stray_object_frames": [],
+    "stray_in_picked": [],
+    "heads": [
+     {
+      "dx": -1,
+      "dy": 0,
+      "err": 4.5,
+      "locked": true
+     },
+     {
+      "dx": -9,
+      "dy": -2,
+      "err": 13.9,
+      "locked": true
+     },
+     {
+      "dx": -4,
+      "dy": 0,
+      "err": 9.8,
+      "locked": true
+     },
+     {
+      "dx": -9,
+      "dy": -2,
+      "err": 10.3,
+      "locked": true
+     },
+     {
+      "dx": 4,
+      "dy": 3,
+      "err": 37.0,
+      "locked": true
+     },
+     {
+      "dx": 4,
+      "dy": 3,
+      "err": 38.7,
+      "locked": true
+     }
+    ],
+    "region_px_fixed": 83,
+    "heights": [
+     56,
+     58,
+     56,
+     58,
+     53,
+     53
+    ],
+    "feet": [
+     69,
+     69,
+     69,
+     69,
+     69,
+     69
+    ],
+    "widths": [
+     65,
+     47,
+     58,
+     47,
+     61,
+     61
+    ],
+    "regions": {
+     "outline": 3311,
+     "skin": 1084,
+     "shirt": 2174,
+     "other": 222,
+     "pants": 1554
+    },
+    "outside_palette": 0,
+    "n_colours": 16,
+    "seconds": 57.7,
+    "vram_peak_mib": 15533
+   },
+   "attack_s2": {
+    "start": 2,
+    "peak": 11,
+    "end": 26,
+    "picked": [
+     2,
+     5,
+     8,
+     11,
+     16,
+     21
+    ],
+    "stray_object_frames": [],
+    "stray_in_picked": [],
+    "heads": [
+     {
+      "dx": 0,
+      "dy": 0,
+      "err": 4.3,
+      "locked": true
+     },
+     {
+      "dx": -5,
+      "dy": -1,
+      "err": 5.4,
+      "locked": true
+     },
+     {
+      "dx": -10,
+      "dy": -1,
+      "err": 37.3,
+      "locked": true
+     },
+     {
+      "dx": -10,
+      "dy": -1,
+      "err": 60.7,
+      "locked": false
+     },
+     {
+      "dx": 3,
+      "dy": 3,
+      "err": 54.1,
+      "locked": false
+     },
+     {
+      "dx": 2,
+      "dy": 2,
+      "err": 31.4,
+      "locked": true
+     }
+    ],
+    "region_px_fixed": 71,
+    "heights": [
+     56,
+     57,
+     57,
+     58,
+     57,
+     54
+    ],
+    "feet": [
+     69,
+     69,
+     69,
+     69,
+     69,
+     69
+    ],
+    "widths": [
+     65,
+     51,
+     46,
+     46,
+     64,
+     54
+    ],
+    "regions": {
+     "outline": 3227,
+     "skin": 1073,
+     "shirt": 2012,
+     "other": 225,
+     "pants": 1593
+    },
+    "outside_palette": 0,
+    "n_colours": 16,
+    "seconds": 43.6,
+    "vram_peak_mib": 15533
+   },
+   "attack_s3": {
+    "start": 17,
+    "peak": 13,
+    "end": 15,
+    "picked": [
+     17,
+     16,
+     14,
+     13,
+     14,
+     14
+    ],
+    "stray_object_frames": [
+     15,
+     16
+    ],
+    "stray_in_picked": [
+     16
+    ],
+    "heads": [
+     {
+      "dx": 10,
+      "dy": 8,
+      "err": 83.0,
+      "locked": false
+     },
+     {
+      "dx": 10,
+      "dy": 8,
+      "err": 81.0,
+      "locked": false
+     },
+     {
+      "dx": 2,
+      "dy": -2,
+      "err": 23.0,
+      "locked": true
+     },
+     {
+      "dx": -1,
+      "dy": -2,
+      "err": 21.2,
+      "locked": true
+     },
+     {
+      "dx": 2,
+      "dy": -2,
+      "err": 23.0,
+      "locked": true
+     },
+     {
+      "dx": 2,
+      "dy": -2,
+      "err": 23.0,
+      "locked": true
+     }
+    ],
+    "region_px_fixed": 48,
+    "heights": [
+     54,
+     54,
+     60,
+     58,
+     60,
+     60
+    ],
+    "feet": [
+     69,
+     69,
+     69,
+     69,
+     69,
+     69
+    ],
+    "widths": [
+     56,
+     56,
+     47,
+     51,
+     47,
+     47
+    ],
+    "regions": {
+     "outline": 3179,
+     "skin": 1465,
+     "shirt": 1908,
+     "other": 219,
+     "pants": 1467
+    },
+    "outside_palette": 0,
+    "n_colours": 16,
+    "seconds": 43.0,
+    "vram_peak_mib": 15565
+   },
+   "attack_s4": {
+    "start": 1,
+    "peak": 13,
+    "end": 25,
+    "picked": [
+     1,
+     5,
+     9,
+     13,
+     17,
+     21
+    ],
+    "stray_object_frames": [],
+    "stray_in_picked": [],
+    "heads": [
+     {
+      "dx": 2,
+      "dy": 0,
+      "err": 4.2,
+      "locked": true
+     },
+     {
+      "dx": -3,
+      "dy": -1,
+      "err": 23.5,
+      "locked": true
+     },
+     {
+      "dx": -5,
+      "dy": -1,
+      "err": 26.7,
+      "locked": true
+     },
+     {
+      "dx": -7,
+      "dy": -2,
+      "err": 18.0,
+      "locked": true
+     },
+     {
+      "dx": 0,
+      "dy": -2,
+      "err": 31.6,
+      "locked": true
+     },
+     {
+      "dx": 6,
+      "dy": 1,
+      "err": 6.5,
+      "locked": true
+     }
+    ],
+    "region_px_fixed": 109,
+    "heights": [
+     56,
+     57,
+     57,
+     58,
+     58,
+     55
+    ],
+    "feet": [
+     69,
+     69,
+     69,
+     69,
+     69,
+     69
+    ],
+    "widths": [
+     63,
+     53,
+     47,
+     47,
+     46,
+     63
+    ],
+    "regions": {
+     "outline": 3232,
+     "skin": 1144,
+     "shirt": 2124,
+     "other": 237,
+     "pants": 1555
+    },
+    "outside_palette": 0,
+    "n_colours": 16,
+    "seconds": 43.6,
+    "vram_peak_mib": 15533
+   }
+  }
+ },
+ "death": {
+  "round": 14,
+  "seed": 3,
+  "prompt": "Pixel art game sprite animation of the huge brute fog zombie from <Picture 1>: keep its massive build, broad shoulders, thick arms, small head, grey-green skin, torn light grey shirt, dark navy trousers, dark boots, colours and near-black outlines exactly. Three-quarter view facing right, fixed camera, no zoom, no pan, full body visible at all times. The background stays plain solid magenta in every frame. Only the zombie, nothing else appears: no weapon, no object, no person. The hunched brute is killed by an invisible blow from the right: its head snaps back, it staggers backward to the left, the knees buckle and the heavy body falls backward to the left, landing flat on its back on the ground line with the head on the left and the feet on the right, a small bounce, then it lies completely still. No effects, no blood. Flat colors.",
+  "first": "walk0",
+  "last": "down",
+  "workflow": "art/ai/workflows/h3_video_i2v.json 576x576, 56 frames, 8-step LoRA, 8 steps",
+  "pick": {
+   "start": 3,
+   "end": 45,
+   "unblur": [
+    {
+     "frame": 5,
+     "from": 30,
+     "to": 29,
+     "sharpness": {
+      "29": 20.9,
+      "30": 15.0,
+      "31": 17.3
+     }
+    }
+   ],
+   "picked": [
+    4,
+    9,
+    14,
+    19,
+    24,
+    29,
+    35,
+    40,
+    45
+   ],
+   "stray_object_frames": [],
+   "stray_in_picked": [],
+   "heads": [
+    {
+     "dx": 1,
+     "dy": 4,
+     "err": 72.8,
+     "locked": false
+    },
+    {
+     "dx": -10,
+     "dy": 8,
+     "err": 77.2,
+     "locked": false
+    },
+    {
+     "dx": -9,
+     "dy": 8,
+     "err": 78.3,
+     "locked": false
+    },
+    {
+     "dx": -10,
+     "dy": 7,
+     "err": 126.8,
+     "locked": false
+    },
+    {
+     "dx": -10,
+     "dy": 6,
+     "err": 133.9,
+     "locked": false
+    },
+    {
+     "dx": -10,
+     "dy": 8,
+     "err": 204.4,
+     "locked": false
+    },
+    {
+     "dx": 9,
+     "dy": 8,
+     "err": 238.6,
+     "locked": false
+    },
+    {
+     "dx": 10,
+     "dy": 8,
+     "err": 241.8,
+     "locked": false
+    },
+    {
+     "dx": -10,
+     "dy": -8,
+     "err": 255.0,
+     "locked": false
+    }
+   ],
+   "region_px_fixed": 131,
+   "heights": [
+    56,
+    61,
+    61,
+    62,
+    62,
+    52,
+    42,
+    42,
+    39
+   ],
+   "feet": [
+    69,
+    69,
+    69,
+    69,
+    69,
+    69,
+    69,
+    69,
+    69
+   ],
+   "widths": [
+    43,
+    35,
+    35,
+    38,
+    38,
+    51,
+    59,
+    58,
+    59
+   ],
+   "regions": {
+    "outline": 4487,
+    "skin": 2173,
+    "shirt": 3148,
+    "other": 323,
+    "pants": 2142
+   },
+   "outside_palette": 0,
+   "n_colours": 16,
+   "seconds": 43.8,
+   "vram_peak_mib": 15533
+  },
+  "seeds": {
+   "death_s1": {
+    "start": 6,
+    "end": 44,
+    "unblur": [
+     {
+      "frame": 4,
+      "from": 26,
+      "to": 25,
+      "sharpness": {
+       "25": 20.9,
+       "26": 18.3,
+       "27": 19.6
+      }
+     },
+     {
+      "frame": 5,
+      "from": 30,
+      "to": 29,
+      "sharpness": {
+       "29": 20.8,
+       "30": 15.9,
+       "31": 17.6
+      }
+     }
+    ],
+    "picked": [
+     7,
+     12,
+     16,
+     21,
+     25,
+     29,
+     35,
+     39,
+     44
+    ],
+    "stray_object_frames": [],
+    "stray_in_picked": [],
+    "heads": [
+     {
+      "dx": 3,
+      "dy": -1,
+      "err": 13.4,
+      "locked": true
+     },
+     {
+      "dx": -10,
+      "dy": -1,
+      "err": 85.1,
+      "locked": false
+     },
+     {
+      "dx": -10,
+      "dy": 8,
+      "err": 84.1,
+      "locked": false
+     },
+     {
+      "dx": -10,
+      "dy": 6,
+      "err": 86.2,
+      "locked": false
+     },
+     {
+      "dx": -10,
+      "dy": 7,
+      "err": 86.5,
+      "locked": false
+     },
+     {
+      "dx": -10,
+      "dy": 8,
+      "err": 217.5,
+      "locked": false
+     },
+     {
+      "dx": 6,
+      "dy": 8,
+      "err": 247.0,
+      "locked": false
+     },
+     {
+      "dx": -2,
+      "dy": 8,
+      "err": 233.1,
+      "locked": false
+     },
+     {
+      "dx": -10,
+      "dy": -8,
+      "err": 255.0,
+      "locked": false
+     }
+    ],
+    "region_px_fixed": 194,
+    "heights": [
+     57,
+     62,
+     62,
+     62,
+     62,
+     48,
+     40,
+     41,
+     39
+    ],
+    "feet": [
+     69,
+     69,
+     69,
+     69,
+     69,
+     69,
+     69,
+     69,
+     69
+    ],
+    "widths": [
+     55,
+     41,
+     43,
+     43,
+     44,
+     54,
+     58,
+     58,
+     58
+    ],
+    "regions": {
+     "outline": 4591,
+     "skin": 2378,
+     "shirt": 3202,
+     "other": 354,
+     "pants": 2295
+    },
+    "outside_palette": 0,
+    "n_colours": 16,
+    "seconds": 52.0,
+    "vram_peak_mib": 15565
+   },
+   "death_s2": {
+    "start": 0,
+    "end": 50,
+    "unblur": [],
+    "picked": [
+     1,
+     7,
+     13,
+     19,
+     26,
+     32,
+     38,
+     44,
+     50
+    ],
+    "stray_object_frames": [],
+    "stray_in_picked": [],
+    "heads": [
+     {
+      "dx": 2,
+      "dy": 6,
+      "err": 65.1,
+      "locked": false
+     },
+     {
+      "dx": -2,
+      "dy": 6,
+      "err": 62.8,
+      "locked": false
+     },
+     {
+      "dx": -4,
+      "dy": 5,
+      "err": 65.4,
+      "locked": false
+     },
+     {
+      "dx": -9,
+      "dy": 3,
+      "err": 65.7,
+      "locked": false
+     },
+     {
+      "dx": -10,
+      "dy": -1,
+      "err": 94.9,
+      "locked": false
+     },
+     {
+      "dx": -10,
+      "dy": 8,
+      "err": 168.1,
+      "locked": false
+     },
+     {
+      "dx": 1,
+      "dy": 8,
+      "err": 217.6,
+      "locked": false
+     },
+     {
+      "dx": -7,
+      "dy": 8,
+      "err": 235.9,
+      "locked": false
+     },
+     {
+      "dx": -10,
+      "dy": -8,
+      "err": 255.0,
+      "locked": false
+     }
+    ],
+    "region_px_fixed": 166,
+    "heights": [
+     54,
+     51,
+     53,
+     55,
+     58,
+     56,
+     43,
+     41,
+     39
+    ],
+    "feet": [
+     69,
+     69,
+     69,
+     69,
+     69,
+     69,
+     69,
+     69,
+     69
+    ],
+    "widths": [
+     62,
+     52,
+     35,
+     37,
+     32,
+     37,
+     58,
+     58,
+     59
+    ],
+    "regions": {
+     "outline": 4401,
+     "shirt": 3284,
+     "skin": 2003,
+     "other": 356,
+     "pants": 2073
+    },
+    "outside_palette": 0,
+    "n_colours": 16,
+    "seconds": 43.6,
+    "vram_peak_mib": 15565
+   },
+   "death_s3": {
+    "start": 3,
+    "end": 45,
+    "unblur": [
+     {
+      "frame": 5,
+      "from": 30,
+      "to": 29,
+      "sharpness": {
+       "29": 20.9,
+       "30": 15.0,
+       "31": 17.3
+      }
+     }
+    ],
+    "picked": [
+     4,
+     9,
+     14,
+     19,
+     24,
+     29,
+     35,
+     40,
+     45
+    ],
+    "stray_object_frames": [],
+    "stray_in_picked": [],
+    "heads": [
+     {
+      "dx": 1,
+      "dy": 4,
+      "err": 72.8,
+      "locked": false
+     },
+     {
+      "dx": -10,
+      "dy": 8,
+      "err": 77.2,
+      "locked": false
+     },
+     {
+      "dx": -9,
+      "dy": 8,
+      "err": 78.3,
+      "locked": false
+     },
+     {
+      "dx": -10,
+      "dy": 7,
+      "err": 126.8,
+      "locked": false
+     },
+     {
+      "dx": -10,
+      "dy": 6,
+      "err": 133.9,
+      "locked": false
+     },
+     {
+      "dx": -10,
+      "dy": 8,
+      "err": 204.4,
+      "locked": false
+     },
+     {
+      "dx": 9,
+      "dy": 8,
+      "err": 238.6,
+      "locked": false
+     },
+     {
+      "dx": 10,
+      "dy": 8,
+      "err": 241.8,
+      "locked": false
+     },
+     {
+      "dx": -10,
+      "dy": -8,
+      "err": 255.0,
+      "locked": false
+     }
+    ],
+    "region_px_fixed": 131,
+    "heights": [
+     56,
+     61,
+     61,
+     62,
+     62,
+     52,
+     42,
+     42,
+     39
+    ],
+    "feet": [
+     69,
+     69,
+     69,
+     69,
+     69,
+     69,
+     69,
+     69,
+     69
+    ],
+    "widths": [
+     43,
+     35,
+     35,
+     38,
+     38,
+     51,
+     59,
+     58,
+     59
+    ],
+    "regions": {
+     "outline": 4487,
+     "skin": 2173,
+     "shirt": 3148,
+     "other": 323,
+     "pants": 2142
+    },
+    "outside_palette": 0,
+    "n_colours": 16,
+    "seconds": 43.8,
+    "vram_peak_mib": 15533
+   },
+   "death_s4": {
+    "start": 2,
+    "end": 52,
+    "unblur": [],
+    "picked": [
+     3,
+     9,
+     15,
+     21,
+     28,
+     34,
+     40,
+     46,
+     52
+    ],
+    "stray_object_frames": [],
+    "stray_in_picked": [],
+    "heads": [
+     {
+      "dx": 1,
+      "dy": -1,
+      "err": 13.2,
+      "locked": true
+     },
+     {
+      "dx": -2,
+      "dy": -2,
+      "err": 13.7,
+      "locked": true
+     },
+     {
+      "dx": -10,
+      "dy": 7,
+      "err": 121.3,
+      "locked": false
+     },
+     {
+      "dx": -10,
+      "dy": 8,
+      "err": 208.1,
+      "locked": false
+     },
+     {
+      "dx": -10,
+      "dy": 8,
+      "err": 179.6,
+      "locked": false
+     },
+     {
+      "dx": -10,
+      "dy": 8,
+      "err": 204.7,
+      "locked": false
+     },
+     {
+      "dx": -10,
+      "dy": -8,
+      "err": 255.0,
+      "locked": false
+     },
+     {
+      "dx": -10,
+      "dy": -8,
+      "err": 255.0,
+      "locked": false
+     },
+     {
+      "dx": -10,
+      "dy": -8,
+      "err": 255.0,
+      "locked": false
+     }
+    ],
+    "region_px_fixed": 187,
+    "heights": [
+     57,
+     58,
+     61,
+     59,
+     57,
+     48,
+     38,
+     39,
+     39
+    ],
+    "feet": [
+     69,
+     69,
+     69,
+     69,
+     69,
+     69,
+     69,
+     69,
+     69
+    ],
+    "widths": [
+     60,
+     57,
+     42,
+     43,
+     47,
+     52,
+     59,
+     59,
+     59
+    ],
+    "regions": {
+     "outline": 4697,
+     "skin": 2350,
+     "shirt": 3075,
+     "pants": 2268,
+     "other": 325
+    },
+    "outside_palette": 0,
+    "n_colours": 16,
+    "seconds": 43.5,
+    "vram_peak_mib": 15565
+   }
+  }
+ },
+ "hit": {
+  "round": 14,
+  "method": "H3 Image stills hitA / hitB / hitA",
+  "seeds": {
+   "hitA": 4,
+   "hitB": 2
+  },
+  "prompts": {
+   "hitA": "Redraw the brute zombie of <Picture 2> at exactly the position, size and three-quarter view facing right of <Picture 1>, keeping its feet on the same ground line, but change its pose: its head has just snapped backward from a blow to the face, the chin up and the face turned up toward the upper right, the shoulders pushed back a little, the thick arms still reaching forward but jerked slightly up, the legs and feet stay exactly where they are. Keep its look: a huge brute fog zombie: massive, much bigger and heavier than a normal zombie, very broad shoulders, thick barrel chest and thick arms, narrow waist, no belly, small head (3.5 heads tall, not chibi), grey-green rotting skin, sunken dark eyes, bald head with a few stray hairs, a torn ragged plain light grey shirt (neutral grey, not greenish) stretched over the chest, dark navy blue-grey long trousers, dark heavy boots. ",
+   "hitB": "Redraw the brute zombie of <Picture 2> at exactly the position, size and three-quarter view facing right of <Picture 1>, keeping its feet on the same ground line, but change its pose: it recoils from a heavy blow to the face, the whole massive upper body bent backward to the left with the chest pushed out, the head thrown back, both arms flung loosely forward and up, the knees slightly bent, the feet stay exactly where they are. Keep its look: a huge brute fog zombie: massive, much bigger and heavier than a normal zombie, very broad shoulders, thick barrel chest and thick arms, narrow waist, no belly, small head (3.5 heads tall, not chibi), grey-green rotting skin, sunken dark eyes, bald head with a few stray hairs, a torn ragged plain light grey shirt (neutral grey, not greenish) stretched over the chest, dark navy blue-grey long trousers, dark heavy boots. "
+  }
+ },
+ "react": {
+  "round": 14,
+  "order": "rise, fall, bounce, down (= death frame 8), getup x4",
+  "seeds": {
+   "rise": 4,
+   "fall": 1,
+   "bounce": 4,
+   "getup": 2
+  },
+  "prompts": {
+   "rise": "Redraw the grey silhouette in <Picture 1> as the brute zombie from <Picture 2>, at exactly the position, size and angle of the silhouette: it has just been knocked off its feet by a huge blow from the right, the whole heavy body in the air leaning backward to the left, head thrown back, both arms flung forward (not above the head), legs kicked forward, both feet clearly off the ground. Seen from the side. Keep its look: a huge brute fog zombie: massive, much bigger and heavier than a normal zombie, very broad shoulders, thick barrel chest and thick arms, narrow waist, no belly, small head (3.5 heads tall, not chibi), grey-green rotting skin, sunken dark eyes, bald head with a few stray hairs, a torn ragged plain light grey shirt (neutral grey, not greenish) stretched over the chest, dark navy blue-grey long trousers, dark heavy boots. ",
+   "fall": "Redraw the grey silhouette in <Picture 1> as the brute zombie from <Picture 2>, at exactly the position, size and angle of the silhouette: it is flying backward through the air almost horizontal, back toward the ground, head on the left slightly lower than the feet on the right, arms and legs flung loosely upward a little, not touching the ground yet. Seen from the side. Keep its look: a huge brute fog zombie: massive, much bigger and heavier than a normal zombie, very broad shoulders, thick barrel chest and thick arms, narrow waist, no belly, small head (3.5 heads tall, not chibi), grey-green rotting skin, sunken dark eyes, bald head with a few stray hairs, a torn ragged plain light grey shirt (neutral grey, not greenish) stretched over the chest, dark navy blue-grey long trousers, dark heavy boots. ",
+   "bounce": "Redraw the grey silhouette in <Picture 1> as the brute zombie from <Picture 2>, at exactly the position, size and angle of the silhouette: it has just slammed onto its back and bounces slightly, lying almost flat with the head on the left and the feet on the right, the back just above the ground, legs and arms jolted upward, head jerked up. Seen from the side. Keep its look: a huge brute fog zombie: massive, much bigger and heavier than a normal zombie, very broad shoulders, thick barrel chest and thick arms, narrow waist, no belly, small head (3.5 heads tall, not chibi), grey-green rotting skin, sunken dark eyes, bald head with a few stray hairs, a torn ragged plain light grey shirt (neutral grey, not greenish) stretched over the chest, dark navy blue-grey long trousers, dark heavy boots. "
+  },
+  "lift_px": {
+   "rise": 3,
+   "fall": 5,
+   "bounce": 2
+  },
+  "getup": {
+   "round": 14,
+   "seed": 2,
+   "prompt": "Pixel art game sprite animation of the huge brute fog zombie from <Picture 1>: keep its massive build, broad shoulders, thick arms, small head, grey-green skin, torn light grey shirt, dark navy trousers, dark boots, colours and near-black outlines exactly. Three-quarter view facing right, fixed camera, no zoom, no pan, full body visible at all times. The background stays plain solid magenta in every frame. Only the zombie, nothing else appears: no weapon, no object, no person. The brute lies flat on its back on the ground line, head on the left, feet on the right. It slowly comes back to life: it pushes its heavy upper body up on its arms, sits up, pulls its legs in and gets onto one knee, then stands up into its hunched walking stance with both arms reaching forward to the right. Slow, heavy, jerky movement. No effects, no blood. Flat colors.",
+   "first": "down",
+   "last": "walk0",
+   "workflow": "art/ai/workflows/h3_video_i2v.json 576x576, 56 frames, 8-step LoRA, 8 steps",
+   "pick": {
+    "height_ratio": [
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.118,
+     0.118,
+     0.118,
+     0.059,
+     0.103,
+     0.103,
+     0.11,
+     0.412,
+     0.537,
+     0.537,
+     0.544,
+     0.603,
+     0.588,
+     0.588,
+     0.581,
+     0.559,
+     0.559,
+     0.559,
+     0.559,
+     0.559,
+     0.566,
+     0.574,
+     0.574,
+     0.551,
+     0.559,
+     0.559,
+     0.559,
+     0.559,
+     0.566,
+     0.574,
+     0.588,
+     0.596,
+     0.507,
+     0.515,
+     0.618,
+     0.625,
+     0.735,
+     0.743,
+     0.882,
+     0.882,
+     1.0,
+     1.0,
+     1.0,
+     1.0,
+     1.0
+    ],
+    "unblur": [],
+    "picked": [
+     18,
+     22,
+     49,
+     51
+    ],
+    "stray_object_frames": [],
+    "stray_in_picked": [],
+    "heads": [
+     {
+      "dx": -10,
+      "dy": -8,
+      "err": 255.0,
+      "locked": false
+     },
+     {
+      "dx": -10,
+      "dy": 7,
+      "err": 88.2,
+      "locked": false
+     },
+     {
+      "dx": -3,
+      "dy": 2,
+      "err": 16.2,
+      "locked": true
+     },
+     {
+      "dx": -3,
+      "dy": 0,
+      "err": 18.5,
+      "locked": true
+     }
+    ],
+    "region_px_fixed": 52,
+    "heights": [
+     46,
+     49,
+     54,
+     56
+    ],
+    "feet": [
+     69,
+     69,
+     69,
+     69
+    ],
+    "widths": [
+     54,
+     50,
+     49,
+     56
+    ],
+    "regions": {
+     "outline": 2119,
+     "skin": 996,
+     "shirt": 1419,
+     "pants": 1018,
+     "other": 136
+    },
+    "outside_palette": 0,
+    "n_colours": 16,
+    "seconds": 43.0,
+    "vram_peak_mib": 15565
+   },
+   "seeds": {
+    "getup_s1": {
+     "height_ratio": [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.007,
+      0.015,
+      0.015,
+      0.015,
+      0.022,
+      0.015,
+      0.022,
+      0.015,
+      0.022,
+      0.022,
+      0.191,
+      0.191,
+      0.191,
+      0.507,
+      0.691,
+      0.699,
+      0.691,
+      0.654,
+      0.662,
+      0.662,
+      0.662,
+      0.662,
+      0.662,
+      0.676,
+      0.662,
+      0.676,
+      0.684,
+      0.684,
+      0.684,
+      0.706,
+      0.706,
+      0.676,
+      0.529,
+      0.529,
+      0.529,
+      0.529,
+      0.507,
+      0.507,
+      0.493,
+      0.5,
+      0.61,
+      0.61,
+      0.618,
+      0.618,
+      0.809,
+      0.809,
+      0.809,
+      0.809,
+      1.0,
+      1.0,
+      1.0
+     ],
+     "unblur": [],
+     "picked": [
+      18,
+      19,
+      53,
+      54
+     ],
+     "stray_object_frames": [],
+     "stray_in_picked": [],
+     "heads": [
+      {
+       "dx": -10,
+       "dy": 7,
+       "err": 252.8,
+       "locked": false
+      },
+      {
+       "dx": -10,
+       "dy": 7,
+       "err": 125.1,
+       "locked": false
+      },
+      {
+       "dx": -1,
+       "dy": 0,
+       "err": 5.5,
+       "locked": true
+      },
+      {
+       "dx": -1,
+       "dy": 0,
+       "err": 5.3,
+       "locked": true
+      }
+     ],
+     "region_px_fixed": 55,
+     "heights": [
+      48,
+      51,
+      56,
+      56
+     ],
+     "feet": [
+      69,
+      69,
+      69,
+      69
+     ],
+     "widths": [
+      54,
+      50,
+      65,
+      65
+     ],
+     "regions": {
+      "outline": 1967,
+      "skin": 862,
+      "shirt": 1474,
+      "pants": 997,
+      "other": 157
+     },
+     "outside_palette": 0,
+     "n_colours": 16,
+     "seconds": 51.5,
+     "vram_peak_mib": 15533
+    },
+    "getup_s2": {
+     "height_ratio": [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.118,
+      0.118,
+      0.118,
+      0.059,
+      0.103,
+      0.103,
+      0.11,
+      0.412,
+      0.537,
+      0.537,
+      0.544,
+      0.603,
+      0.588,
+      0.588,
+      0.581,
+      0.559,
+      0.559,
+      0.559,
+      0.559,
+      0.559,
+      0.566,
+      0.574,
+      0.574,
+      0.551,
+      0.559,
+      0.559,
+      0.559,
+      0.559,
+      0.566,
+      0.574,
+      0.588,
+      0.596,
+      0.507,
+      0.515,
+      0.618,
+      0.625,
+      0.735,
+      0.743,
+      0.882,
+      0.882,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0
+     ],
+     "unblur": [],
+     "picked": [
+      18,
+      22,
+      49,
+      51
+     ],
+     "stray_object_frames": [],
+     "stray_in_picked": [],
+     "heads": [
+      {
+       "dx": -10,
+       "dy": -8,
+       "err": 255.0,
+       "locked": false
+      },
+      {
+       "dx": -10,
+       "dy": 7,
+       "err": 88.2,
+       "locked": false
+      },
+      {
+       "dx": -3,
+       "dy": 2,
+       "err": 16.2,
+       "locked": true
+      },
+      {
+       "dx": -3,
+       "dy": 0,
+       "err": 18.5,
+       "locked": true
+      }
+     ],
+     "region_px_fixed": 52,
+     "heights": [
+      46,
+      49,
+      54,
+      56
+     ],
+     "feet": [
+      69,
+      69,
+      69,
+      69
+     ],
+     "widths": [
+      54,
+      50,
+      49,
+      56
+     ],
+     "regions": {
+      "outline": 2119,
+      "skin": 996,
+      "shirt": 1419,
+      "pants": 1018,
+      "other": 136
+     },
+     "outside_palette": 0,
+     "n_colours": 16,
+     "seconds": 43.0,
+     "vram_peak_mib": 15565
+    },
+    "getup_s3": {
+     "height_ratio": [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.022,
+      0.022,
+      0.029,
+      0.022,
+      0.022,
+      0.022,
+      0.022,
+      0.022,
+      0.022,
+      0.022,
+      0.022,
+      0.118,
+      0.118,
+      0.272,
+      0.265,
+      0.566,
+      0.566,
+      0.64,
+      0.64,
+      0.691,
+      0.684,
+      0.618,
+      0.618,
+      0.662,
+      0.669,
+      0.618,
+      0.588,
+      0.603,
+      0.61,
+      0.618,
+      0.632,
+      0.632,
+      0.64,
+      0.64,
+      0.574,
+      0.574,
+      0.588,
+      0.588,
+      0.596,
+      0.596,
+      0.596,
+      0.787,
+      0.787,
+      1.0,
+      1.0
+     ],
+     "unblur": [],
+     "picked": [
+      24,
+      26,
+      54,
+      55
+     ],
+     "stray_object_frames": [],
+     "stray_in_picked": [],
+     "heads": [
+      {
+       "dx": -10,
+       "dy": 8,
+       "err": 251.9,
+       "locked": false
+      },
+      {
+       "dx": -10,
+       "dy": 8,
+       "err": 197.7,
+       "locked": false
+      },
+      {
+       "dx": 0,
+       "dy": 0,
+       "err": 14.3,
+       "locked": true
+      },
+      {
+       "dx": 0,
+       "dy": 0,
+       "err": 17.4,
+       "locked": true
+      }
+     ],
+     "region_px_fixed": 48,
+     "heights": [
+      44,
+      48,
+      56,
+      56
+     ],
+     "feet": [
+      69,
+      69,
+      69,
+      69
+     ],
+     "widths": [
+      55,
+      52,
+      65,
+      65
+     ],
+     "regions": {
+      "outline": 2053,
+      "skin": 966,
+      "shirt": 1291,
+      "pants": 982,
+      "other": 150
+     },
+     "outside_palette": 0,
+     "n_colours": 16,
+     "seconds": 42.8,
+     "vram_peak_mib": 15533
+    },
+    "getup_s4": {
+     "height_ratio": [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.044,
+      -0.044,
+      -0.132,
+      -0.132,
+      -0.132,
+      -0.184,
+      -0.184,
+      -0.184,
+      0.228,
+      0.221,
+      0.324,
+      0.324,
+      0.324,
+      0.324,
+      0.603,
+      0.603,
+      0.647,
+      0.654,
+      0.662,
+      0.596,
+      0.603,
+      0.596,
+      0.515,
+      0.441,
+      0.5,
+      0.5,
+      0.544,
+      0.544,
+      0.544,
+      0.544,
+      0.544,
+      0.544,
+      0.544,
+      0.544,
+      0.544,
+      0.544,
+      0.544,
+      0.544,
+      0.882,
+      0.882,
+      1.0,
+      1.0,
+      1.0,
+      1.0
+     ],
+     "unblur": [],
+     "picked": [
+      20,
+      26,
+      50,
+      52
+     ],
+     "stray_object_frames": [],
+     "stray_in_picked": [],
+     "heads": [
+      {
+       "dx": -10,
+       "dy": -8,
+       "err": 255.0,
+       "locked": false
+      },
+      {
+       "dx": -10,
+       "dy": 8,
+       "err": 190.8,
+       "locked": false
+      },
+      {
+       "dx": 0,
+       "dy": 2,
+       "err": 21.0,
+       "locked": true
+      },
+      {
+       "dx": 0,
+       "dy": 0,
+       "err": 24.0,
+       "locked": true
+      }
+     ],
+     "region_px_fixed": 40,
+     "heights": [
+      43,
+      49,
+      54,
+      56
+     ],
+     "feet": [
+      69,
+      69,
+      69,
+      69
+     ],
+     "widths": [
+      54,
+      50,
+      64,
+      65
+     ],
+     "regions": {
+      "outline": 2080,
+      "skin": 878,
+      "shirt": 1396,
+      "other": 156,
+      "pants": 966
+     },
+     "outside_palette": 0,
+     "n_colours": 16,
+     "seconds": 43.0,
+     "vram_peak_mib": 15565
+    }
+   }
+  }
+ }
+}

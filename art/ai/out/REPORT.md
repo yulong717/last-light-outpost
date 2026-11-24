@@ -56,6 +56,79 @@ VRAM 峰值為 `nvidia-smi` 整卡用量（含桌面）。全程沒有 OOM。
 - 疊圖：`templates_contact.png`、`overlay_check.png`。
 - 失敗：`walk_pass_a`（過渡姿勢）兩個 seed 都畫成大步，沒有收腿；之後改提示詞重做。灰色人台的近腳／遠腳不易區分，contact_a / contact_b 看起來差不多。
 
+## 第十四輪：巨屍 XL-壯版 26 格（brute）＋一般霧屍小修
+
+> 給遊戲 brute 用，取代「一般霧屍放大 1.3 倍」。工具：`tools/art/ai/build_brute.py`（大畫格版，流程同第十～十三輪）、`tools/art/ai/fix_zombie_m14.py`（一般霧屍小修）。原始檔 `art/ai/raw/brute/`（不進 git）。輸出 `art/ai/out/zombie_xl/`。
+
+### 畫格：72×72（不是 64×72）
+
+- 規格是 XL 一律 64×72、腳底 y=69。但巨屍雙手往前伸、步伐大，**寬度超過 64**：walk 最寬 65、hit 69、走路關鍵姿勢 69–70。
+- 所以改成 **72×72、腳底 y=69、中線 x=36**。高度和腳底照 XL 規則，只有寬度加 8。
+- 生成尺寸：H3 Image 1152²（÷16＝72）、H3 影片 576²（÷8＝72）。
+
+### 流程與選定
+
+| 步驟 | 做法 | 選定 |
+| --- | --- | --- |
+| 站姿（長相定案） | H3 Image：Picture 1＝XL_strong 人台、Picture 2＝一般霧屍站姿（配色）、Picture 3＝anchor。提示詞：寬肩厚胸粗手臂、窄腰無肚子、小頭、破爛淺灰上衣、深藍灰長褲、深色靴子、駝背 | s3：58 高（駝背）、寬 38、頭 15 |
+| 走路關鍵姿勢 | 版面＝一般霧屍 walk_key 拉成 62 高、寬 ×1.18；Picture 2＝巨屍站姿 | s3：69×56 |
+| walk 8 格 | 影片首尾＝關鍵姿勢；提示詞加「身體每步左右晃、長而拖的步伐」；挑格同第十輪（腳張開寬度） | s1：週期 26，張開 46／33／13／24／40／31／15／33 |
+| 倒地姿勢 | H3 Image，版面＝站姿轉 90° | s1：59×39（頭在左） |
+| attack 6 格 | 影片 walk 第 0 格 → walk 第 0 格 | s1（後拉、前撲、抓、咬） |
+| death 9 格 | 影片 walk 第 0 格 → 倒地姿勢 | s3（沒有多餘物件；直起身 → 往左後倒 → 躺平） |
+| hit 3 格 | H3 Image 靜態 hitA／hitB／hitA | A s4、B s2 |
+| rise／fall／bounce | H3 Image 靜態（版面見下） | rise s4、fall s1、bounce s4 |
+| down | death 第 8 格 | — |
+| getup 4 格 | 影片 倒地 → walk 第 0 格 | s2（撐起 → 坐 → 單膝跪 → 站） |
+
+對照表（每個 seed 上排成品、下排分區）都在 `art/ai/out/zombie_xl/`：
+- 靜態：`stand_seeds_x3.png`、`walkkey_seeds_x3.png`、`down_seeds_x3.png`、`hitA_seeds_x3.png`、`hitB_seeds_x3.png`、`rise_seeds_x3.png`、`fall_seeds_x3.png`、`bounce_seeds_x3.png`
+- 影片：`walk_seeds_x3.png`、`attack_seeds_x3.png`、`death_seeds_x3.png`、`getup_seeds_x3.png`
+
+各動作輸出：`walk／attack／death／hit／react` 的 png、json、gif、`contact_*.png`、`*_regions_x4.png`，`meta.json` 記錄所有 seed 與提示詞。
+
+### 26 格 sheet：`art/ai/out/zombie_xl/zombie_brute_26.png`
+
+- 72×72 × 26 格，腳底 y=69，**16 色，0 色超出 master.gpl**。排列同 zombie_basic_26。
+- attack 4–5 格用第 2、4 格：第 0 格是 walk 姿勢，手本來就伸到最遠，所以從第 1–4 格裡挑伸最遠的兩格。
+- 附 `zombie_brute_26.json`（格號範圍、每格來源、最低像素列、bbox）、`contact_zombie_brute_26.png`。
+- 另存完整原檔 `zombie_brute_walk8.png`、`zombie_brute_attack6.png`。
+- 各格高度：walk 56–59、attack 53–58、death 62→39（躺）、hit 62／67／62、rise 58、fall 41、bounce 39、down 39、getup 46→56。
+
+![brute 26](../out/zombie_xl/contact_zombie_brute_26.png)
+
+### 為了巨屍改的工具
+
+- **分區的頭部規則**：第九輪的「人物最上面 28% 不可能是上衣」，在駝背的巨屍身上會把肩膀上衣分成皮膚（站姿 s1–s3 上衣上緣一整條綠）。
+  - 改成：只有最大塊的上衣算上衣；人物上方 40% 內、小於 15 px 的上衣色塊才當頭頂高光改成皮膚。
+- **頭部遮罩**：駝背時背部外框和舉起的前臂都高過脖子，舊遮罩會把它們當頭一起貼（頭後面一條浮空的弧線、頭前面一根棍子）。
+  - 改成用頭殼的方框：頭頂到脖子，寬度只取頭殼皮膚的範圍。
+- **walk 的頭跟著身體左右晃**：第十輪是頭 x 固定、只上下 1 px。巨屍要「身體左右晃」，影片裡頭也會左右移。
+  - 固定 x 會在旁邊留下原本那顆頭（雙頭）。
+  - 改成每格追蹤頭的位置（左右 ±8、上下 ±4），把同一組頭像素貼到追到的位置。8 格頭部仍逐像素相同（程式檢查通過），位置是 x+5、y 0 到 −3。
+- **補洞**：清掉原本的頭、貼上新頭後，留下的透明小洞（四周有 ≥3 個不透明像素）用鄰近最常見的顏色補上。
+- **getup 挑格**：巨屍躺著就有 39 px 高（站姿的 0.7），用絕對比例會挑到躺姿。改成以「躺 → 站」之間的比例挑（0.2／0.55／0.82／0.96）。這組門檻換算回一般霧屍和第十三輪一樣。
+- **rise／fall 版面重做**：第一版用走路姿勢轉 55°／100°，rise 太高、手碰到畫格頂，fall 是斜的不是接近水平（存在 `raw/brute/v1/`）。
+  - 改成 rise＝站姿往後轉 35°、fall＝倒地姿勢轉 15°（頭在左、稍低）。提示詞也改成手往前、不往上。
+
+### 問題
+
+- **站姿比規格矮**：XL 人台 62 高，但駝背的巨屍站姿只有 58。walk 56–59、hit 62–67。
+- **death 第 1–4 格站直**：4 個 seed 都是先直起身再倒，和一般霧屍一樣，所以第 7–10 格比 walk 高、不駝背。
+- **getup 最後一格**雙手往前但比 walk 低，接回 walk 第 0 格時手會往上抬一下。
+- **倒地姿勢很厚**（39 高）：H3 把壯碩的上半身畫成接近正面躺。bounce 和 down 幾乎一樣，看不太出彈起。
+- 物件偵測：attack s3 有一根直棒（沒選）、death s1／s4 第一格有東西（沒選）；選定的都乾淨。
+
+### 一般霧屍小修（第十三輪留下的 1–3 項）
+
+工具 `tools/art/ai/fix_zombie_m14.py`，只改兩格，顏色都在 walk 那 16 色裡，改完重出 `zombie_basic_26.png`、`contact_zombie_basic_26.png`。
+
+1. **attack 第 1 格脖子左邊的綠色**：用「軀幹遮罩」修。
+   - 軀幹＝最大塊上衣的凸包，加上頭左側、頭下半部到頭底下 4 列（背和肩膀）。
+   - 範圍內、頭框外的皮膚像素，改成同亮度順序的上衣色。改了 8 px，綠色領口大部分消失；頭框裡緊貼下巴的幾個像素還在。
+2. **bounce 比 down 小一號**：實測 bounce 寬 55、down 寬 56，只差 1 px。看起來小是因為 bounce 腿彎起來、身體比較薄，**不是比例問題，沒有改**。
+3. **getup 第 0 格（react 第 4 格）上衣的綠色塊**：同一個軀幹遮罩。頭框＝上衣左邊的不透明像素；頭框裡的上衣色改成皮膚色。改了 56 px。
+
 ## 第十三輪：擊飛反應 8 格、death／attack 修正、26 格整合 sheet
 
 > 補齊一般霧屍 M 版，讓它可以整組換進遊戲。工具：`tools/art/ai/build_zombie12.py`（新增 knock、getup、refs13）、`tools/art/ai/build_zombie13.py`（react 組裝、26 格 sheet）。規格、調色盤、分區、頭部處理都沿用第十二輪；所有新影格同樣對到 walk 的 16 色。

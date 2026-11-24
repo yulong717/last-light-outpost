@@ -488,9 +488,12 @@ def pick_indices(action: str, frames: list[Path]) -> tuple[list[int], dict]:
         for p in frames:
             ys_ = np.where((np.array(z10.key_magenta(Image.open(p)))[..., 3] > 128).any(1))[0]
             hs.append(float(ys_.max() - ys_.min() + 1) if len(ys_) else 0.0)
-        r = np.array(hs) / max(hs[-1], 1)
+        # round 14: normalised between the lying start and the standing end (the brute lies 39 px tall = 0.7 of
+        # standing, so absolute ratios picked the lying frame); targets equal round 13's for the M zombie
+        h0 = float(np.median(hs[:3]))
+        r = (np.array(hs) - h0) / max(hs[-1] - h0, 1)
         idx, last = [], 0
-        for tgt in (0.55, 0.75, 0.9, 0.98):
+        for tgt in (0.2, 0.55, 0.82, 0.96):
             cand = [t for t in range(last + 1, T) if t not in bad and r[t] >= tgt]
             t = cand[0] if cand else T - 1
             idx.append(t)
