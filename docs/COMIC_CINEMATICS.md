@@ -39,7 +39,8 @@
 | `src/comic/ComicSequencer.ts` | 演出引擎：任何場景都能 `new ComicSequencer(scene, script, opts).run()` |
 | `src/comic/art.ts` | 插圖 id → 貼圖：`qte/<事件>/<格>` 走 ComicArt，其他走 CinemaArt；**已預載的同名貼圖優先** |
 | `src/scenes/ComicScene.ts` | 通用的劇情演出場景：`scene.launch('Comic', { script: 'prologue_intro', onDone })` |
-| `src/data/cinematics.ts` | 劇情劇本（目前：序章開場 `prologue_intro`） |
+| `src/data/cinematics.ts` | 手寫分鏡的劇情劇本（目前：序章開場 `prologue_intro`） |
+| `src/comic/storyComic.ts` | 文字劇情自動排成一頁漫畫：主角序章、章節開場、序章收尾 |
 | `src/art/CinemaArt.ts` | 劇情插圖（目前是程式畫的占位圖） |
 | `src/scenes/QteScene.ts` | 探索 QTE 的漫畫模式（依 `src/data/comics.ts` 組出劇本） |
 
@@ -94,9 +95,25 @@ await seq.run();
   `src/comic/art.ts` 會優先用已存在的貼圖，占位圖自動退場，劇本不用改。
 - 突破格子的物件（`pop`）用透明底。
 
+## 自動排版的劇情頁（storyComic）
+
+主角序章、章節開場、序章收尾原本是文字劇情卡，現在全部用 `storyComic()` 自動排成一頁漫畫，舊的劇情卡（StoryScene）已移除：
+
+1. 上排大全景：該區的關卡插圖，鏡頭從左搖到右，旁白是第一句。
+2. 主角登場格（主角序章、序章收尾）：放大裁切壓暗的背景＋速度線，主角從格子底部衝出來，打上名字與身分。
+3. 下排每句一格：同一張插圖不同位置放大裁切，傾斜角度、進場方式輪替；超過的句子併進最後一格。
+4. 標題卡：章名＋目標，點一下開始。
+
+| | |
+|---|---|
+| ![主角序章](screenshots/comic/story-hero.png) | ![章節開場](screenshots/comic/story-chapter.png) |
+| 主角序章（含登場格） | 章節開場 |
+
+重要段落要更有張力時，改到 `src/data/cinematics.ts` 手寫分鏡（序章開場就是這樣做的）。
+
 ## 之後
 
-- 序章收尾、各章開場（目前還是 StoryScene 的劇情卡）改寫成漫畫劇本。
-- 角色介紹（選角畫面）用漫畫格。
+- 各章重要段落改成手寫分鏡（專屬插圖、砸入、定格）。
+- 探索結束時的章節完成卡（ExpeditionScene）改成漫畫格。
 - 開鎖、電箱接線、圍困救援等事件演出的開頭／結尾接上漫畫格。
 - 插圖換成生成圖（見上一節）。

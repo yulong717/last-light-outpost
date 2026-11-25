@@ -12,6 +12,12 @@ export interface ComicSceneData {
   onDone?: () => void;
 }
 
+/** 在 from 場景上蓋一段漫畫演出 */
+export function playComic(from: Phaser.Scene, data: ComicSceneData): void {
+  from.scene.launch('Comic', data);
+  from.scene.bringToTop('Comic');
+}
+
 /**
  * 劇情漫畫演出（序章開場、過場、角色介紹）：蓋在任何畫面上，播完呼叫 onDone 並關掉自己。
  * 演出本體在 src/comic/ComicSequencer.ts，QTE 等互動演出直接在自己的場景裡用 ComicSequencer。

@@ -75,6 +75,8 @@ interface LivePanel {
   appliedDim: number;
   frozen: boolean;
   speedAt: number;
+  /** 突破格子的物件插在這個位置（畫面之上、文字與擬聲字之下） */
+  popIndex: number;
 }
 
 /**
@@ -313,6 +315,7 @@ export class ComicSequencer {
       appliedDim: -1,
       frozen: false,
       speedAt: 0,
+      popIndex: c.list.length,
     };
     // dim 疊在最上面（文字、擬聲字、突破的物件也一起退到背景），在 text()/pop() 之後重新排到最上
     c.add(dim);
@@ -585,8 +588,7 @@ export class ComicSequencer {
     const b = p.beat.pop!;
     const key = resolveComicArt(this.scene, b.art, this.opts.zone);
     const img = this.scene.add.image(b.x - p.w / 2, b.y - p.h / 2, key).setScale(b.scale ?? p.base).setAlpha(0);
-    p.c.add(img);
-    p.c.bringToTop(p.dim);
+    p.c.addAt(img, p.popIndex);
     await this.sleep((b.delay ?? 0) + 120);
     if (this.stopped) return;
     const [dx, dy] = b.from ?? [0, 30];

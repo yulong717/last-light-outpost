@@ -1,6 +1,5 @@
 import { ScopeView } from '../systems/ScopeView';
 import { BoltPickups } from '../systems/BoltPickups';
-import { illustrationFor } from '../art/IllustrationArt';
 import { heroRigColors } from '../art/HeroArt';
 import { barricadeKey } from '../art/ProceduralArt';
 import Phaser from 'phaser';
@@ -57,7 +56,8 @@ import { deployedCrew } from '../data/companions';
 import { HeroSystem, type HeroHud } from '../systems/HeroSystem';
 import { LUCK } from '../data/heroes';
 import { OPENINGS, PROLOGUES } from '../data/story';
-import type { StoryData } from './StoryScene';
+import { playComic } from './ComicScene';
+import { storyComic } from '../comic/storyComic';
 import { useMedkit } from '../explore/Supplies';
 import { describeLoot } from '../explore/Expedition';
 import { AMMO } from '../data/weapons';
@@ -400,19 +400,15 @@ export class DefenseScene extends Phaser.Scene {
       begin();
       return;
     }
-    const data: StoryData = {
-      ...PROLOGUES[GameState.data.hero],
-      art: illustrationFor(OPENINGS[GameState.data.hero]?.zone),
-      hero: GameState.data.hero,
-      objective: '先熟悉操作：據點外的霧屍已經聞到你了',
-      onClose: () => {
+    const hero = GameState.data.hero;
+    playComic(this, {
+      script: storyComic({ id: `prologue_${hero}`, ...PROLOGUES[hero], zone: OPENINGS[hero]?.zone, hero, objective: '先熟悉操作：據點外的霧屍已經聞到你了' }),
+      onDone: () => {
         GameState.markIntroSeen();
         GameState.save();
         begin();
       },
-    };
-    this.scene.launch('Story', data);
-    this.scene.bringToTop('Story');
+    });
   }
 
   /** 教學打完（或跳過）：還原快照，進入第一天白天 */
@@ -466,36 +462,43 @@ export class DefenseScene extends Phaser.Scene {
   private showStoryIntro(): void {
     const intro = GameState.pendingIntro();
     if (!intro) return;
-    const data: StoryData =
-      intro === 'prologue'
-        ? {
-            ...PROLOGUES[GameState.data.hero],
-            art: illustrationFor(OPENINGS[GameState.data.hero]?.zone),
-            hero: GameState.data.hero,
-            onClose: () => {
-              GameState.markIntroSeen();
-              GameState.save();
-              // 序章看完，接著播第一章
-              this.time.delayedCall(150, () => this.showStoryIntro());
-            },
-          }
-        : {
-            title: intro.title,
-            lines: intro.intro,
-            art: illustrationFor(intro.zone),
-            objective: `${intro.objective}（${getZone(intro.zone)?.name ?? ''}・城市地圖上的★）`,
-            onClose: () => {
-              GameState.markIntroSeen();
-              GameState.save();
-            },
-          };
-    this.scene.launch('Story', data);
-    this.scene.bringToTop('Story');
+    const hero = GameState.data.hero;
+    // 主線劇情一律用漫畫分格演出（src/comic/storyComic.ts 自動排版）
+    if (intro === 'prologue') {
+      playComic(this, {
+        script: storyComic({ id: `prologue_${hero}`, ...PROLOGUES[hero], zone: OPENINGS[hero]?.zone, hero }),
+        onDone: () => {
+          GameState.markIntroSeen();
+          GameState.save();
+          // 序章看完，接著播第一章
+          this.time.delayedCall(150, () => this.showStoryIntro());
+        },
+      });
+      return;
+    }
+    playComic(this, {
+      script: storyComic({
+        id: `chapter_${intro.id}`,
+        title: intro.title,
+        lines: intro.intro,
+        zone: intro.zone,
+        objective: `${intro.objective}（${getZone(intro.zone)?.name ?? ''}・城市地圖上的★）`,
+      }),
+      onDone: () => {
+        GameState.markIntroSeen();
+        GameState.save();
+      },
+    });
+  }
+
+  /** 劇情演出還開著（擋住出門、入夜） */
+  private isStoryOpen(): boolean {
+    return this.scene.isActive('Comic');
   }
 
   /** 白天出門探索：先把據點狀態存起來，回來時從 GameState 重建 */
   private goExplore(): void {
-    if (this.phase !== 'day' || this.ended || this.scene.isActive('Story')) return;
+    if (this.phase !== 'day' || this.ended || this.isStoryOpen()) return;
     this.outpost.persist();
     GameState.save();
     this.cameras.main.fadeOut(250, 0, 0, 0);
@@ -523,7 +526,7 @@ export class DefenseScene extends Phaser.Scene {
 
   /** 入夜：收起布置介面，開始出怪 */
   private startNight(tutorial = false): void {
-    if (this.phase === 'night' || this.ended || this.scene.isActive('Story')) return;
+    if (this.phase === 'night' || this.ended || this.isStoryOpen()) return;
     this.phase = 'night';
     this.build.exit();
     for (const t of this.sideTags) t.destroy();

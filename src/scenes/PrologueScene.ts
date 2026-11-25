@@ -1,15 +1,14 @@
 import Phaser from 'phaser';
 import { GAME_HEIGHT, GAME_WIDTH } from '../config';
 import { AudioManager } from '../audio/AudioManager';
-import { illustrationFor } from '../art/IllustrationArt';
 import { getZone } from '../data/explore';
 import { PROLOGUE_OUTRO, PROLOGUE_REWARD, PROLOGUE_STAGES } from '../data/prologue';
 import { Expedition } from '../explore/Expedition';
 import { GameState } from '../state/GameState';
 import { pixelText } from '../utils/text';
 import type { ExploreFieldData, FieldResult } from './ExploreFieldScene';
-import type { StoryData } from './StoryScene';
-import type { ComicSceneData } from './ComicScene';
+import { playComic, type ComicSceneData } from './ComicScene';
+import { storyComic } from '../comic/storyComic';
 
 export interface PrologueData {
   /** 從第幾層開始（測試用；預設 0 = 頂樓，會先播開場） */
@@ -39,9 +38,7 @@ export class PrologueScene extends Phaser.Scene {
     Expedition.current = new Expedition(getZone('school')!, []);
     if (this.index === 0) {
       // 開場：漫畫分格演出（src/data/cinematics.ts 的 prologue_intro）
-      const comic: ComicSceneData = { script: 'prologue_intro', zone: 'school', onDone: () => this.floorIntro() };
-      this.scene.launch('Comic', comic);
-      this.scene.bringToTop('Comic');
+      playComic(this, { script: 'prologue_intro', zone: 'school', onDone: () => this.floorIntro() });
     } else this.floorIntro();
   }
 
@@ -115,14 +112,10 @@ export class PrologueScene extends Phaser.Scene {
     gs.data.route = { node: 'school_gate', hours: 0 };
     gs.startNewDay();
     gs.save();
-    const outro: StoryData = {
-      ...PROLOGUE_OUTRO,
-      art: illustrationFor('school'),
-      hero: 'student',
-      onClose: () => this.nextChapter(),
-    };
-    this.scene.launch('Story', outro);
-    this.scene.bringToTop('Story');
+    playComic(this, {
+      script: storyComic({ id: 'prologue_outro', ...PROLOGUE_OUTRO, zone: 'school', hero: 'student' }),
+      onDone: () => this.nextChapter(),
+    });
   }
 
   /** 接著播第二章的開場，播完出發 */
@@ -135,20 +128,20 @@ export class PrologueScene extends Phaser.Scene {
       });
     };
     if (!ch) return leave();
-    const story: StoryData = {
-      title: ch.title,
-      lines: ch.intro,
-      art: illustrationFor(ch.zone),
-      objective: `${ch.objective}（${getZone(ch.zone)?.name ?? ''}・城市地圖上的★）`,
-      onClose: () => {
+    const data: ComicSceneData = {
+      script: storyComic({
+        id: `chapter_${ch.id}`,
+        title: ch.title,
+        lines: ch.intro,
+        zone: ch.zone,
+        objective: `${ch.objective}（${getZone(ch.zone)?.name ?? ''}・城市地圖上的★）`,
+      }),
+      onDone: () => {
         GameState.markIntroSeen();
         GameState.save();
         leave();
       },
     };
-    this.time.delayedCall(150, () => {
-      this.scene.launch('Story', story);
-      this.scene.bringToTop('Story');
-    });
+    this.time.delayedCall(150, () => playComic(this, data));
   }
 }

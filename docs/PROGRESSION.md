@@ -58,5 +58,5 @@
 - `src/state/GameState.ts`：`story` 進度（目前章節、已開放區域、開場播到哪），`completeChapter()`、`pendingIntro()`、`zoneOpen()`。
   主線之前的舊存檔會當作主線已完成，不會被鎖住。
 - `src/explore/Expedition.ts`：主線區域的最後一站換成劇情事件；結果標 `story: true` 時發固定獎勵，`bank()` 時完成章節。
-- `src/scenes/StoryScene.ts`：劇情卡（序章、章節開場），由 `DefenseScene.showStoryIntro()` 在白天開場時跳出。
+- 劇情（主角序章、章節開場）用漫畫分格演出（`src/comic/storyComic.ts` 自動排版，見 [COMIC_CINEMATICS.md](COMIC_CINEMATICS.md)），由 `DefenseScene.showStoryIntro()` 在白天開場時跳出。
 - `src/data/waves.ts`：`NIGHT_ONE` 單人教學夜、`squadScale()` 隊伍倍率。
