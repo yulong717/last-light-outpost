@@ -458,11 +458,12 @@ export class ComicSequencer {
 
   private async title(text: string, sub: string | undefined, hold: number | 'tap' | undefined): Promise<void> {
     const s = this.scene;
-    const band = s.add.rectangle(0, GAME_HEIGHT / 2, GAME_WIDTH, sub ? 74 : 56, 0x000000, 0.86).setOrigin(0, 0.5).setDepth(D_TITLE);
-    const t = s.add.text(GAME_WIDTH / 2, GAME_HEIGHT / 2 - (sub ? 10 : 0), text, { ...this.style(20, '#f5d76e'), fontStyle: 'bold' }).setOrigin(0.5).setDepth(D_TITLE);
+    const subLines = sub ? sub.split('\n').length : 0;
+    const band = s.add.rectangle(0, GAME_HEIGHT / 2, GAME_WIDTH, (sub ? 60 : 56) + subLines * 18, 0x000000, 0.86).setOrigin(0, 0.5).setDepth(D_TITLE);
+    const t = s.add.text(GAME_WIDTH / 2, GAME_HEIGHT / 2 - (subLines * 18) / 2 - (sub ? 4 : 0), text, { ...this.style(20, '#f5d76e'), fontStyle: 'bold' }).setOrigin(0.5).setDepth(D_TITLE);
     t.setStroke('#000000', 5);
     const objs: Phaser.GameObjects.GameObject[] = [band, t];
-    if (sub) objs.push(s.add.text(GAME_WIDTH / 2, GAME_HEIGHT / 2 + 20, sub, this.style(9, '#d8cfb8')).setOrigin(0.5).setDepth(D_TITLE));
+    if (sub) objs.push(s.add.text(GAME_WIDTH / 2, GAME_HEIGHT / 2 - (subLines * 18) / 2 + 18, sub, { ...this.style(9, '#d8cfb8'), align: 'center' }).setOrigin(0.5, 0).setDepth(D_TITLE).setLineSpacing(4));
     band.scaleY = 0;
     t.setScale(1.6).setAlpha(0);
     this.busy = true;

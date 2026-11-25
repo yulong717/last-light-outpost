@@ -1,4 +1,6 @@
 import Phaser from 'phaser';
+import { playComic } from './ComicScene';
+import { storyComic } from '../comic/storyComic';
 import { GAME_HEIGHT, GAME_WIDTH } from '../config';
 import { AudioManager } from '../audio/AudioManager';
 import { COMPANION_ROLES } from '../data/companions';
@@ -552,18 +554,18 @@ export class ExpeditionScene extends Phaser.Scene {
     this.card.add(uiButton(this, CARD_X + 14, CARD_Y + CARD_H - 40, CARD_W - 28, 28, ch ? '繼續 ▶' : '回據點', next, { fill: 0x3a4a2a, size: 9 }));
   }
 
-  /** 主線一章完成：收尾劇情＋開放了什麼 */
+  /** 主線一章完成：收尾劇情用漫畫演出，最後的標題卡列出開放了什麼 */
   private showChapterDone(ch: Chapter): void {
-    AudioManager.play('stinger_win');
-    this.cardFrame(`完成　${ch.title}`, ch.outro.join('\n'), '#f5d76e');
     const unlocked: string[] = [];
     for (const id of ch.openZones) unlocked.push(`新區域：${getZone(id)?.name ?? id}`);
     const guns = (ch.reward.weapons ?? []).map((id) => getWeapon(id)?.name ?? id);
     if (guns.length) unlocked.push(`陳列架新增：${guns.join('、')}`);
     const nextCh = GameState.chapter;
     if (nextCh) unlocked.push(`下一章：${nextCh.title}（第 ${nextCh.minDay} 天起）`);
-    unlocked.forEach((l, i) => this.card.add(pixelText(this, CARD_X + 24, CARD_Y + CARD_H - 50 - (unlocked.length - i) * 13, l, 8, '#9ad17a')));
-    this.card.add(uiButton(this, CARD_X + 14, CARD_Y + CARD_H - 40, CARD_W - 28, 28, '回據點', () => this.leave(), { fill: 0x3a4a2a, size: 9 }));
+    playComic(this, {
+      script: storyComic({ id: `chapter_done_${ch.id}`, title: `完成　${ch.title}`, lines: ch.outro, zone: ch.zone, objective: unlocked.join('\n') }),
+      onDone: () => this.leave(),
+    });
   }
 
   private leave(): void {
