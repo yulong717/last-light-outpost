@@ -82,7 +82,7 @@ export function outpostScenery(scene: Phaser.Scene, mapId: string | undefined, w
     extras: 0,
     decor: 1.2,
     // 據點外牆、路障、建築槽位附近不要擺東西
-    keepClear: [[0, 430]],
+    keepClear: map.keepClear ?? [[0, 430]],
   });
   void day;
   return res;

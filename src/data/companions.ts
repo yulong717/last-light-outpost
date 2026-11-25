@@ -108,6 +108,8 @@ export interface CrewMember {
   injuredDays?: number;
   /** 玩家在名冊裡設成「待命」：夜晚防守不上場 */
   standby?: boolean;
+  /** 雙面據點（孤島小店）守哪一側：1 = 右、-1 = 左；沒設就左右輪流 */
+  side?: 1 | -1;
 }
 
 /** 這位隊員現在能不能出戰／探索 */

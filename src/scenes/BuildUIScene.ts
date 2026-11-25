@@ -168,21 +168,23 @@ export class BuildUIScene extends Phaser.Scene {
 
     if (sel.type === 'barricade') {
       const lv = GameState.data.barricadeLevel;
-      const bar = out.barricade;
+      const side = sel.side ?? 1;
+      const bar = out.barricadeOf(side);
+      const label = out.barricadeL ? (side < 0 ? '左側路障' : '右側路障') : '主路障';
       this.frame(74);
-      this.text(PANEL_X + 10, PANEL_Y + 7, `主路障　Lv${lv}${lv >= BARRICADE_LEVELS.length ? '（滿級）' : ''}`, 9, '#f5d76e');
+      this.text(PANEL_X + 10, PANEL_Y + 7, `${label}　Lv${lv}${lv >= BARRICADE_LEVELS.length ? '（滿級）' : ''}`, 9, '#f5d76e');
       this.text(PANEL_X + 10, PANEL_Y + 24, `耐久 ${bar.hp} / ${bar.maxHp}${bar.alive ? '' : '　已倒塌！'}`, 8, bar.alive ? '#c8c8c8' : '#ff8a80');
       const bw = (PANEL_W - 16 - 8) / 2;
       const by = PANEL_Y + 42;
       this.actionButton(PANEL_X + 8, by, bw, '強化', out.barricadeUpgradeQuote(), () => this.mode.upgrade());
-      this.actionButton(PANEL_X + 16 + bw, by, bw, '修理', out.barricadeRepairQuote(), () => this.mode.repair(), true);
+      this.actionButton(PANEL_X + 16 + bw, by, bw, '修理', out.barricadeRepairQuote(side), () => this.mode.repair(), true);
       return;
     }
 
     // 外牆
     const st = GameState.data;
     this.frame(74);
-    this.text(PANEL_X + 10, PANEL_Y + 7, '據點外牆', 9, '#f5d76e');
+    this.text(PANEL_X + 10, PANEL_Y + 7, out.barricadeL ? '小店門面' : '據點外牆', 9, '#f5d76e');
     this.text(PANEL_X + 10, PANEL_Y + 24, `耐久 ${st.baseHp} / ${st.baseMaxHp}　歸零就失守`, 8, '#c8c8c8');
     this.actionButton(PANEL_X + 8, PANEL_Y + 42, PANEL_W - 16, '修理', out.wallRepairQuote(), () => this.mode.repair(), true);
   }

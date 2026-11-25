@@ -7,7 +7,7 @@ import {
   ECONOMY,
   LAMP,
   SANDBAG_HALF_H,
-  SLOTS,
+  ALL_SLOTS,
   SPIKES,
   investedCost,
   type BuildingKind,
@@ -35,15 +35,24 @@ export interface Quote {
 export class Outpost {
   readonly buildings = new Map<string, Building>();
 
-  constructor(private scene: Phaser.Scene, readonly barricade: Barricade) {
+  /**
+   * barricade：主路障（右側）。barricadeL：雙面據點的左側路障（等級與主路障共用，耐久各自計）。
+   */
+  constructor(private scene: Phaser.Scene, readonly barricade: Barricade, readonly barricadeL?: Barricade) {
     const st = GameState.data;
     const lv = Phaser.Math.Clamp(st.barricadeLevel, 1, BARRICADE_LEVELS.length);
     barricade.setHp(st.barricadeHp, BARRICADE_LEVELS[lv - 1].maxHp);
+    barricadeL?.setHp(st.barricadeHpL ?? BARRICADE_LEVELS[lv - 1].maxHp, BARRICADE_LEVELS[lv - 1].maxHp);
     for (const b of st.buildings) {
-      const slot = SLOTS.find((s) => s.id === b.slot);
+      const slot = ALL_SLOTS.find((s) => s.id === b.slot);
       if (!slot || !BUILDINGS[b.kind]) continue;
       this.buildings.set(slot.id, new Building(scene, slot, b.kind, b.level, b.hp));
     }
+  }
+
+  /** 這一側的路障（-1 = 左側；沒有左側路障時一律回傳主路障） */
+  barricadeOf(side: number = 1): Barricade {
+    return side < 0 && this.barricadeL ? this.barricadeL : this.barricade;
   }
 
   get scrap(): number {
@@ -51,7 +60,7 @@ export class Outpost {
   }
 
   slot(id: string): SlotDef | undefined {
-    return SLOTS.find((s) => s.id === id);
+    return ALL_SLOTS.find((s) => s.id === id);
   }
 
   // ───────────── 夜晚：建築效果 ─────────────
@@ -60,14 +69,14 @@ export class Outpost {
    * 霧屍在 (x, y) 時，前方最近、還站著的沙包牆。
    * minFront：已經有的擋路線（路障或外牆），比它更後面的沙包不用管。
    */
-  blockerFor(x: number, y: number, minFront: number): { blockX: number; hit: (d: number, y: number) => void } | null {
+  blockerFor(x: number, y: number, minFront: number, side: number = 1): { blockX: number; hit: (d: number, y: number) => void } | null {
     let best: Building | null = null;
     for (const b of this.buildings.values()) {
-      if (b.kind !== 'sandbag' || !b.working) continue;
+      if (b.kind !== 'sandbag' || !b.working || b.dir !== side) continue;
       if (Math.abs(y - b.slot.y) > SANDBAG_HALF_H) continue;
-      // 霧屍已經在沙包後面（左邊）就不擋
-      if (x < b.frontX - 2 || b.frontX <= minFront) continue;
-      if (!best || b.frontX > best.frontX) best = b;
+      // 霧屍已經在沙包後面（靠據點那側）就不擋；side 是霧屍來的方向
+      if ((x - b.frontX) * side < -2 || (b.frontX - minFront) * side <= 0) continue;
+      if (!best || (b.frontX - best.frontX) * side > 0) best = b;
     }
     if (!best) return null;
     const target = best;
@@ -163,8 +172,9 @@ export class Outpost {
     return { cost: BARRICADE_LEVELS[lv - 1].upgradeCost };
   }
 
-  barricadeRepairQuote(): Quote {
-    const missing = this.barricade.maxHp - this.barricade.hp;
+  barricadeRepairQuote(side: number = 1): Quote {
+    const bar = this.barricadeOf(side);
+    const missing = bar.maxHp - bar.hp;
     if (missing <= 0) return { cost: 0, blocked: '耐久全滿' };
     return { cost: Math.ceil(missing / BARRICADE_HP_PER_SCRAP) };
   }
@@ -174,19 +184,20 @@ export class Outpost {
     const st = GameState.data;
     st.barricadeLevel += 1;
     const max = BARRICADE_LEVELS[st.barricadeLevel - 1].maxHp;
-    // 強化時順便補上多出來的耐久
-    this.barricade.setHp(this.barricade.hp + (max - this.barricade.maxHp), max);
+    // 強化時順便補上多出來的耐久（雙面據點兩道一起強化）
+    for (const bar of [this.barricade, this.barricadeL]) bar?.setHp(bar.hp + (max - bar.maxHp), max);
     this.persist();
     return true;
   }
 
   /** 修理主路障；錢不夠時能修多少修多少 */
-  repairBarricade(): boolean {
-    const q = this.barricadeRepairQuote();
+  repairBarricade(side: number = 1): boolean {
+    const q = this.barricadeRepairQuote(side);
     if (q.blocked || this.scrap <= 0) return false;
     const spend = Math.min(q.cost, this.scrap);
     GameState.data.scrap -= spend;
-    this.barricade.setHp(this.barricade.hp + spend * BARRICADE_HP_PER_SCRAP);
+    const bar = this.barricadeOf(side);
+    bar.setHp(bar.hp + spend * BARRICADE_HP_PER_SCRAP);
     this.persist();
     return true;
   }
@@ -218,6 +229,7 @@ export class Outpost {
     const st = GameState.data;
     st.barricadeHp = this.barricade.hp;
     st.barricadeMaxHp = this.barricade.maxHp;
+    if (this.barricadeL) st.barricadeHpL = this.barricadeL.hp;
     st.buildings = [...this.buildings.values()].map((b) => ({
       slot: b.slot.id,
       kind: b.kind,

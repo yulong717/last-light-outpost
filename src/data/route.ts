@@ -20,7 +20,10 @@ export interface RouteNode {
   /** 地圖座標（和 ZONES 的 mapX/mapY 同一套：x 0～600、y 90～280） */
   x: number;
   y: number;
-  /** explore：對應的探索區域 */
+  /**
+   * 探索區域。explore 節點一定有；outpost 節點有的話代表「據點兼探索點」：
+   * 可以在這裡搜刮，也可以在這裡過夜防守。
+   */
   zone?: string;
   /** outpost：守夜的戰場地圖（src/data/scenery.ts 的 OUTPOST_MAPS） */
   map?: string;
@@ -31,14 +34,15 @@ export const ROUTE_NODES: RouteNode[] = [
   { id: 'school_gate', kind: 'start', name: '學校後門', x: 50, y: 160, blurb: '你逃出來的地方。回不去了。' },
   // ── 據點 ──
   { id: 'alley', kind: 'outpost', name: '後巷鐵捲門', x: 150, y: 185, map: 'alley' },
-  { id: 'street', kind: 'outpost', name: '街口五金行', x: 290, y: 235, map: 'street' },
+  // 據點兼探索點：鬧區裡的五金行（搜刮鬧區、在五金行過夜）
+  { id: 'street', kind: 'outpost', name: '鬧區・五金行', x: 330, y: 265, map: 'street', zone: 'downtown' },
   { id: 'schoolyard', kind: 'outpost', name: '光明國小', x: 235, y: 100, map: 'school' },
-  { id: 'gasstation', kind: 'outpost', name: '公路加油站', x: 430, y: 270, map: 'gasstation' },
+  // 據點兼探索點：廢棄加油站（搜刮加油站、在便利商店過夜）
+  { id: 'gasstation', kind: 'outpost', name: '廢棄加油站', x: 120, y: 250, map: 'gasstation', zone: 'gas' },
+  { id: 'islandshop', kind: 'outpost', name: '孤島小店', x: 368, y: 178, map: 'islandshop', blurb: '路口正中間的便利商店，兩邊都會有霧屍來。' },
   // ── 探索點（區域） ──
-  { id: 'gas', kind: 'explore', name: '', x: 0, y: 0, zone: 'gas' },
   { id: 'homes', kind: 'explore', name: '', x: 0, y: 0, zone: 'homes' },
   { id: 'market', kind: 'explore', name: '', x: 0, y: 0, zone: 'market' },
-  { id: 'downtown', kind: 'explore', name: '', x: 0, y: 0, zone: 'downtown' },
   { id: 'nightmarket', kind: 'explore', name: '', x: 0, y: 0, zone: 'nightmarket' },
   { id: 'hospital', kind: 'explore', name: '', x: 0, y: 0, zone: 'hospital' },
   { id: 'police', kind: 'explore', name: '', x: 0, y: 0, zone: 'police' },
@@ -53,28 +57,34 @@ export const ROUTE_NODES: RouteNode[] = [
 /** 路線：[a, b, 路程時數] */
 export const ROUTE_EDGES: [string, string, number][] = [
   ['school_gate', 'alley', 1],
-  ['school_gate', 'gas', 1],
+  ['school_gate', 'gasstation', 1],
   ['school_gate', 'homes', 2],
-  ['alley', 'gas', 1],
+  ['alley', 'gasstation', 1],
   ['alley', 'homes', 1],
   ['alley', 'market', 1],
-  ['gas', 'street', 2],
+  ['gasstation', 'street', 2],
   ['market', 'street', 1],
   ['market', 'schoolyard', 1],
   ['homes', 'schoolyard', 1],
   ['schoolyard', 'nightmarket', 1],
-  ['street', 'downtown', 1],
   ['nightmarket', 'hospital', 2],
-  ['downtown', 'gasstation', 1],
-  ['gasstation', 'police', 1],
   ['street', 'police', 2],
   ['hospital', 'police', 2],
   ['hospital', 'checkpoint', 2],
+  ['market', 'islandshop', 1],
+  ['street', 'islandshop', 1],
+  ['islandshop', 'hospital', 2],
+  ['islandshop', 'police', 2],
   ['police', 'checkpoint', 2],
 ];
 
 export function getNode(id: string | undefined): RouteNode | undefined {
   return ROUTE_NODES.find((n) => n.id === id);
+}
+
+/** 這裡能不能搜刮（探索點，或兼探索點的據點） */
+export function canExplore(n: RouteNode): boolean {
+  return !!n.zone && n.kind !== 'start';
 }
 
 /** 相鄰的地點與路程 */

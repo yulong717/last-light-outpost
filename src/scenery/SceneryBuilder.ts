@@ -334,6 +334,10 @@ function drawFacade(
       case 'gas':
         facadeGas(p, W, t, rnd, signs);
         break;
+      case 'gascenter':
+        // 雙向公路加油站：便利商店正好在戰場中間（店的中心在 x0 + 440）
+        facadeGas(p, W, t, rnd, signs, Math.round(W / 2) - 440 - 760);
+        break;
       case 'market':
         facadeMarket(p, W, t, rnd, signs);
         break;
@@ -360,6 +364,9 @@ function drawFacade(
         break;
       case 'alley':
         facadeAlley(p, W, rnd, signs);
+        break;
+      case 'islandshop':
+        facadeIslandShop(p, W, t, rnd, signs);
         break;
       case 'street':
       default:
@@ -476,8 +483,8 @@ function facadeHomes(p: Painter, W: number, _t: LocationTheme, rnd: Phaser.Math.
 }
 
 /** 加油站：5m 高的雨棚、便利商店、修車間、價目牌 */
-function facadeGas(p: Painter, W: number, _t: LocationTheme, rnd: Phaser.Math.RandomDataGenerator, signs: Sign[]): void {
-  for (let x0 = 0; x0 < W; x0 += 760) {
+function facadeGas(p: Painter, W: number, _t: LocationTheme, rnd: Phaser.Math.RandomDataGenerator, signs: Sign[], start = 0): void {
+  for (let x0 = start; x0 < W; x0 += 760) {
     // 便利商店（3.6m 高）
     const sx = x0 + 330;
     const sw = 220;
@@ -759,6 +766,79 @@ function facadeAlley(p: Painter, W: number, rnd: Phaser.Math.RandomDataGenerator
     }
   }
   signs.push({ x: Math.min(W - 80, 700), y: 46, text: '禁止停車', color: '#e8e0d0', size: 8 });
+  sidewalkTrim(p, W);
+}
+
+/**
+ * 孤島小店：空曠路口正中間孤零零一間 24 小時便利商店，兩側是拆光的空地與倒掉的圍籬，
+ * 看得出霧屍可以從左右兩邊同時過來。店裡的燈還亮著。
+ */
+function facadeIslandShop(p: Painter, W: number, t: LocationTheme, rnd: Phaser.Math.RandomDataGenerator, signs: Sign[]): void {
+  const cx = Math.round(W / 2);
+  // 兩側：空地上的瓦礫、倒塌的工地圍籬、孤立的電線桿
+  for (let x = 0; x < W; x += rnd.between(18, 40)) {
+    if (Math.abs(x - cx) < 150) continue;
+    p.rect(x, B - rnd.between(3, 14), rnd.between(8, 26), rnd.between(3, 10), tone(t.wall, rnd.frac() * 0.2 - 0.25));
+  }
+  for (const side of [-1, 1]) {
+    // 工地圍籬：一段立著、一段倒了
+    const x0 = side < 0 ? 40 : cx + 190;
+    const x1 = side < 0 ? cx - 190 : W - 40;
+    for (let x = x0; x < x1; x += 46) {
+      const down = rnd.frac() < 0.35;
+      if (down) p.rect(x, B - 8, 44, 6, 0x6a7078);
+      else {
+        p.rect(x, B - 52, 44, 50, 0x8a9096);
+        p.rect(x, B - 52, 44, 3, 0xb8bcc0);
+        for (let k = 0; k < 44; k += 6) p.rect(x + k, B - 49, 1, 47, 0x6a7078);
+        if (rnd.frac() < 0.4) p.dither(x + 4, B - 40, 30, 14, rnd.pick([0xc83a2a, 0x3a9ae0, 0xe8e040]), 0.35, 0.6);
+      }
+      p.rect(x, B - 56, 2, 56, 0x4a4e54);
+    }
+    // 電線桿
+    const px = cx + side * 260;
+    p.rect(px, 24, 5, B - 24, 0x5a4a3a);
+    p.rect(px - 14, 40, 33, 3, 0x4a3a2a);
+  }
+  for (let k = 0; k < 2; k++) p.wire(cx - 258, 42 + k * 6, cx + 262, 42 + k * 6, 10, 0x101114);
+  // ── 便利商店（7m 寬 × 一層樓高，平頂） ──
+  const w = 7 * M;
+  const x = cx - Math.round(w / 2);
+  const top = B - FLOOR_H - 18;
+  p.box(x - 4, top - 6, w + 8, 8, 0xd8dcd8);
+  p.box(x, top, w, B - top, 0xe6e2d6, { light: 0.06 });
+  // 招牌色帶（綠橘兩條）
+  p.rect(x, top + 4, w, 6, 0x2a9a6a);
+  p.rect(x, top + 10, w, 5, 0xe0782a);
+  p.rect(x, top + 15, w, 3, 0xc83a2a);
+  signs.push({ x: cx, y: top + 26, text: '孤島小店　24H', color: '#2a4a3a', size: 10 });
+  // 大片玻璃窗：裡面的貨架和燈
+  const gy = top + 36;
+  const gh = B - gy - 8;
+  p.rect(x + 8, gy, w - 16, gh, 0x1a2a30);
+  p.rect(x + 8, gy, w - 16, gh, 0xf0e8a0, 0.22);
+  for (let k = 0; k < 3; k++) {
+    const sy = gy + 12 + k * 18;
+    p.rect(x + 14, sy, w - 28, 2, 0x5a6a70);
+    for (let i = x + 16; i < x + w - 18; i += rnd.between(4, 7)) p.rect(i, sy - rnd.between(4, 9), 3, 4, rnd.pick([0xc83a2a, 0x3a9ae0, 0xe8e040, 0x9ad17a, 0xe0e0e0]), 0.8);
+  }
+  // 窗框與玻璃反光、木板釘起來的破窗
+  for (let i = x + 8; i <= x + w - 8; i += Math.round((w - 16) / 4)) p.rect(i - 1, gy, 2, gh, 0x9aa0a4);
+  p.rect(x + 8, gy, w - 16, 2, 0x9aa0a4);
+  for (let k = 0; k < 4; k++) p.line(x + 20 + k * 52, gy + 4, x + 32 + k * 52, gy + 20, 0xffffff, 0.25);
+  for (const bx of [x + 14, x + w - 62]) {
+    p.rect(bx, gy + 20, 48, 6, 0x8a6a44);
+    p.rect(bx + 4, gy + 34, 44, 6, 0x7a5a3a);
+  }
+  // 自動門（中間）
+  p.rect(cx - 18, gy + 6, 36, gh - 6, 0x22343a);
+  p.rect(cx - 1, gy + 6, 2, gh - 6, 0x9aa0a4);
+  p.rect(cx - 18, B - 10, 36, 2, 0x5a6064);
+  // 外面的冰櫃與招牌燈箱
+  p.box(x - 30, B - 34, 22, 34, 0x3a8ac8);
+  p.rect(x - 28, B - 30, 18, 12, 0xd8f0ff, 0.7);
+  p.box(x + w + 8, B - 26, 26, 26, 0xc83a2a);
+  p.rect(x + w + 10, B - 22, 22, 8, 0xf8e0a0, 0.8);
   sidewalkTrim(p, W);
 }
 

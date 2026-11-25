@@ -39,7 +39,8 @@ export class Building {
     const depth = kind === 'spikes' ? depthForY(slot.y) - 1.5 : depthForY(slot.y);
     this.sprite = scene.add.image(slot.x, slot.y + (kind === 'spikes' ? 4 : 0), BUILDINGS[kind].texture, 0)
       .setOrigin(0.5, 1)
-      .setDepth(depth);
+      .setDepth(depth)
+      .setFlipX(this.dir < 0);
     if (kind === 'lamp') {
       this.glow = scene.add
         .image(slot.x, slot.y - 6, FX.glow)
@@ -66,9 +67,14 @@ export class Building {
     return this.kind === 'sandbag' || this.kind === 'spikes';
   }
 
+  /** 霧屍從哪一側來：1 = 右邊（預設），-1 = 左邊（雙面據點的左側槽位） */
+  get dir(): 1 | -1 {
+    return this.slot.dir ?? 1;
+  }
+
   /** 沙包牆擋住霧屍的那條線 */
   get frontX(): number {
-    return this.slot.x + 16;
+    return this.slot.x + 16 * this.dir;
   }
 
   get lampRadius(): number {
@@ -103,7 +109,7 @@ export class Building {
     this.hp = Math.max(0, this.hp - amount);
     const fx = Fx.of(this.scene);
     fx?.dust(this.frontX, hitY - 6, 3);
-    this.scene.tweens.add({ targets: this.sprite, x: this.slot.x - 1, duration: 40, yoyo: true });
+    this.scene.tweens.add({ targets: this.sprite, x: this.slot.x - this.dir, duration: 40, yoyo: true });
     this.refreshLook();
     if (!this.working) fx?.dust(this.slot.x, this.slot.y - 6, 10);
   }
@@ -139,7 +145,7 @@ export class Building {
       if (z.dead || z.alt > 8 || !this.covers(z.footX, z.footY)) continue;
       stabbed = true;
       if (z.takeDamage(SPIKES.damage[this.level - 1], 0, { dirX: -1 })) kills++;
-      Fx.of(this.scene)?.blood(z.footX, z.footY - 4, -1, z.footY, 2, 0.5);
+      Fx.of(this.scene)?.blood(z.footX, z.footY - 4, -this.dir, z.footY, 2, 0.5);
     }
     if (stabbed) {
       this.hp = Math.max(0, this.hp - SPIKES.wear);
@@ -157,7 +163,7 @@ export class Building {
     let best = Infinity;
     for (const z of zombies) {
       if (z.dead) continue;
-      const dx = z.footX - this.slot.x;
+      const dx = (z.footX - this.slot.x) * this.dir;
       if (dx < 0 || dx > this.turretRange) continue;
       const d = Math.hypot(dx, (z.footY - this.slot.y) * 1.6);
       if (d < best) {
@@ -168,7 +174,7 @@ export class Building {
     if (!target) return 0;
     this.timer = 0;
     const s = target.def.scale ?? 1;
-    const mx = this.slot.x + 15;
+    const mx = this.slot.x + 15 * this.dir;
     const my = this.slot.y - 15;
     const tx = target.footX;
     const ty = target.footY - 30 * s;
@@ -176,10 +182,10 @@ export class Building {
     fx?.bulletTracer(mx, my, tx, ty);
     fx?.bulletHit(tx, ty, 1, target.footY, false);
     // 槍口火光 + 機身往後頓
-    const flash = this.scene.add.circle(mx + 1, my, 3, 0xfff3a0).setDepth(this.sprite.depth + 0.1);
+    const flash = this.scene.add.circle(mx + this.dir, my, 3, 0xfff3a0).setDepth(this.sprite.depth + 0.1);
     this.scene.tweens.add({ targets: flash, scale: 0.2, alpha: 0, duration: 60, onComplete: () => flash.destroy() });
-    this.scene.tweens.add({ targets: this.sprite, x: this.slot.x - 2, duration: 40, yoyo: true });
-    return target.takeDamage(TURRET.damage[this.level - 1], 2, { dirX: 1 }) ? 1 : 0;
+    this.scene.tweens.add({ targets: this.sprite, x: this.slot.x - 2 * this.dir, duration: 40, yoyo: true });
+    return target.takeDamage(TURRET.damage[this.level - 1], 2, { dirX: this.dir }) ? 1 : 0;
   }
 
   private refreshLook(): void {

@@ -132,6 +132,15 @@ export class Companion {
     return this.hp > 0;
   }
 
+  /** 白天直接擺到某個位置（雙面據點換守的那一側）；facing 是要面向的方向 */
+  placeAt(x: number, y: number, facing?: number): void {
+    this.footX = x;
+    this.footY = clampLaneY(y);
+    if (facing) this.facing = facing > 0 ? 1 : -1;
+    this.sync();
+    this.updateRig(0, null);
+  }
+
   get reloading(): boolean {
     return this.reloadLeft > 0;
   }

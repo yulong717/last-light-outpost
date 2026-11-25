@@ -5,7 +5,7 @@ import { ensureCrewTexture } from '../art/CrewArt';
 import { ensureCityMap, ensureZoneIcons, ZONE_ICON_KEY, zoneIconFrame } from '../art/MapArt';
 import { COMPANION_ROLES, crewReady, type CrewMember } from '../data/companions';
 import { EXPLORE_TIME, INTEL, SUPPLIES, getZone, type SupplyId } from '../data/explore';
-import { DAY_HOURS, ROUTE_EDGES, ROUTE_NODES, clockText, exploreHours, getNode, nearestOutpost, travelHours, type RouteNode } from '../data/route';
+import { DAY_HOURS, ROUTE_EDGES, ROUTE_NODES, canExplore, clockText, exploreHours, getNode, nearestOutpost, travelHours, type RouteNode } from '../data/route';
 import { getOutpostMap } from '../data/scenery';
 import { Expedition } from '../explore/Expedition';
 import { stars, uiButton, uiPanel, uiTopBar } from '../explore/ui';
@@ -96,7 +96,7 @@ export class ExploreMapScene extends Phaser.Scene {
   }
 
   private locked(n: RouteNode): boolean {
-    return n.kind === 'explore' && !GameState.zoneOpen(n.zone!);
+    return canExplore(n) && !GameState.zoneOpen(n.zone!);
   }
 
   // ── 地圖：路線、地點、目前位置 ──
@@ -139,7 +139,7 @@ export class ExploreMapScene extends Phaser.Scene {
     for (const n of ROUTE_NODES) {
       const p = this.toMap(n);
       const locked = this.locked(n);
-      const done = n.kind === 'explore' && st.exploredToday.includes(n.zone!);
+      const done = canExplore(n) && st.exploredToday.includes(n.zone!);
       const c = this.add.container(p.x, p.y);
       const ring = this.add.circle(0, 0, 14).setStrokeStyle(2, 0xffffff, 0.9).setVisible(false);
       c.add(ring);
@@ -149,6 +149,11 @@ export class ExploreMapScene extends Phaser.Scene {
         if (this.route.lastOutpost === n.id) c.add(this.add.circle(0, 0, 18, 0xf5d76e, 0.12));
         hit = this.add.rectangle(0, 0, 16, 16, 0x2e4a2a).setStrokeStyle(2, 0x9ad17a, 0.95);
         c.add([hit, this.add.rectangle(0, 0, 6, 6, 0xf5d76e)]);
+        // 兼探索點：角落掛一個區域小圖示
+        if (n.zone) {
+          const icon = zoneIconFrame(n.zone);
+          if (icon >= 0) c.add(this.add.image(9, -9, ZONE_ICON_KEY, icon).setScale(0.7).setAlpha(locked ? 0.45 : done ? 0.6 : 1));
+        }
       } else if (n.kind === 'start') {
         hit = this.add.circle(0, 0, 7, 0x3a3d44).setStrokeStyle(2, 0x9aa3ad, 0.8);
         c.add(hit);
@@ -203,7 +208,7 @@ export class ExploreMapScene extends Phaser.Scene {
     const here = n.id === r.node;
     const hours = here ? 0 : travelHours(r.node, n.id);
     const locked = this.locked(n);
-    const kindLabel = n.kind === 'outpost' ? '據點' : n.kind === 'start' ? '' : '探索點';
+    const kindLabel = n.kind === 'outpost' ? (n.zone ? '據點・探索點' : '據點') : n.kind === 'start' ? '' : '探索點';
     add(pixelText(this, PANEL_X + 10, y0 + 8, n.name, 10, n.kind === 'outpost' ? '#9ad17a' : '#f5d76e'));
     add(pixelText(this, PANEL_X + PANEL_W - 10, y0 + 10, here ? '目前位置' : hours === null ? '不相鄰' : `${kindLabel}・路程 ${hours} 小時`, 8, '#c8c8c8').setOrigin(1, 0));
     let y = y0 + 26;
@@ -218,15 +223,18 @@ export class ExploreMapScene extends Phaser.Scene {
       text(map.blurb);
       for (const p of map.perks) text(`・${p}`, '#9ad17a');
       if (GameState.data.outpostMap !== map.id && GameState.data.buildings.length) text('換到這裡過夜：舊據點的建築拆掉，退回一半廢料。', '#ffcc80', 7);
-    } else if (n.kind === 'explore') {
+    }
+    if (canExplore(n)) {
       const z = getZone(n.zone!)!;
-      text(z.blurb);
+      if (n.kind === 'outpost') text(`也能搜刮：${z.name}`, '#f5d76e', 8);
+      if (n.kind !== 'outpost') text(z.blurb);
       text(`風險 ${stars(z.risk)}　搜刮 ${exploreHours(z)} 小時　${z.nodes} 個地點`, '#ff8a6a');
       text(`可能找到：${z.tags.join('、')}`, '#9ad17a');
       if (GameState.isStoryZone(z.id)) text(`★主線　${GameState.chapter!.title}：${GameState.chapter!.objective}`, '#f5d76e', 7);
       const st = GameState.data;
       if (st.intel?.zone === z.id) text(`情報：${INTEL[st.intel.kind].name}　${INTEL[st.intel.kind].desc}`, '#ffd24a', 7);
-    } else if (n.blurb) text(n.blurb);
+    }
+    if (n.kind === 'start' && n.blurb) text(n.blurb);
 
     // 動作按鈕（由下往上排）
     const bw = PANEL_W - 16;
@@ -243,13 +251,15 @@ export class ExploreMapScene extends Phaser.Scene {
     if (n.kind === 'outpost') {
       if (here) button('在這裡過夜 ▶', '', () => this.settle(n), 0x2e4a2a);
       else button(`前往（${hours} 小時）`, hours! > left ? '時間不夠' : '', () => this.move(n, hours!), 0x2a3a5a);
-    } else if (n.kind === 'explore') {
+    }
+    if (canExplore(n)) {
       const z = getZone(n.zone!)!;
       const cost = (hours ?? 0) + exploreHours(z);
       const done = GameState.data.exploredToday.includes(z.id);
       const why = locked ? '主線推進後開放' : done ? '今天已經搜過' : cost > left ? `時間不夠（要 ${cost} 小時）` : '';
       button(here ? `搜刮（${exploreHours(z)} 小時）▶` : `前往並搜刮（共 ${cost} 小時）▶`, why, () => this.explore(n, hours ?? 0));
-      if (!here) button(`只是路過（${hours} 小時）`, locked ? '主線推進後開放' : hours! > left ? '時間不夠' : '', () => this.move(n, hours!), 0x2a3a5a);
+      // 據點本來就能「前往」，不用再多一顆「路過」
+      if (!here && n.kind !== 'outpost') button(`只是路過（${hours} 小時）`, locked ? '主線推進後開放' : hours! > left ? '時間不夠' : '', () => this.move(n, hours!), 0x2a3a5a);
       // 同行隊員
       if (!locked && !done) {
         add(pixelText(this, PANEL_X + 10, y + 2, `同行隊員（最多 ${EXPLORE_TIME.maxSquad} 位）`, 8, '#f5d76e'));
