@@ -323,6 +323,14 @@ export class Player {
     return true;
   }
 
+  /** 直接擺到某個位置（多樓層據點爬樓梯時用：中途的 y 不夾回樓層） */
+  placeAt(x: number, y: number): void {
+    this.footX = x;
+    this.footY = y;
+    this.vy = 0;
+    this.sync();
+  }
+
   private sync(): void {
     const s = this.sprite;
     if (!this.alive) return;

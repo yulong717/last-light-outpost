@@ -368,6 +368,9 @@ function drawFacade(
       case 'islandshop':
         facadeIslandShop(p, W, t, rnd, signs);
         break;
+      case 'site':
+        facadeSite(p, W, rnd, signs);
+        break;
       case 'street':
       default:
         facadeStreet(p, W, t, rnd, signs);
@@ -840,6 +843,42 @@ function facadeIslandShop(p: Painter, W: number, t: LocationTheme, rnd: Phaser.M
   p.box(x + w + 8, B - 26, 26, 26, 0xc83a2a);
   p.rect(x + w + 10, B - 22, 22, 8, 0xf8e0a0, 0.8);
   sidewalkTrim(p, W);
+}
+
+/**
+ * 工地（爛尾樓據點的背景）：後面一整排蓋到一半的大樓，掛著綠色安全網，遠處一座塔吊。
+ * 前景的樓板、樓梯、鷹架由 src/scenery/FloorsStructure.ts 畫（蓋在這張上面）。
+ */
+function facadeSite(p: Painter, W: number, rnd: Phaser.Math.RandomDataGenerator, signs: Sign[]): void {
+  // 後排大樓：水泥骨架，有的包著安全網
+  for (let x = -20; x < W; x += rnd.between(120, 190)) {
+    const w = rnd.between(90, 150);
+    const top = rnd.between(20, 70);
+    const netted = rnd.frac() < 0.55;
+    p.rect(x, top, w, B - top, 0x3a3c40);
+    // 樓板線＋柱子
+    for (let y = top + 6; y < B; y += 30) p.rect(x, y, w, 4, 0x5a5c60);
+    for (let k = 0; k <= w; k += 36) p.rect(x + k, top, 4, B - top, 0x4e5054);
+    // 還沒砌牆的格子：看得到裡面黑黑的
+    for (let y = top + 10; y < B - 20; y += 30) for (let k = 6; k < w - 30; k += 36) if (rnd.frac() < 0.7) p.rect(x + k, y, 26, 20, 0x15171a);
+    // 頂上冒出來的鋼筋
+    for (let k = 2; k < w; k += 6) p.rect(x + k, top - rnd.between(4, 10), 1, 10, 0x7a5a44);
+    if (netted) {
+      p.rect(x - 2, top + 20, w + 4, B - top - 20, 0x2a6a3a, 0.75);
+      for (let y = top + 22; y < B; y += 4) p.rect(x - 2, y, w + 4, 1, 0x1e4e2a, 0.6);
+      p.dither(x + 6, top + 40, w - 12, 40, 0x3a8a4a, 0.25);
+    }
+  }
+  // 塔吊：直立的格構塔、橫臂、吊鉤
+  const cx = Math.round(W * 0.62);
+  p.rect(cx, 4, 10, B - 4, 0xc8a030);
+  for (let y = 8; y < B; y += 10) p.line(cx, y, cx + 10, y + 10, 0x8a6a20);
+  p.rect(cx - 220, 10, 320, 6, 0xc8a030);
+  for (let x = cx - 220; x < cx + 100; x += 10) p.line(x, 10, x + 10, 16, 0x8a6a20);
+  p.box(cx + 60, 16, 30, 22, 0x6a6c70);
+  p.rect(cx - 150, 16, 1, 70, 0x101114);
+  p.rect(cx - 156, 86, 13, 4, 0x2a2c30);
+  signs.push({ x: Math.min(W - 120, 900), y: 130, text: '工地重地　閒人勿進', color: '#f0d040', size: 8 });
 }
 
 /** 建築底下的人行道邊緣與路緣 */

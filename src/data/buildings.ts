@@ -145,8 +145,54 @@ export const DUAL_SLOTS: SlotDef[] = ([1, -1] as const).flatMap((dir) =>
   DUAL_SIDE.map((s) => ({ id: `${dir > 0 ? 'R' : 'L'}-${s.id}`, x: DUAL.center + dir * s.dx, y: s.y, kinds: s.kinds, dir })),
 );
 
+/**
+ * 多樓層據點（爛尾樓）的槽位：每層地板上一排。y 對準 src/data/scenery.ts 的 TOWER_F1／F2／F3。
+ * 頂樓沒有路障，只能靠沙包和砲塔守住爬上來的霧屍。
+ */
+const FLOOR_ROWS: { f: string; y: number; cells: { id: string; x: number; kinds: BuildingKind[] }[] }[] = [
+  {
+    f: 'F1',
+    y: 338,
+    cells: [
+      { id: 'tower', x: 122, kinds: ['turret', 'lamp'] },
+      { id: 'front', x: 214, kinds: ['sandbag', 'spikes'] },
+      { id: 'mid', x: 300, kinds: ['sandbag', 'spikes', 'lamp'] },
+      { id: 'far', x: 390, kinds: ['spikes', 'lamp', 'sandbag'] },
+    ],
+  },
+  {
+    f: 'F2',
+    y: 250,
+    cells: [
+      { id: 'tower', x: 122, kinds: ['turret', 'lamp'] },
+      { id: 'front', x: 214, kinds: ['sandbag', 'spikes'] },
+      { id: 'mid', x: 300, kinds: ['sandbag', 'spikes', 'lamp'] },
+    ],
+  },
+  {
+    f: 'F3',
+    y: 162,
+    cells: [
+      { id: 'tower', x: 122, kinds: ['turret', 'lamp'] },
+      { id: 'front', x: 250, kinds: ['sandbag', 'spikes'] },
+      { id: 'mid', x: 400, kinds: ['sandbag', 'spikes', 'lamp'] },
+    ],
+  },
+  {
+    // 透天厝二樓陽台（y 對準 HOUSE_F2）：只能架砲塔或燈，往下打院子
+    f: 'H2',
+    y: 104,
+    cells: [
+      { id: 'tower', x: 200, kinds: ['turret', 'lamp'] },
+      { id: 'tower2', x: 270, kinds: ['turret', 'lamp'] },
+    ],
+  },
+];
+
+export const FLOOR_SLOTS: SlotDef[] = FLOOR_ROWS.flatMap((r) => r.cells.map((c) => ({ id: `${r.f}-${c.id}`, x: c.x, y: r.y, kinds: c.kinds })));
+
 /** 所有槽位（存檔還原用）；一般據點只開放沒有 dir 的那些 */
-export const ALL_SLOTS: SlotDef[] = [...SLOTS, ...DUAL_SLOTS];
+export const ALL_SLOTS: SlotDef[] = [...SLOTS, ...DUAL_SLOTS, ...FLOOR_SLOTS];
 
 /** 廢料收支 */
 export const ECONOMY = {
