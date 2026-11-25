@@ -93,9 +93,9 @@ export function registerHeadFrames(scene: Phaser.Scene, key: string, neckRow: nu
  * - crates：便利商店的飲料塑膠籃、購物推車
  * 沒指定就是原本的木板路障（'barricade'）。
  */
-export type BarricadeStyle = 'bins' | 'shelves' | 'desks' | 'tires' | 'crates' | 'scaffold';
+export type BarricadeStyle = 'bins' | 'shelves' | 'desks' | 'tires' | 'crates' | 'scaffold' | 'furniture';
 
-export const BARRICADE_STYLES: BarricadeStyle[] = ['bins', 'shelves', 'desks', 'tires', 'crates', 'scaffold'];
+export const BARRICADE_STYLES: BarricadeStyle[] = ['bins', 'shelves', 'desks', 'tires', 'crates', 'scaffold', 'furniture'];
 
 export function barricadeKey(style?: BarricadeStyle): string {
   return style ? `barricade_${style}` : 'barricade';
@@ -265,6 +265,31 @@ const BARRICADE_DRAW: Record<BarricadeStyle, (px: Px, f: number, rnd: Phaser.Mat
     }
     // 安全網的一角
     if (f === 0) for (let y = 4; y < 20; y += 3) px(10 + ((y / 3) % 2), y, 0x3a8a4a, 6, 1);
+  },
+  // 透天厝：把家裡的衣櫃、沙發、冰箱推到門口堵住
+  furniture: (px, f, rnd) => {
+    const WOOD = [0x5a3a22, 0x7a5232, 0x9a6a42];
+    // 倒放的衣櫃（越爛門板越歪）
+    if (f < 2) {
+      boxPx(px, 2, 6, 15, 44, WOOD[1], WOOD[2], WOOD[0]);
+      px(9, 8, WOOD[0], 1, 40);
+      px(7, 26, 0xc8b070, 1, 3);
+      px(11, 26, 0xc8b070, 1, 3);
+      if (f >= 1) px(3, 12, OUTLINE, 6, 2);
+    } else {
+      boxPx(px, 0, 40, 22, 9, WOOD[1], WOOD[2], WOOD[0]);
+    }
+    // 舊冰箱（白色）
+    if (f === 0) {
+      boxPx(px, 16, 16, 11, 34, 0xd8d8d0, 0xf0f0e8, 0xa8a8a0);
+      px(17, 28, 0xa8a8a0, 9, 1);
+      px(24, 20, 0x8a8a84, 1, 5);
+    }
+    // 沙發（紅色）壓在最下面
+    boxPx(px, 0, 48, 27, 8, 0x8a2a24, 0xb04034, 0x5a1a16);
+    px(2, 47, 0x8a2a24, 6, 2);
+    px(19, 47, 0x8a2a24, 6, 2);
+    if (f >= 1) for (let k = 0; k < 3; k++) px(rnd.between(2, 24), rnd.between(49, 54), 0xd8c8a0, 2, 1);
   },
   crates: (px, f, rnd) => {
     const C = [

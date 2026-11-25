@@ -52,7 +52,7 @@ export interface CompanionLayout {
    * 多樓層據點（爛尾樓）：每層地板的 y（由下往上）與隊員預設守哪一層（依出戰順序輪流）。
    * 每位隊員守 CrewMember.floor 那一層（白天點隊員切換），只在那層移動。
    */
-  floors?: { ys: number[]; crewFloors: number[] };
+  floors?: { ys: number[]; bands?: boolean[]; crewFloors: number[]; holdMinX?: number[]; from?: number[] };
 }
 
 type Patient = { x: number; y: number; ratio: number; heal: (a: number) => number };
@@ -139,6 +139,8 @@ export class CompanionSystem {
 
   /** 這位隊員守哪一側：1 = 右、-1 = 左（只有雙面據點會是 -1） */
   sideOf(c: Companion): 1 | -1 {
+    // 透天厝退守之後：霧屍從樓梯口（左邊）上來
+    if (this.forcedFloor >= 0 && this.layout.floors?.from?.[this.forcedFloor] === -1) return -1;
     if (!this.layout.dual) return 1;
     if (c.member.side) return c.member.side;
     // 還沒分配：依序左右輪流
@@ -160,9 +162,27 @@ export class CompanionSystem {
     return this.memberFloor(c.member, this.companions.indexOf(c));
   }
 
+  /** 透天厝鐵門被撞開：今晚全隊退到這一層（不改存檔裡的分配） */
+  private forcedFloor = -1;
+
+  retreatTo(floor: number): void {
+    this.forcedFloor = floor;
+    this.companions.forEach((c, i) => {
+      if (!c.alive) return;
+      const home = this.holdSpot(c.def.role, i, 1, floor);
+      if (floorOf(c.footY) !== floor) {
+        Fx.of(this.scene)?.dust(c.footX, c.footY, 4);
+        c.placeAt(home.x, home.y);
+      }
+    });
+    const lead = this.companions.find((c) => c.alive);
+    if (lead) Fx.of(this.scene)?.popText(lead.footX, lead.footY - 66, '快上樓！', '#fff59d');
+  }
+
   private memberFloor(m: CrewMember, i: number): number {
     const fl = this.layout.floors;
     if (!fl) return 0;
+    if (this.forcedFloor >= 0) return this.forcedFloor;
     const f = m.floor ?? fl.crewFloors[i % fl.crewFloors.length] ?? 0;
     return Math.max(0, Math.min(fl.ys.length - 1, f));
   }
@@ -398,7 +418,8 @@ export class CompanionSystem {
     const wall = dual ? dual.center + s * 48 : this.layout.minX + 8;
     const x = role === 'shooter' ? bx - s * 18 : role === 'medic' ? wall : bx - s * 32;
     const fl = this.layout.floors;
-    return { x, y: fl ? fl.ys[floor] : HOLD_Y[i % HOLD_Y.length] };
+    // 多樓層：有些樓層的人要站在路障內側（透天厝二樓：樓梯口的路障右邊）
+    return { x: Math.max(x, fl?.holdMinX?.[floor] ?? -Infinity), y: fl && !fl.bands?.[floor] ? fl.ys[floor] : HOLD_Y[i % HOLD_Y.length] };
   }
 
   private followSpot(p: CompanionPlayerLink, i: number): { x: number; y: number } {

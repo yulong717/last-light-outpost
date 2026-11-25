@@ -16,7 +16,7 @@ export interface BuildGeometry {
   /** 雙面據點：左側路障的 x、小店的範圍（中心與半寬） */
   dual?: { barricadeXL: number; center: number; half: number };
   /** 多樓層據點：第二道路障在第幾層（主路障在 1F）；-1 = 沒有第二道 */
-  floors?: { second: number };
+  floors?: { second: number; secondX: number };
   /** 點到槽位以外的東西（雙面據點點隊員換邊、多樓層據點換樓層）：回傳 true 代表這一下已經處理掉 */
   pickExtra?: (x: number, y: number) => boolean;
 }
@@ -208,11 +208,9 @@ export class BuildMode {
     const fl = this.geom.floors;
     if (fl) {
       // 多樓層：點到哪一層的路障（往上涵蓋路障本身的高度）
-      if (Math.abs(w.x - this.geom.barricadeX) <= 18) {
-        const f = floorOf(w.y + 24);
-        if (f === 0) return { type: 'barricade' };
-        if (f === fl.second) return { type: 'barricade', side: -1 };
-      }
+      const f = floorOf(w.y + 24);
+      if (f === 0 && Math.abs(w.x - this.geom.barricadeX) <= 18) return { type: 'barricade' };
+      if (f === fl.second && Math.abs(w.x - fl.secondX) <= 18) return { type: 'barricade', side: -1 };
       const top = Math.min(...(floorLevels() ?? [GROUND_Y]));
       if (w.x <= this.geom.baseX + 6 && w.y >= top - 70) return { type: 'wall' };
       return null;
@@ -256,7 +254,8 @@ export class BuildMode {
     }
     if (sel?.type === 'barricade') {
       const fy = this.outpost.barricadeOf(sel.side ?? 1).floorY;
-      return { x: sel.side && this.geom.dual ? this.geom.dual.barricadeXL : this.geom.barricadeX, y: fy !== undefined ? fy - 66 : LANE_TOP - 50 };
+      const x = sel.side && this.geom.dual ? this.geom.dual.barricadeXL : sel.side && this.geom.floors ? this.geom.floors.secondX : this.geom.barricadeX;
+      return { x, y: fy !== undefined ? fy - 66 : LANE_TOP - 50 };
     }
     if (this.geom.dual) return { x: this.geom.dual.center, y: GROUND_Y - 60 };
     return { x: this.geom.baseX / 2 + 4, y: GROUND_Y - 60 };

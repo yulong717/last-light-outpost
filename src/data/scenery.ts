@@ -576,6 +576,17 @@ export interface FloorLevel {
   spawnX?: number;
   /** 這層往右只蓋到哪（頂樓只蓋到一半）；不填 = 整個戰場 */
   x1?: number;
+  /** 這層是一整條 2.5D 地面帶（透天厝的一樓院子）：[上緣, 下緣]；不填 = 單線，腳底固定在 y */
+  band?: [number, number];
+  /** 這層的路障在哪（不填 = 一般路障位置）、霧屍從哪邊打過來（-1 = 從左邊的樓梯口上來） */
+  barricadeX?: number;
+  from?: -1;
+  /** 路障倒了以後霧屍敲哪裡（不填 = 據點外牆）。透天厝 2F 是陽台盡頭 */
+  baseX?: number;
+  /** 這層路障倒了：全隊退到第幾層，霧屍從樓梯追上去（不會直接敲據點） */
+  retreatTo?: number;
+  /** 站在這層可以往下丟雜物（近戰鍵）：每晚幾件 */
+  junk?: number;
 }
 
 /**
@@ -583,6 +594,10 @@ export interface FloorLevel {
  * 主角走樓梯／鷹架爬梯換層（站在樓梯上按上／下）。每層各自防守，任何一層被突破都會敲到據點。
  */
 export interface FloorsDef {
+  /** 前景結構的畫法（src/scenery/FloorsStructure.ts）：爛尾樓剖面、透天厝 */
+  look: 'tower' | 'house';
+  /** 主角從第幾層開始 */
+  startFloor: number;
   levels: FloorLevel[];
   /** 樓梯與爬梯的 x 範圍，連通所有蓋到那裡的樓層 */
   stairs: { x0: number; x1: number; name: string }[];
@@ -775,6 +790,8 @@ OUTPOST_MAPS.push({
   facade: 'site',
   barricade: 'scaffold',
   floors: {
+    look: 'tower',
+    startFloor: 1,
     levels: [
       { y: TOWER_F1, name: '1F', barricade: true, weight: 0.5 },
       { y: TOWER_F2, name: '2F', barricade: true, weight: 0.35 },
@@ -807,10 +824,55 @@ OUTPOST_MAPS.push({
   keepClear: [[0, 1280]],
 });
 
-/** 多樓層據點：油桶與物資箱放在哪一層（依序在 1F、2F 輪流） */
+/**
+ * 透天厝：一樓院子是 2.5D 地面帶（屍潮擠在鐵門前），二樓是窄窄的陽台（單線）。
+ * 陽台上可以開槍、往下丟雜物；鐵門被撞開就全隊退上二樓，霧屍沿樓梯追上來，背後只剩陽台盡頭。
+ */
+const HOUSE_F2 = 104;
+
+OUTPOST_MAPS.push({
+  id: 'house',
+  name: '巷口透天厝',
+  blurb: '兩層樓的老透天厝，一樓鐵門、二樓陽台。站在陽台上往下打、往下丟東西；鐵門要是被撞開，就只能退上二樓背水一戰。',
+  perks: ['二樓陽台居高臨下，按近戰鍵往下丟雜物', '一樓院子是 2.5D，屍潮全擠在鐵門前', '鐵門倒了全隊退上二樓，霧屍爬樓梯追上來'],
+  theme: 'homes',
+  facade: 'homes',
+  barricade: 'furniture',
+  floors: {
+    look: 'house',
+    startFloor: 1,
+    levels: [
+      { y: 286, band: [226, 346], name: '一樓院子', barricade: true, weight: 1, retreatTo: 1 },
+      { y: HOUSE_F2, name: '二樓陽台', barricade: true, weight: 0, x1: 300, barricadeX: 118, from: -1, baseX: 296, junk: 8 },
+    ],
+    stairs: [{ x0: 58, x1: 94, name: '樓梯' }],
+    waves: 1.25,
+    slots: ['tower-far', 'tower-near', 'front-1', 'front-2', 'front-3', 'mid-1', 'mid-2', 'mid-3', 'H2-tower', 'H2-tower2'],
+    crewFloors: [1, 0, 1],
+  },
+  terrain: [{ kind: 'mud', x0: 560, x1: 660, y0: 300, y1: 340 }],
+  pieces: [
+    { prop: 'scooter', x: 470, lane: 'back' },
+    { prop: 'scooter', x: 500, lane: 'back', flip: true },
+    { prop: 'car_white', x: 820, lane: 318, kind: 'cover' },
+    { prop: 'lamppost', x: 700, lane: 'wall' },
+    { prop: 'trashbags', x: 1000, lane: 'back' },
+  ],
+  barrels: [620, 980],
+  crates: [1150],
+  keepClear: [[0, 440]],
+});
+
+/** 多樓層據點：油桶與物資箱放在哪一層（依序在 1F、2F 輪流；有 2.5D 地面帶的據點照一般擺法） */
 export function floorLaneFor(map: OutpostMapDef, i: number): number | undefined {
+  if (map.floors?.levels.some((l) => l.band)) return undefined;
   const lv = map.floors?.levels.filter((l) => !l.x1);
   return lv?.length ? lv[i % lv.length].y : undefined;
+}
+
+/** 多樓層據點：哪幾層有路障（第一個是主路障，第二個存在 barricadeHpL） */
+export function barricadeFloors(map: OutpostMapDef): number[] {
+  return map.floors ? map.floors.levels.map((l, i) => (l.barricade ? i : -1)).filter((i) => i >= 0).slice(0, 2) : [];
 }
 
 export function getOutpostMap(id: string | undefined): OutpostMapDef {

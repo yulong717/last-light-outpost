@@ -10,12 +10,13 @@ import {
   LANE_TOP,
   SINGLE_LANE_Y,
   WORLD_WIDTH,
+  floorBand,
   floorOf,
   setFloors,
   setSingleLane,
 } from '../config';
-import { getOutpostMap, type FloorsDef } from '../data/scenery';
-import { FLOORS_PAD, drawFloorsStructure } from '../scenery/FloorsStructure';
+import { barricadeFloors, getOutpostMap, type FloorsDef } from '../data/scenery';
+import { FLOORS_PAD, drawFloorsStructure, drawHouseStructure } from '../scenery/FloorsStructure';
 import { DUAL, setActiveSlots } from '../data/buildings';
 import { addUiCamera, setViewZoom, splitUiObjects } from '../render/RenderScale';
 import type { WaveDef } from '../data/waves';
@@ -178,6 +179,11 @@ export class DefenseScene extends Phaser.Scene {
   private stairHinted = false;
   /** 今晚第一次有霧屍爬上頂樓時提示一次 */
   private climbHinted = false;
+  /** 透天厝：今晚還能往下丟幾件雜物、丟東西的冷卻 */
+  private junkLeft = 0;
+  private junkCd = 0;
+  /** 透天厝：鐵門被撞開、全隊退上二樓了（退到第幾層） */
+  private retreated = -1;
   /** 雙面據點白天：隊員頭上的「守左／守右」標籤 */
   private sideTags: Phaser.GameObjects.Text[] = [];
   private player!: Player;
@@ -236,7 +242,13 @@ export class DefenseScene extends Phaser.Scene {
     this.stairReady = true;
     this.stairHinted = false;
     this.climbHinted = false;
-    setFloors(map.floors ? map.floors.levels.map((l) => l.y) : null);
+    this.retreated = -1;
+    this.junkCd = 0;
+    this.junkLeft = map.floors?.levels.reduce((a, l) => a + (l.junk ?? 0), 0) ?? 0;
+    setFloors(
+      map.floors ? map.floors.levels.map((l) => l.y) : null,
+      map.floors?.levels.map((l) => l.band),
+    );
     setActiveSlots(map.single?.slots ?? map.dual?.slots ?? map.floors?.slots ?? null);
     this.dual = !!map.dual;
     this.homeX = this.dual ? DUAL.center : PLAYER_X;
@@ -263,21 +275,23 @@ export class DefenseScene extends Phaser.Scene {
     // 路障用當地的東西堆（巷子是垃圾桶、國小是課桌椅…）
     const barTex = barricadeKey(map.barricade);
     // 多樓層據點：有路障的樓層各堆一道（第一道是主路障，第二道借用雙面據點的「第二道路障」存檔欄位）
-    const barFloors = map.floors ? map.floors.levels.map((l, i) => (l.barricade ? i : -1)).filter((i) => i >= 0).slice(0, 2) : [];
-    const floorY = (k: number) => (map.floors && barFloors[k] !== undefined ? map.floors.levels[barFloors[k]].y : undefined);
-    this.barricade = new Barricade(this, barXR, st.barricadeMaxHp, 1, barTex, floorY(0));
+    // 2.5D 地面帶那層（透天厝院子）照一般路障堆滿整條帶；單線樓層只堆在那層地板上
+    const barFloors = barricadeFloors(map);
+    const barLv = (k: number) => (map.floors && barFloors[k] !== undefined ? map.floors.levels[barFloors[k]] : undefined);
+    const floorY = (k: number) => (barLv(k)?.band ? undefined : barLv(k)?.y);
+    this.barricade = new Barricade(this, barLv(0)?.barricadeX ?? barXR, st.barricadeMaxHp, barLv(0)?.from ?? 1, barTex, floorY(0));
     const barricadeL = this.dual
       ? new Barricade(this, barXL, st.barricadeMaxHp, -1, barTex)
       : barFloors.length > 1
-        ? new Barricade(this, barXR, st.barricadeMaxHp, 1, barTex, floorY(1))
+        ? new Barricade(this, barLv(1)?.barricadeX ?? barXR, st.barricadeMaxHp, barLv(1)?.from ?? 1, barTex, floorY(1))
         : undefined;
     if (map.floors) {
-      this.fronts = map.floors.levels.map((_, i) => ({
-        side: 1 as const,
+      this.fronts = map.floors.levels.map((l, i) => ({
+        side: l.from ?? 1,
         floor: i,
         barricade: i === barFloors[0] ? this.barricade : i === barFloors[1] ? barricadeL : undefined,
-        barX: barXR,
-        baseX: BASE_X,
+        barX: l.barricadeX ?? barXR,
+        baseX: l.baseX ?? BASE_X,
       }));
     } else {
       this.fronts = [{ side: 1, barricade: this.barricade, barX: barXR, baseX: this.dual ? DUAL.center + DUAL.storeHalf : BASE_X }];
@@ -289,12 +303,15 @@ export class DefenseScene extends Phaser.Scene {
       barricadeX: barXR,
       baseX: BASE_X,
       dual: this.dual ? { barricadeXL: barXL, center: DUAL.center, half: 3.5 * 34 } : undefined,
-      floors: map.floors ? { second: barFloors[1] ?? -1 } : undefined,
+      floors: map.floors ? { second: barFloors[1] ?? -1, secondX: barLv(1)?.barricadeX ?? barXR } : undefined,
       pickExtra: this.dual || map.floors ? (x, y) => this.toggleCrewSide(x, y) : undefined,
     });
-    // 多樓層據點：主角從 2F 開始（看得到上下兩層）
-    const startY = map.floors ? map.floors.levels[Math.min(1, map.floors.levels.length - 1)].y : (LANE_TOP + LANE_BOTTOM) / 2;
-    this.player = new Player(this, this.homeX, startY, GameState.hero.maxHp);
+    // 多樓層據點：主角從指定的那層開始
+    const startY = map.floors ? map.floors.levels[map.floors.startFloor].y : (LANE_TOP + LANE_BOTTOM) / 2;
+    // 樓梯口有路障的那層（透天厝二樓）：站到路障內側的陽台上
+    const startLv = map.floors?.levels[map.floors.startFloor];
+    const startX = startLv?.from === -1 ? (startLv.barricadeX ?? this.homeX) + 40 : this.homeX;
+    this.player = new Player(this, startX, startY, GameState.hero.maxHp);
     this.props = new PropSystem(this, {
       player: this.player,
       zombies: () => this.zombies,
@@ -348,7 +365,7 @@ export class DefenseScene extends Phaser.Scene {
       maxX: WORLD_WIDTH - 16,
       barricadeX: barXR,
       dual: this.dual ? { center: DUAL.center, barricadeXL: barXL } : undefined,
-      floors: map.floors ? { ys: map.floors.levels.map((l) => l.y), crewFloors: map.floors.crewFloors } : undefined,
+      floors: map.floors ? { ys: map.floors.levels.map((l) => l.y), bands: map.floors.levels.map((l) => !!l.band), holdMinX: map.floors.levels.map((l) => (l.from === -1 ? (l.barricadeX ?? 0) + 24 : 0)), from: map.floors.levels.map((l) => l.from ?? 1), crewFloors: map.floors.crewFloors } : undefined,
     });
     // 夜晚強度依可出戰的隊員人數縮放（單人開局比較溫和）
     const base = buildNight(GameState.data.day, Math.random, deployedCrew(GameState.data.crew).length);
@@ -603,7 +620,8 @@ export class DefenseScene extends Phaser.Scene {
     this.scenery = outpostScenery(this, GameState.data.outpostMap, WORLD_WIDTH, GameState.data.day);
     // 多樓層據點：三層樓的剖面、樓梯、鷹架（樓梯間就是據點本體）
     if (this.floors) {
-      drawFloorsStructure(this, this.floors, BASE_X, WORLD_WIDTH);
+      if (this.floors.look === 'house') drawHouseStructure(this, this.floors, BASE_X);
+      else drawFloorsStructure(this, this.floors, BASE_X, WORLD_WIDTH);
       return;
     }
     // 雙面據點：小店畫在背景立面上（SceneryBuilder 的 islandshop），門口鋪一塊地墊標出「據點」範圍
@@ -696,7 +714,7 @@ export class DefenseScene extends Phaser.Scene {
     const level = this.floors && atX === undefined ? this.pickSpawnFloor(id) : -1;
     if (this.floors && level >= 0) {
       const lv = this.floors.levels[level];
-      y = lv.y + Phaser.Math.Between(-2, 2);
+      y = lv.band ? Phaser.Math.Between(lv.band[0], lv.band[1]) : lv.y + Phaser.Math.Between(-2, 2);
       if (lv.spawnX !== undefined) x = lv.spawnX;
     }
     // 職業／動物＋隨機外觀、體型、性別＋變異（見 src/systems/ZombieFactory.ts）
@@ -757,15 +775,118 @@ export class DefenseScene extends Phaser.Scene {
     if (!this.stairHinted && p.alive) {
       this.stairHinted = true;
       this.fx.popText(p.footX, p.footY - 70, `${stair.name}：按 ▲／▼ 換樓層`, '#fff59d');
+      if (this.junkLeft > 0) this.time.delayedCall(1800, () => this.fx.popText(p.footX + 60, p.footY - 70, `陽台上：瞄準樓下按近戰鍵（V）丟雜物 ×${this.junkLeft}`, '#fff59d'));
     }
     if (!this.stairReady || Math.abs(moveY) < 0.6 || !p.alive) return;
     const to = f + (moveY < 0 ? 1 : -1);
     if (!reaches(to) || !reaches(f)) return;
+    // 2.5D 地面帶那層：樓梯在最裡面，要走到後牆邊才爬得上去（不然在院子裡往上走就變爬樓梯）
+    const band = floorBand(f);
+    if (moveY < 0 && fl.levels[f].band && band && p.footY > band[0] + 10) return;
+    const toBand = fl.levels[to].band;
     this.stairReady = false;
-    this.climb = { x0: p.footX, x1: Phaser.Math.Clamp(p.footX, stair.x0 + 6, stair.x1 - 6), y0: p.footY, y1: fl.levels[to].y, t: 0 };
+    this.climb = { x0: p.footX, x1: Phaser.Math.Clamp(p.footX, stair.x0 + 6, stair.x1 - 6), y0: p.footY, y1: toBand ? toBand[0] + 4 : fl.levels[to].y, t: 0 };
     this.weapons.cancelReload();
     this.fx.dust(p.footX, p.footY, 3);
     this.fx.popText(p.footX, fl.levels[to].y - 64, fl.levels[to].name, '#e0e0e0');
+  }
+
+  /**
+   * 透天厝：鐵門被撞開。全隊退到 to 那層（隊員直接傳上去，主角自己爬），
+   * 之後走到樓梯的霧屍會爬上去，從樓梯口打過來。
+   */
+  private retreat(to: number): void {
+    if (this.retreated >= 0 || !this.floors) return;
+    this.retreated = to;
+    const lv = this.floors.levels[to];
+    this.companions.retreatTo(to);
+    this.camFeel.addTrauma(0.4);
+    const t1 = pixelText(this, GAME_WIDTH / 2, 110, '鐵門被撞開了！', 14, '#ff8a80').setOrigin(0.5);
+    const t2 = pixelText(this, GAME_WIDTH / 2, 130, `全員退到${lv.name}，守住樓梯口！`, 9, '#ffe0a0').setOrigin(0.5);
+    for (const t of [t1, t2]) {
+      t.setScrollFactor(0).setDepth(200).setStroke('#000000', 3);
+      this.tweens.add({ targets: t, alpha: 0, delay: 2600, duration: 500, onComplete: () => t.destroy() });
+    }
+  }
+
+  /** 退守後：一樓走到樓梯口的霧屍爬上去，出現在樓上的樓梯口 */
+  private updateRetreat(): void {
+    const fl = this.floors!;
+    const stair = fl.stairs[0];
+    const from = fl.levels.findIndex((l) => l.retreatTo === this.retreated);
+    const up = fl.levels[this.retreated];
+    for (const z of this.zombies) {
+      if (z.dead || z.spec.body === 'crow' || floorOf(z.footY) !== from || z.footX > stair.x1 + 26) continue;
+      z.footX = stair.x0 + 12 + Math.random() * 8;
+      z.footY = up.y;
+      z.laneY = up.y;
+      z.side = up.from ?? 1;
+      z.setFlipX(z.side > 0);
+      this.fx.dust(z.footX, z.footY, 4);
+    }
+  }
+
+  /**
+   * 透天厝陽台：瞄準樓下按近戰鍵，往下丟雜物（花盆、舊電視、瓦斯爐…）。
+   * 落地砸一小圈，霧屍被砸倒、硬直。丟完就變回一般近戰。回傳這一下有沒有丟。
+   */
+  private tryThrowJunk(aimX: number, aimY: number, pressed: boolean): boolean {
+    const fl = this.floors;
+    if (!fl || this.climb) return false;
+    const p = this.player;
+    const here = floorOf(p.footY);
+    const lv = fl.levels[here];
+    if (!lv.junk || aimY < p.footY + 20) return false;
+    if (this.junkLeft <= 0) {
+      if (pressed) this.fx.popText(p.footX, p.footY - 64, '雜物丟完了', '#b0bec5');
+      return false;
+    }
+    if (this.junkCd > 0) return true;
+    const below = Math.max(0, fl.levels.findIndex((l) => l.band));
+    const band = floorBand(below) ?? [LANE_TOP, LANE_BOTTOM];
+    const tx = Phaser.Math.Clamp(aimX, p.footX - 40, p.footX + 260);
+    // 準星指的是畫面上的點：丟到那一點正下方的地面（地面帶內）
+    const ty = Phaser.Math.Clamp(aimY, band[0], band[1]);
+    this.junkLeft--;
+    this.junkCd = 0.45;
+    const kinds = [
+      { w: 10, h: 9, c: 0xa0522d, t: '花盆' },
+      { w: 14, h: 11, c: 0x4a4e54, t: '舊電視' },
+      { w: 12, h: 6, c: 0xb8bcc0, t: '瓦斯爐' },
+      { w: 8, h: 12, c: 0x2a6ac8, t: '水桶' },
+    ];
+    const k = Phaser.Utils.Array.GetRandom(kinds);
+    const obj = this.add.rectangle(p.footX + p.facing * 8, p.footY - 34, k.w, k.h, k.c).setStrokeStyle(1, 0x120d0a).setDepth(90);
+    const x0 = obj.x;
+    const y0 = obj.y;
+    const dur = 420 + Math.abs(ty - y0) * 1.2;
+    this.tweens.addCounter({
+      from: 0,
+      to: 1,
+      duration: dur,
+      onUpdate: (tw) => {
+        const t = tw.getValue() ?? 0;
+        obj.setPosition(Phaser.Math.Linear(x0, tx, t), Phaser.Math.Linear(y0, ty - 4, t) - Math.sin(t * Math.PI) * 30);
+        obj.setAngle(t * 540 * (tx >= x0 ? 1 : -1));
+      },
+      onComplete: () => {
+        obj.destroy();
+        this.junkLand(tx, ty, k.t);
+      },
+    });
+    this.fx.popText(p.footX, p.footY - 64, `${k.t}！×${this.junkLeft}`, '#ffe0a0');
+    return true;
+  }
+
+  private junkLand(x: number, y: number, name: string): void {
+    void name;
+    const R = 38;
+    this.fx.dust(x, y, 10);
+    this.camFeel.addTrauma(0.18);
+    for (const z of this.zombies) {
+      if (z.dead || z.spec.body === 'crow' || Math.hypot(z.footX - x, (z.footY - y) * 1.6) > R) continue;
+      if (z.takeDamage(55, 10, { dirX: Math.sign(z.footX - x) || 1, type: 'blunt' })) this.kills++;
+    }
   }
 
   /** 多樓層據點：這一層的路障（沒有路障的樓層回傳 undefined） */
@@ -820,6 +941,21 @@ export class DefenseScene extends Phaser.Scene {
     const bar = front.barricade;
     const fl = allFloors ? undefined : front.floor;
     const same = (y: number) => fl === undefined || floorOf(y) === fl;
+    const lv = this.floors && front.floor !== undefined ? this.floors.levels[front.floor] : undefined;
+    // 透天厝：鐵門倒了，霧屍不敲牆，往樓梯擠（走到樓梯就爬上二樓，見 updateRetreat）
+    if (!bar?.alive && lv?.retreatTo !== undefined) {
+      const stair = this.floors!.stairs[0];
+      return {
+        blockX: stair.x0,
+        hitBlock: () => {},
+        blockerFor: (x, y) => this.outpost.blockerFor(x, y, stair.x0, front.side),
+        speedMul: (x, y) => this.outpost.speedMul(x, y) * this.terrain.speedMul(x, y),
+        player: { x: this.player.footX, y: this.player.footY, alive: this.player.alive && same(this.player.footY) },
+        hitPlayer: (d, fromX, fromY, src) => (this.heroSys ? this.heroSys.hitPlayer(d, fromX, fromY, src) : this.player.takeDamage(d, fromX, fromY)),
+        others: [...this.companions.targets(), ...this.props.lureTargets(), ...(this.rescue?.targets() ?? [])].filter((t) => same(t.y)),
+        zombies: this.zombies,
+      };
+    }
     const blocker = bar?.alive
       ? {
           blockX: bar.frontX,
@@ -830,7 +966,8 @@ export class DefenseScene extends Phaser.Scene {
             if (!bar.alive) {
               GameEvents.of(this).emit('barricade:break', { x: bx });
               if (this.dual) this.fx.popText(bx, LANE_TOP - 30, front.side < 0 ? '左側路障倒了！' : '右側路障倒了！', '#ff8a80');
-              if (this.floors && front.floor !== undefined) this.fx.popText(bx, this.floors.levels[front.floor].y - 70, `${this.floors.levels[front.floor].name} 路障倒了！`, '#ff8a80');
+              if (lv?.retreatTo !== undefined) this.retreat(lv.retreatTo);
+              else if (lv) this.fx.popText(bx, lv.y - 70, `${lv.name} 路障倒了！`, '#ff8a80');
             }
           },
         }
@@ -883,7 +1020,10 @@ export class DefenseScene extends Phaser.Scene {
     // 觸控沒在點畫面時，近戰方向看搖桿／面向（不是上一次點的位置或按鈕的位置）
     const meleeAim = touchMeleeAimX(inp, this.player.footX, this.player.facing);
     // 近戰：拿槍時隨時快揮一下，近戰模式下攻擊鍵就是揮；會打斷換彈
-    if (melee.swing && this.player.alive) {
+    this.junkCd = Math.max(0, this.junkCd - frameDt);
+    if (melee.swing && this.player.alive && this.tryThrowJunk(inp.aimX, inp.aimY, melee.pressed)) {
+      // 陽台上瞄準樓下：近戰鍵變成往下丟雜物
+    } else if (melee.swing && this.player.alive) {
       this.weapons.cancelReload();
       this.melee.trySwing(this.player, meleeAim, melee.pressed);
     }
@@ -898,7 +1038,7 @@ export class DefenseScene extends Phaser.Scene {
     // 多樓層據點：上下鍵留給樓梯；頂樓只蓋到一半，走不出去
     const lvNow = this.floors?.levels[floorOf(this.player.footY)];
     const maxX = lvNow?.x1 !== undefined ? lvNow.x1 - 6 : WORLD_WIDTH - 16;
-    this.player.update(dt, this.climb ? 0 : inp.moveX, this.floors ? 0 : inp.moveY, this.melee.aimX(this.player, this.melee.stance ? meleeAim : inp.aimX), { minX: this.dual ? 16 : BASE_X + 14, maxX });
+    this.player.update(dt, this.climb ? 0 : inp.moveX, this.floors && !lvNow?.band ? 0 : inp.moveY, this.melee.aimX(this.player, this.melee.stance ? meleeAim : inp.aimX), { minX: this.dual ? 16 : BASE_X + 14, maxX });
     if (this.floors) this.updateStairs(dt, inp.moveY);
 
     const p = this.player;
@@ -952,6 +1092,7 @@ export class DefenseScene extends Phaser.Scene {
       // 多樓層：每隻用自己那層的；烏鴉會飛，哪層都追
       const air = this.zombieContext(this.fronts[0], true);
       for (const z of this.zombies) z.update(dt, z.spec.body === 'crow' ? air : ctxs[floorOf(z.footY)] ?? ctxs[0]);
+      if (this.retreated >= 0) this.updateRetreat();
     } else for (const z of this.zombies) z.update(dt, z.side < 0 ? ctxL : ctxs[0]);
     // 場景道具：油桶、火堆、汽車警報、掉落物；掩體擋路
     this.props.update(dt);

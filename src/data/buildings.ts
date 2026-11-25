@@ -178,6 +178,15 @@ const FLOOR_ROWS: { f: string; y: number; cells: { id: string; x: number; kinds:
       { id: 'mid', x: 400, kinds: ['sandbag', 'spikes', 'lamp'] },
     ],
   },
+  {
+    // 透天厝二樓陽台（y 對準 HOUSE_F2）：只能架砲塔或燈，往下打院子
+    f: 'H2',
+    y: 104,
+    cells: [
+      { id: 'tower', x: 200, kinds: ['turret', 'lamp'] },
+      { id: 'tower2', x: 270, kinds: ['turret', 'lamp'] },
+    ],
+  },
 ];
 
 export const FLOOR_SLOTS: SlotDef[] = FLOOR_ROWS.flatMap((r) => r.cells.map((c) => ({ id: `${r.f}-${c.id}`, x: c.x, y: r.y, kinds: c.kinds })));

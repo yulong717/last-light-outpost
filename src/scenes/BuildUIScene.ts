@@ -7,7 +7,7 @@ import type { BuildMode } from '../build/BuildMode';
 import type { Quote } from '../build/Outpost';
 import { registerUIRect } from '../input/InputManager';
 import { GameState } from '../state/GameState';
-import { getOutpostMap } from '../data/scenery';
+import { barricadeFloors, getOutpostMap } from '../data/scenery';
 import { ensureCrewTexture } from '../art/CrewArt';
 import { COMPANION_ROLES, MAX_DEPLOYED, deployedCrew } from '../data/companions';
 import { ATTRS, TRAIT_BY_ID } from '../data/crewTraits';
@@ -172,7 +172,8 @@ export class BuildUIScene extends Phaser.Scene {
       const side = sel.side ?? 1;
       const bar = out.barricadeOf(side);
       // 多樓層據點：照那道路障所在的樓層命名
-      const floorLv = getOutpostMap(GameState.data.outpostMap).floors?.levels.find((l) => l.y === bar.floorY);
+      const omap = getOutpostMap(GameState.data.outpostMap);
+      const floorLv = omap.floors?.levels[barricadeFloors(omap)[side < 0 ? 1 : 0]];
       const label = floorLv ? `${floorLv.name} 路障` : out.barricadeL ? (side < 0 ? '左側路障' : '右側路障') : '主路障';
       this.frame(74);
       this.text(PANEL_X + 10, PANEL_Y + 7, `${label}　Lv${lv}${lv >= BARRICADE_LEVELS.length ? '（滿級）' : ''}`, 9, '#f5d76e');

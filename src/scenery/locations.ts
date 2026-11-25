@@ -81,7 +81,7 @@ export function outpostScenery(scene: Phaser.Scene, mapId: string | undefined, w
       ...map.crates.map((x, i) => ({ prop: 'crate', x, lane: floorLaneFor(map, i + 1) ?? ('back' as const) })),
     ],
     extras: 0,
-    decor: map.floors ? 0 : 1.2,
+    decor: map.floors && !map.floors.levels[0].band ? 0 : 1.2,
     // 據點外牆、路障、建築槽位附近不要擺東西
     keepClear: map.keepClear ?? [[0, 430]],
   });
