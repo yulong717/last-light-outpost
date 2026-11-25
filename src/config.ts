@@ -30,10 +30,46 @@ export function singleLane(): boolean {
   return laneLock !== null;
 }
 
-/** 把腳底 y 夾在地面帶之內（單軸模式時夾在那條線上）。 */
+/**
+ * 多樓層模式（爛尾樓據點）：戰場分成好幾層，每層是一條路（腳底 y 固定在那層的地板上）。
+ * floorYs 由下往上排：[1F, 2F, 頂樓…]。換樓層只能走樓梯（DefenseScene 處理），
+ * 一般移動、推擠、繞路都會被夾回原本那一層。
+ */
+let floorYs: number[] | null = null;
+/** 每層地板上下能偏多少（一點點縱深，不然整排疊成一條線） */
+export const FLOOR_BAND = 3;
+
+export function setFloors(ys: number[] | null): void {
+  floorYs = ys ? [...ys] : null;
+}
+
+/** 目前的樓層地板 y（不是多樓層模式就是 null） */
+export function floorLevels(): readonly number[] | null {
+  return floorYs;
+}
+
+/** 腳底 y 在第幾層（0 = 1F）；不是多樓層模式一律 0 */
+export function floorOf(y: number): number {
+  if (!floorYs) return 0;
+  let best = 0;
+  for (let i = 1; i < floorYs.length; i++) if (Math.abs(floorYs[i] - y) < Math.abs(floorYs[best] - y)) best = i;
+  return best;
+}
+
+/** 把腳底 y 夾在地面帶之內（單軸模式時夾在那條線上；多樓層時夾在最近那一層）。 */
 export function clampLaneY(y: number): number {
+  if (floorYs) {
+    const f = floorYs[floorOf(y)];
+    return Math.min(f + FLOOR_BAND, Math.max(f - FLOOR_BAND, y));
+  }
   const [top, bottom] = laneLock ?? [LANE_TOP, LANE_BOTTOM];
   return Math.min(bottom, Math.max(top, y));
+}
+
+/** 會飛的（烏鴉）：多樓層時可以在各層之間自由移動，只夾在最低與最高層之間 */
+export function clampFlyY(y: number): number {
+  if (!floorYs) return clampLaneY(y);
+  return Math.min(Math.max(...floorYs) + FLOOR_BAND, Math.max(Math.min(...floorYs) - FLOOR_BAND, y));
 }
 
 /** 依腳底 y 算出繪製深度；特效、HUD 用更大的固定值蓋在上面。 */

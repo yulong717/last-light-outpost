@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { ARRIVAL_SETS, EVENT_SETS, THEMES, getOutpostMap, type SetDressing } from '../data/scenery';
+import { ARRIVAL_SETS, EVENT_SETS, THEMES, floorLaneFor, getOutpostMap, type SetDressing } from '../data/scenery';
 import { buildScenery, type SceneryResult } from './SceneryBuilder';
 
 /**
@@ -76,11 +76,12 @@ export function outpostScenery(scene: Phaser.Scene, mapId: string | undefined, w
     seed: `outpost-${map.id}`,
     pieces: [
       ...map.pieces,
-      ...map.barrels.map((x, i) => ({ prop: 'barrel', x, lane: (i % 3 === 0 ? 'back' : i % 3 === 1 ? 'mid' : 'front') as 'back' | 'mid' | 'front' })),
-      ...map.crates.map((x) => ({ prop: 'crate', x, lane: 'back' as const })),
+      // 多樓層據點：放在各層的地板上，不然會飄在樓層之間
+      ...map.barrels.map((x, i) => ({ prop: 'barrel', x, lane: floorLaneFor(map, i) ?? ((i % 3 === 0 ? 'back' : i % 3 === 1 ? 'mid' : 'front') as 'back' | 'mid' | 'front') })),
+      ...map.crates.map((x, i) => ({ prop: 'crate', x, lane: floorLaneFor(map, i + 1) ?? ('back' as const) })),
     ],
     extras: 0,
-    decor: 1.2,
+    decor: map.floors ? 0 : 1.2,
     // 據點外牆、路障、建築槽位附近不要擺東西
     keepClear: map.keepClear ?? [[0, 430]],
   });

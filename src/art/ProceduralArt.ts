@@ -93,9 +93,9 @@ export function registerHeadFrames(scene: Phaser.Scene, key: string, neckRow: nu
  * - crates：便利商店的飲料塑膠籃、購物推車
  * 沒指定就是原本的木板路障（'barricade'）。
  */
-export type BarricadeStyle = 'bins' | 'shelves' | 'desks' | 'tires' | 'crates';
+export type BarricadeStyle = 'bins' | 'shelves' | 'desks' | 'tires' | 'crates' | 'scaffold';
 
-export const BARRICADE_STYLES: BarricadeStyle[] = ['bins', 'shelves', 'desks', 'tires', 'crates'];
+export const BARRICADE_STYLES: BarricadeStyle[] = ['bins', 'shelves', 'desks', 'tires', 'crates', 'scaffold'];
 
 export function barricadeKey(style?: BarricadeStyle): string {
   return style ? `barricade_${style}` : 'barricade';
@@ -224,6 +224,47 @@ const BARRICADE_DRAW: Record<BarricadeStyle, (px: Px, f: number, rnd: Phaser.Mat
       px(6, 54, 0x0c0c10, 22, 2);
     }
     if (f === 0) tire(13, 20);
+  },
+  // 工地：鷹架鋼管綁成框、釘上夾板，底下壓水泥袋
+  scaffold: (px, f, rnd) => {
+    const PIPE = [0x6a7076, 0x9aa0a6, 0xc8ccd0];
+    const PLY = [0x8a6a3a, 0xb8925a, 0xd8b070];
+    const pipe = (x: number, y0: number, y1: number) => {
+      px(x - 1, y0, OUTLINE, 4, y1 - y0);
+      px(x, y0, PIPE[1], 2, y1 - y0);
+      px(x, y0, PIPE[2], 1, y1 - y0);
+    };
+    // 直立的兩根鋼管（打爛後倒一根）
+    pipe(3, f >= 2 ? 30 : 8, 56);
+    if (f < 2) pipe(22, 12, 56);
+    else {
+      px(8, 52, OUTLINE, 20, 4);
+      px(9, 53, PIPE[1], 18, 2);
+    }
+    // 橫管＋扣件
+    if (f < 2) {
+      px(1, 17, OUTLINE, 26, 4);
+      px(2, 18, PIPE[1], 24, 2);
+      px(3, 17, 0xd8a030, 3, 4);
+      px(22, 17, 0xd8a030, 3, 4);
+    }
+    // 夾板（越爛越少片）
+    const boards = f >= 2 ? 1 : f >= 1 ? 2 : 3;
+    for (let i = 0; i < boards; i++) {
+      const y = 22 + i * 10;
+      boxPx(px, 2, y, 24, 8, PLY[1], PLY[2], PLY[0]);
+      px(5, y + 3, PLY[0], 1, 1);
+      px(21, y + 3, PLY[0], 1, 1);
+      if (f >= 1 && i === boards - 1) px(rnd.between(8, 18), y + 1, OUTLINE, 3, 6);
+    }
+    // 底下的水泥袋
+    for (const [x, w] of [[0, 13], [14, 14]] as const) {
+      px(x, 48, OUTLINE, w, 8);
+      px(x + 1, 49, 0xb8b0a0, w - 2, 6);
+      px(x + 2, 51, 0x8a3a2a, w - 4, 2);
+    }
+    // 安全網的一角
+    if (f === 0) for (let y = 4; y < 20; y += 3) px(10 + ((y / 3) % 2), y, 0x3a8a4a, 6, 1);
   },
   crates: (px, f, rnd) => {
     const C = [

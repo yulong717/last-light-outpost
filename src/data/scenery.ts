@@ -11,7 +11,7 @@ import type { BarricadeStyle } from '../art/ProceduralArt';
 export type Setting = 'ext' | 'int';
 
 /** 室外的主建築立面 */
-export type FacadeStyle = 'gas' | 'market' | 'homes' | 'hospital' | 'police' | 'military' | 'street' | 'school' | 'parking' | 'rooftop' | 'alley' | 'islandshop' | 'gascenter';
+export type FacadeStyle = 'gas' | 'market' | 'homes' | 'hospital' | 'police' | 'military' | 'street' | 'school' | 'parking' | 'rooftop' | 'alley' | 'islandshop' | 'gascenter' | 'site';
 /** 室內的牆面風格 */
 export type InteriorStyle = 'garage' | 'store' | 'house' | 'ward' | 'precinct' | 'bunker' | 'warehouse' | 'lobby' | 'classroom';
 export type FarStyle = 'city' | 'hills' | 'industrial';
@@ -251,6 +251,23 @@ export const THEMES: Record<string, LocationTheme> = {
     floor: 0x302c28,
     light: 0xffe0a0,
     decorExt: { tires: 2, cone: 2, debris: 2, corpse: 1 },
+    decorInt: {},
+    extrasExt: {},
+    extrasInt: {},
+    wallInt: {},
+  },
+  site: {
+    id: 'site',
+    sky: [0x1a1c26, 0x4a4a52],
+    far: 'industrial',
+    facade: 'site',
+    interior: 'warehouse',
+    floorExt: 'concrete',
+    floorInt: 'concrete',
+    wall: 0x4a4a48,
+    floor: 0x34343a,
+    light: 0xfff0c0,
+    decorExt: {},
     decorInt: {},
     extrasExt: {},
     extrasInt: {},
@@ -545,6 +562,38 @@ export const ARRIVAL_SETS: Record<string, SetDressing> = {
 
 // ── 守城據點地圖 ─────────────────────────────────────
 
+/** 多樓層據點的一層 */
+export interface FloorLevel {
+  /** 這層地板的腳底 y */
+  y: number;
+  /** 顯示用（1F、2F、頂樓） */
+  name: string;
+  /** 這層有自己的路障（最多兩層：第一個是主路障，第二個存在 barricadeHpL） */
+  barricade: boolean;
+  /** 霧屍從這層進來的比例（權重） */
+  weight: number;
+  /** 霧屍從哪裡冒出來：不填 = 戰場右緣（鏡頭外）；填 x = 從這裡的鷹架爬上來 */
+  spawnX?: number;
+  /** 這層往右只蓋到哪（頂樓只蓋到一半）；不填 = 整個戰場 */
+  x1?: number;
+}
+
+/**
+ * 多樓層據點（爛尾樓工地）：戰場分成好幾層，每層一條路，霧屍只能在自己那層走，
+ * 主角走樓梯／鷹架爬梯換層（站在樓梯上按上／下）。每層各自防守，任何一層被突破都會敲到據點。
+ */
+export interface FloorsDef {
+  levels: FloorLevel[];
+  /** 樓梯與爬梯的 x 範圍，連通所有蓋到那裡的樓層 */
+  stairs: { x0: number; x1: number; name: string }[];
+  /** 夜晚霧屍數量倍率 */
+  waves: number;
+  /** 開放的建築槽位（src/data/buildings.ts 的 FLOOR_SLOTS） */
+  slots: string[];
+  /** 隊員預設守哪一層（依出戰順序輪流；白天點隊員可以換） */
+  crewFloors: number[];
+}
+
 export interface OutpostMapDef {
   id: string;
   name: string;
@@ -576,6 +625,8 @@ export interface OutpostMapDef {
   terrain?: TerrainDef[];
   /** 路障用當地的東西臨時堆起來（垃圾桶、課桌椅、輪胎…）；不填 = 木板路障 */
   barricade?: BarricadeStyle;
+  /** 多樓層據點（爛尾樓）：見 FloorsDef */
+  floors?: FloorsDef;
 }
 
 export const OUTPOST_MAPS: OutpostMapDef[] = [
@@ -709,6 +760,58 @@ OUTPOST_MAPS.push({
     { kind: 'mud', x0: 1000, x1: 1100, y0: 300, y1: 346 },
   ],
 });
+
+/** 爛尾樓的三層：1F 街道、2F 鷹架走道、頂樓（只蓋到一半） */
+const TOWER_F1 = 338;
+const TOWER_F2 = 250;
+const TOWER_F3 = 162;
+
+OUTPOST_MAPS.push({
+  id: 'tower',
+  name: '爛尾樓工地',
+  blurb: '蓋到一半就停工的三層樓水泥骨架，旁邊整排鷹架。霧屍從街上走來，也會沿著鷹架爬上二樓、翻上頂樓。',
+  perks: ['三層樓：1F、2F 各一道路障，頂樓沒有', '霧屍會爬鷹架直接翻上頂樓', '站在樓梯上按上下換層，居高臨下開槍'],
+  theme: 'site',
+  facade: 'site',
+  barricade: 'scaffold',
+  floors: {
+    levels: [
+      { y: TOWER_F1, name: '1F', barricade: true, weight: 0.5 },
+      { y: TOWER_F2, name: '2F', barricade: true, weight: 0.35 },
+      { y: TOWER_F3, name: '頂樓', barricade: false, weight: 0.15, spawnX: 506, x1: 520 },
+    ],
+    stairs: [
+      { x0: 58, x1: 94, name: '樓梯' },
+      { x0: 490, x1: 516, name: '鷹架爬梯' },
+    ],
+    waves: 1.15,
+    slots: ['F1-tower', 'F1-front', 'F1-mid', 'F1-far', 'F2-tower', 'F2-front', 'F2-mid', 'F3-tower', 'F3-front', 'F3-mid'],
+    crewFloors: [1, 0, 2],
+  },
+  terrain: [
+    // 1F：沒乾的水泥地、鷹架下的積水；2F：走道上倒翻的水泥粉
+    { kind: 'mud', x0: 640, x1: 740, y0: TOWER_F1 - 8, y1: TOWER_F1 + 8 },
+    { kind: 'water', x0: 930, x1: 1010, y0: TOWER_F1 - 8, y1: TOWER_F1 + 8 },
+    { kind: 'sand', x0: 700, x1: 770, y0: TOWER_F2 - 7, y1: TOWER_F2 + 7 },
+  ],
+  pieces: [
+    { prop: 'cone', x: 580, lane: TOWER_F1 + 1, kind: null },
+    { prop: 'pallet', x: 860, lane: TOWER_F1 - 1, kind: null },
+    { prop: 'tires', x: 1150, lane: TOWER_F1, kind: null },
+    { prop: 'debris', x: 1060, lane: TOWER_F2, kind: null },
+    { prop: 'boxes', x: 620, lane: TOWER_F2 - 1, kind: null },
+    { prop: 'debris', x: 330, lane: TOWER_F3, kind: null },
+  ],
+  barrels: [780, 1090, 900],
+  crates: [1200, 980],
+  keepClear: [[0, 1280]],
+});
+
+/** 多樓層據點：油桶與物資箱放在哪一層（依序在 1F、2F 輪流） */
+export function floorLaneFor(map: OutpostMapDef, i: number): number | undefined {
+  const lv = map.floors?.levels.filter((l) => !l.x1);
+  return lv?.length ? lv[i % lv.length].y : undefined;
+}
 
 export function getOutpostMap(id: string | undefined): OutpostMapDef {
   return OUTPOST_MAPS.find((m) => m.id === id) ?? OUTPOST_MAPS[0];

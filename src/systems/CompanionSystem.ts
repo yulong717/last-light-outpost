@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { LANE_BOTTOM, LANE_TOP } from '../config';
+import { LANE_BOTTOM, LANE_TOP, floorOf } from '../config';
 import { COMPANION_ROLES, MAX_DEPLOYED, deployedCrew, type CrewMember } from '../data/companions';
 import { TRAIT_TUNING, traitNames } from '../data/crewTraits';
 import type { Barricade } from '../entities/Barricade';
@@ -48,6 +48,11 @@ export interface CompanionLayout {
    * 每位隊員依 CrewMember.side 守左邊或右邊（白天在戰場上點隊員切換）。
    */
   dual?: { center: number; barricadeXL: number };
+  /**
+   * 多樓層據點（爛尾樓）：每層地板的 y（由下往上）與隊員預設守哪一層（依出戰順序輪流）。
+   * 每位隊員守 CrewMember.floor 那一層（白天點隊員切換），只在那層移動。
+   */
+  floors?: { ys: number[]; crewFloors: number[] };
 }
 
 type Patient = { x: number; y: number; ratio: number; heal: (a: number) => number };
@@ -88,7 +93,7 @@ export class CompanionSystem {
       const def = COMPANION_ROLES[member.role];
       if (!def) return;
       const side = layout.dual ? (member.side ?? (i % 2 === 0 ? 1 : -1)) : 1;
-      const home = this.holdSpot(member.role, i, side);
+      const home = this.holdSpot(member.role, i, side, this.memberFloor(member, i));
       const c = new Companion(scene, member, def, home.x, home.y);
       this.companions.push(c);
       if (layout.dual) c.placeAt(home.x, home.y, side);
@@ -150,6 +155,29 @@ export class CompanionSystem {
     return next;
   }
 
+  /** 這位隊員守第幾層（多樓層據點；一般據點一律 0） */
+  floorOf(c: Companion): number {
+    return this.memberFloor(c.member, this.companions.indexOf(c));
+  }
+
+  private memberFloor(m: CrewMember, i: number): number {
+    const fl = this.layout.floors;
+    if (!fl) return 0;
+    const f = m.floor ?? fl.crewFloors[i % fl.crewFloors.length] ?? 0;
+    return Math.max(0, Math.min(fl.ys.length - 1, f));
+  }
+
+  /** 多樓層據點白天：換守下一層（1F → 2F → 頂樓 → 1F），回傳新的樓層 */
+  toggleFloor(c: Companion): number {
+    const n = this.layout.floors?.ys.length ?? 1;
+    const next = (this.floorOf(c) + 1) % n;
+    c.member.floor = next;
+    const i = this.companions.indexOf(c);
+    const home = this.holdSpot(c.def.role, i, 1, next);
+    c.placeAt(home.x, home.y);
+    return next;
+  }
+
   /** 白天：在戰場上點到哪位隊員（雙面據點用來分配左右） */
   companionAt(x: number, y: number): Companion | null {
     let best: Companion | null = null;
@@ -171,18 +199,23 @@ export class CompanionSystem {
     return side < 0 && this.layout.dual ? this.layout.dual.barricadeXL : this.layout.barricadeX;
   }
 
-  update(dt: number, player: CompanionPlayerLink, zombies: Zombie[], barricadeOf: (side: number) => Barricade): CompanionShot {
+  /**
+   * barricadeOf：這位隊員要顧的路障（side：守哪一側；floor：守哪一層）。
+   * 多樓層據點沒有路障的那層（頂樓）回傳 undefined，工兵就專心開槍。
+   */
+  update(dt: number, player: CompanionPlayerLink, zombies: Zombie[], barricadeOf: (side: number, floor: number) => Barricade | undefined): CompanionShot {
     const total: CompanionShot = { kills: 0, headshots: 0 };
     this.companions.forEach((c, i) => {
       if (!c.alive) return;
       // s：這位隊員守的那一側（霧屍從哪邊來）；bx：那一側路障；往「外」是 +s
       const s = this.sideOf(c);
       const bx = this.barX(s);
-      const barricade = barricadeOf(s);
+      const floor = this.floorOf(c);
+      const barricade = barricadeOf(s, floor);
       const following = this.order === 'follow' && player.alive;
       // 往前（朝霧屍）的方向：固守時看守的那一側，跟隨時一般據點照舊往右、雙面據點看主角面向
       const fwd = following ? (this.layout.dual ? player.facing : 1) : s;
-      let { x, y } = following ? this.followSpot(player, i) : this.holdSpot(c.def.role, i, s);
+      let { x, y } = following ? this.followSpot(player, i) : this.holdSpot(c.def.role, i, s, floor);
       let canShoot = true;
       c.status = c.reloading ? '換彈' : this.order === 'hold' ? '固守' : '跟隨';
       // 近戰型：固守時守在路障邊、對準正在拆路障的霧屍；跟隨時衝向附近的霧屍
@@ -201,7 +234,7 @@ export class CompanionSystem {
       }
 
       // 工兵：路障受損就去修
-      if (c.stats.repairPerSec && barricade.alive && barricade.hp < barricade.maxHp) {
+      if (c.stats.repairPerSec && barricade?.alive && barricade.hp < barricade.maxHp) {
         x = bx - s * 14;
         y = c.footY;
         const atSpot = Math.abs(c.footX - x) < 6;
@@ -313,6 +346,8 @@ export class CompanionSystem {
     let bestD = Infinity;
     for (const z of zombies) {
       if (z.dead) continue;
+      // 多樓層據點：打不到別層的
+      if (this.layout.floors && floorOf(z.footY) !== floorOf(c.footY)) continue;
       // 固守：只管自己這一側、貼在路障前的
       const ok = following
         ? Math.abs(z.footX - player.footX) < 110
@@ -356,13 +391,14 @@ export class CompanionSystem {
     return best;
   }
 
-  private holdSpot(role: string, i: number, s: number = 1): { x: number; y: number } {
+  private holdSpot(role: string, i: number, s: number = 1, floor = 0): { x: number; y: number } {
     const bx = this.barX(s);
     // 射手靠路障、醫護退到牆邊（雙面據點：小店門口）、工兵站中間方便衝去修
     const dual = this.layout.dual;
     const wall = dual ? dual.center + s * 48 : this.layout.minX + 8;
     const x = role === 'shooter' ? bx - s * 18 : role === 'medic' ? wall : bx - s * 32;
-    return { x, y: HOLD_Y[i % HOLD_Y.length] };
+    const fl = this.layout.floors;
+    return { x, y: fl ? fl.ys[floor] : HOLD_Y[i % HOLD_Y.length] };
   }
 
   private followSpot(p: CompanionPlayerLink, i: number): { x: number; y: number } {

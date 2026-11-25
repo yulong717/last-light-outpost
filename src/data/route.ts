@@ -40,6 +40,8 @@ export const ROUTE_NODES: RouteNode[] = [
   // 據點兼探索點：廢棄加油站（搜刮加油站、在便利商店過夜）
   { id: 'gasstation', kind: 'outpost', name: '廢棄加油站', x: 120, y: 250, map: 'gasstation', zone: 'gas' },
   { id: 'islandshop', kind: 'outpost', name: '孤島小店', x: 368, y: 178, map: 'islandshop', blurb: '路口正中間的便利商店，兩邊都會有霧屍來。' },
+  // 多樓層據點：三層樓的爛尾樓，霧屍會爬鷹架上樓
+  { id: 'tower', kind: 'outpost', name: '爛尾樓工地', x: 498, y: 172, map: 'tower', blurb: '停工的三層樓骨架。1F、2F 都要守，霧屍還會沿鷹架爬上頂樓。' },
   // ── 探索點（區域） ──
   { id: 'homes', kind: 'explore', name: '', x: 0, y: 0, zone: 'homes' },
   { id: 'market', kind: 'explore', name: '', x: 0, y: 0, zone: 'market' },
@@ -76,6 +78,10 @@ export const ROUTE_EDGES: [string, string, number][] = [
   ['islandshop', 'hospital', 2],
   ['islandshop', 'police', 2],
   ['police', 'checkpoint', 2],
+  ['islandshop', 'tower', 1],
+  ['hospital', 'tower', 1],
+  ['police', 'tower', 1],
+  ['tower', 'checkpoint', 2],
 ];
 
 export function getNode(id: string | undefined): RouteNode | undefined {

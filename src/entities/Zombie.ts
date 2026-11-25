@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { clampLaneY, depthForY } from '../config';
+import { clampFlyY, clampLaneY, depthForY } from '../config';
 import type { EnemyDef } from '../data/enemies';
 import { BURST, CHARGE, CROW, ENRAGE, GORE, HEAL_AURA, POUNCE, SPRINT, type ArmorPiece } from '../data/zombies';
 import { ANIMAL_FRAMES } from '../art/AnimalArt';
@@ -765,7 +765,7 @@ export class Zombie extends Phaser.GameObjects.Sprite {
       const d = Math.hypot(dx, dy) || 1;
       const step = Math.min(d, v * dt);
       this.footX += (dx / d) * step;
-      this.footY = clampLaneY(this.footY + (dy / d) * step);
+      this.footY = this.clampY(this.footY + (dy / d) * step);
       if (Math.abs(dx) > 1) this.setFlipX(dx < 0);
     };
     const climb = (alt: number, rate: number) => {
@@ -811,6 +811,11 @@ export class Zombie extends Phaser.GameObjects.Sprite {
     }
     this.walkPhase += dt * 6;
     this.sync(1, dt);
+  }
+
+  /** 夾住腳底 y：烏鴉會飛，多樓層據點裡可以在各層之間移動；其他霧屍只能待在自己那層 */
+  clampY(y: number): number {
+    return this.spec.body === 'crow' ? clampFlyY(y) : clampLaneY(y);
   }
 
   /** 不能越過擋路線：x 夾在 front 的外側（依進攻方向） */
@@ -971,8 +976,8 @@ export class Zombie extends Phaser.GameObjects.Sprite {
     const push = (minDist - dist) / 2;
     a.footX -= nx * push;
     b.footX += nx * push;
-    a.footY = clampLaneY(a.footY - (ny * push) / Y_WEIGHT);
-    b.footY = clampLaneY(b.footY + (ny * push) / Y_WEIGHT);
+    a.footY = a.clampY(a.footY - (ny * push) / Y_WEIGHT);
+    b.footY = b.clampY(b.footY + (ny * push) / Y_WEIGHT);
     a.laneY = a.footY;
     b.laneY = b.footY;
   }

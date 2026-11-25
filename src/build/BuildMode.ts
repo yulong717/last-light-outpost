@@ -1,11 +1,11 @@
 import Phaser from 'phaser';
-import { GROUND_Y, LANE_BOTTOM, LANE_TOP } from '../config';
+import { GROUND_Y, LANE_BOTTOM, LANE_TOP, floorLevels, floorOf } from '../config';
 import { BUILDINGS, activeSlots, type BuildingKind } from '../data/buildings';
 import { Fx } from '../fx/Fx';
 import { isPointerOverUI } from '../input/InputManager';
 import type { Outpost } from './Outpost';
 
-/** barricade 的 side：-1 = 雙面據點的左側路障，不填 = 主路障 */
+/** barricade 的 side：-1 = 第二道路障（雙面據點的左側、多樓層據點的 2F），不填 = 主路障 */
 export type Selection = { type: 'slot'; id: string } | { type: 'barricade'; side?: -1 } | { type: 'wall' } | null;
 
 export interface BuildGeometry {
@@ -15,7 +15,9 @@ export interface BuildGeometry {
   baseX: number;
   /** 雙面據點：左側路障的 x、小店的範圍（中心與半寬） */
   dual?: { barricadeXL: number; center: number; half: number };
-  /** 點到槽位以外的東西（雙面據點點隊員換邊）：回傳 true 代表這一下已經處理掉 */
+  /** 多樓層據點：第二道路障在第幾層（主路障在 1F）；-1 = 沒有第二道 */
+  floors?: { second: number };
+  /** 點到槽位以外的東西（雙面據點點隊員換邊、多樓層據點換樓層）：回傳 true 代表這一下已經處理掉 */
   pickExtra?: (x: number, y: number) => boolean;
 }
 
@@ -149,14 +151,18 @@ export class BuildMode {
         const r = b.lampRadius;
         g.lineStyle(1, 0xffd27a, 0.6).strokeEllipse(b.slot.x, b.slot.y, r * 2, (r * 2) / 1.6);
       } else if (b?.kind === 'turret') {
-        g.fillStyle(0xff8a80, 0.08).fillRect(b.slot.x, LANE_TOP, b.turretRange, LANE_BOTTOM - LANE_TOP);
-        g.lineStyle(1, 0xff8a80, 0.5).strokeRect(b.slot.x, LANE_TOP, b.turretRange, LANE_BOTTOM - LANE_TOP);
+        // 多樓層：只畫那一層的範圍（砲塔還是會打別層，只是優先同一層）
+        const [y0, y1] = floorLevels() ? [b.slot.y - 50, b.slot.y + 6] : [LANE_TOP, LANE_BOTTOM];
+        g.fillStyle(0xff8a80, 0.08).fillRect(b.slot.x, y0, b.turretRange, y1 - y0);
+        g.lineStyle(1, 0xff8a80, 0.5).strokeRect(b.slot.x, y0, b.turretRange, y1 - y0);
       }
     }
     if (this.hover?.type === 'wall' || sel?.type === 'wall') {
       const d = this.geom.dual;
       const col = sel?.type === 'wall' ? 0xffd24a : 0xffffff;
+      const lv = floorLevels();
       if (d) g.lineStyle(1, col, 0.7).strokeRect(d.center - d.half, GROUND_Y - 130, d.half * 2, 130);
+      else if (lv) g.lineStyle(1, col, 0.7).strokeRect(1, Math.min(...lv) - 70, this.geom.baseX + 4, 360 - Math.min(...lv) + 69);
       else g.lineStyle(1, col, 0.7).strokeRect(1, GROUND_Y - 83, this.geom.baseX + 4, 360 - GROUND_Y + 82);
     }
   }
@@ -199,6 +205,18 @@ export class BuildMode {
       }
     }
     if (best) return best;
+    const fl = this.geom.floors;
+    if (fl) {
+      // 多樓層：點到哪一層的路障（往上涵蓋路障本身的高度）
+      if (Math.abs(w.x - this.geom.barricadeX) <= 18) {
+        const f = floorOf(w.y + 24);
+        if (f === 0) return { type: 'barricade' };
+        if (f === fl.second) return { type: 'barricade', side: -1 };
+      }
+      const top = Math.min(...(floorLevels() ?? [GROUND_Y]));
+      if (w.x <= this.geom.baseX + 6 && w.y >= top - 70) return { type: 'wall' };
+      return null;
+    }
     const inBand = w.y >= LANE_TOP - 60 && w.y <= LANE_BOTTOM + 10;
     if (Math.abs(w.x - this.geom.barricadeX) <= 18 && inBand) return { type: 'barricade' };
     const d = this.geom.dual;
@@ -236,7 +254,10 @@ export class BuildMode {
       const s = activeSlots().find((x) => x.id === sel.id)!;
       return { x: s.x, y: s.y - 40 };
     }
-    if (sel?.type === 'barricade') return { x: sel.side && this.geom.dual ? this.geom.dual.barricadeXL : this.geom.barricadeX, y: LANE_TOP - 50 };
+    if (sel?.type === 'barricade') {
+      const fy = this.outpost.barricadeOf(sel.side ?? 1).floorY;
+      return { x: sel.side && this.geom.dual ? this.geom.dual.barricadeXL : this.geom.barricadeX, y: fy !== undefined ? fy - 66 : LANE_TOP - 50 };
+    }
     if (this.geom.dual) return { x: this.geom.dual.center, y: GROUND_Y - 60 };
     return { x: this.geom.baseX / 2 + 4, y: GROUND_Y - 60 };
   }
