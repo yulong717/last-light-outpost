@@ -18,6 +18,8 @@ import { placeStaticProps } from '../scenery/SceneryBuilder';
 import type { DefenseSceneData } from './DefenseScene';
 import type { ExploreFieldData, FieldResult } from './ExploreFieldScene';
 import type { QteData } from './QteScene';
+import type { LockData } from './LockScene';
+import type { SiegeData, SiegeResult } from './SiegeScene';
 
 /** 事件卡放右邊，左邊留給場景插圖（事件寫到的東西都畫在這裡） */
 const CARD_X = 316;
@@ -244,6 +246,10 @@ export class ExpeditionScene extends Phaser.Scene {
         return 'fight';
       case 'check':
         return 'check';
+      case 'lock':
+        return 'lockpick';
+      case 'siege':
+        return 'siege';
       case 'outcome':
         if (a.outcome.scrapCost) return 'trade';
         if (a.outcome.loot || a.outcome.bonus || a.outcome.survivor) return 'bag';
@@ -386,15 +392,59 @@ export class ExpeditionScene extends Phaser.Scene {
         const data: QteData = {
           spec: a.qte,
           ease: this.exp.qteEase(),
-          onDone: (ok) => {
+          comic: a.comic ? { id: a.comic, zone: this.exp.zone.id } : undefined,
+          onDone: (grade) => {
             this.input.enabled = true;
-            this.resolve(ev, ok ? a.success : a.fail);
+            const o = grade === 'great' ? a.great ?? a.success : grade === 'ok' ? a.success : a.fail;
+            const tag = grade === 'great' ? '大成功！' : '';
+            this.resolve(ev, { ...o, text: tag + o.text });
           },
         };
         this.input.enabled = false;
         this.clearCard();
         this.scene.launch('Qte', data);
         this.scene.bringToTop('Qte');
+        break;
+      }
+      case 'lock': {
+        const data: LockData = {
+          spec: a.lock,
+          zone: this.exp.zone.id,
+          ease: this.exp.qteEase(),
+          onDone: (ok) => {
+            this.input.enabled = true;
+            this.refreshHud();
+            this.resolve(ev, ok ? a.success : a.fail);
+          },
+        };
+        this.input.enabled = false;
+        this.clearCard();
+        // 電箱接線是另一個小遊戲，其他都是彈子鎖
+        const key = a.lock.model === 'fusebox' ? 'Wiring' : 'Lock';
+        this.scene.launch(key, data);
+        this.scene.bringToTop(key);
+        break;
+      }
+      case 'siege': {
+        const data: SiegeData = {
+          spec: a.siege,
+          zone: this.exp.zone.id,
+          risk: this.exp.zone.risk,
+          onDone: (r: SiegeResult) => {
+            this.scene.wake();
+            this.cameras.main.fadeIn(250, 0, 0, 0);
+            AudioManager.setMood('menu');
+            if (r === 'down') {
+              this.exp.hp = 0;
+              this.showDown();
+              return;
+            }
+            this.resolve(ev, r === 'win' ? a.success : a.fail);
+          },
+        };
+        this.clearCard();
+        this.scene.sleep();
+        this.scene.launch('Siege', data);
         break;
       }
       case 'field': {

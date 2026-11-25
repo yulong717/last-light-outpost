@@ -27,6 +27,64 @@
 
 程式在 `src/art/EventArt.ts`：新增事件時在 `PAINTERS` 加一個畫圖函式（沒加的會先用儲物間的圖）。
 
+## 事件演出：漫畫格 QTE、開鎖、圍困救援
+
+### 漫畫格 QTE（6 個招牌事件）
+
+腐朽的樓板、櫃子裡衝出來的霧屍、卡住的鐵捲門、可疑的絆線、樓梯間的跑者（新）、野狗（新）不再跳出單純的 QTE 面板，
+而是像美式漫畫一樣一格一格滑進來：
+
+1. 第 1、2 格交代狀況（旁白框＋狀聲詞），點一下可以跳過等待。
+2. 第 3 格是動作格：第 2 格放大、壓暗，QTE 就在這格裡進行。
+3. 第 4 格依結果換成不同的結果圖：**大成功**（時機條沒失誤、方向鍵／連打剩一半左右的時間）、**成功**、**失敗**，蓋上評等章，點一下繼續。
+
+大成功有自己的獎勵（`great`，例如樓板多一個背包、絆線拆出兩倍零件），沒填就跟成功一樣。
+
+![漫畫格：QTE 進行中](screenshots/explore-events/comic-floor-qte.png)
+![漫畫格：大成功](screenshots/explore-events/comic-floor-great.png)
+![漫畫格：失敗](screenshots/explore-events/comic-ambush-fail.png)
+
+- 分鏡內容（旁白、狀聲詞）：`src/data/comics.ts`。
+- 分鏡圖（每格 128×78，畫面上放大 2 倍，跟著區域換配色）：`src/art/ComicArt.ts`，每個事件五格 `s1`、`s2`、`great`、`ok`、`fail`。
+- 新增招牌事件：comics.ts 加一筆、ComicArt 的 `PANELS` 加五個畫圖函式，事件的 qte 動作填 `comic: '<id>'`。
+
+### 開鎖小遊戲（`LockScene`）
+
+畫面是看得到內部結構的**彈子鎖芯剖面**（簡化版）：黃銅外殼、鎖膽、每個孔裡上下兩截彈子和彈簧、金色的剪切線，左邊伸進來撥片和張力扳手，右邊是鎖的正面（鑰匙孔會跟著轉）。
+
+- 原理跟真的一樣：下彈子長短不一，要把每一根推到「上下兩截的接縫剛好對齊剪切線」，扳手的張力會把上彈子卡在外殼裡；全部卡住，鎖膽就轉開。
+- 操作：←→ 選彈子，**按住**空白鍵（手機按住那根彈子）往上推，接縫對到金線時放開。接縫越靠近金線越亮，對準時會輕響一聲、震一下。
+- 不 hardcore：太早放開不算失誤，彈子掉回去再推就好。只有**推過頭**才算失誤，這時扳手一滑，上一根卡住的也會掉回去。失誤 3 次撥片斷掉就算失敗，每次失誤噪音 +4。
+- 每根彈子長短（要推多高）和彈簧軟硬（推多快）都不一樣。難度 1～3 是 3～5 根彈子，判定也會更窄。隊伍膽識越高，時間越多、判定越寬。
+- **開鎖工具**：事件上的「用開鎖工具」仍然直接打開。小遊戲裡也能花一個來輔助，判定變寬、彈簧變軟。
+- 鎖的外觀（`LockSpec.model`）：掛鎖（鐵櫃）、保險箱鎖（辦公室保險箱）、門鎖（槍械櫃，五根彈子，最難）。
+
+**電箱接線**（`WiringScene`，`model: 'fusebox'`）：斷電的倉庫門用這個。旋轉接頭，把電從左邊的電池接到右邊；時間到或亂轉太多次就失敗，開鎖工具可以讓前半段路自動接好。
+
+![電箱接線](screenshots/explore-events/lock-wires.png)
+
+![掛鎖](screenshots/explore-events/lock-padlock.png)
+![門鎖（五根）](screenshots/explore-events/lock-door.png)
+
+### 圍困救援（`SiegeScene`）
+
+不是守據點也不是清場：場景很小、四面八方都是霧屍，目標是**撐到進度條跑滿**，中間不能讓倖存者被咬死。
+主角只能左右跑，到破口旁邊揮棒（空白鍵／點自己旁邊；點破口會跑過去再揮）。站在破口旁邊會頂住，霧屍爬得慢很多。
+
+| 版面 | 事件 | 目標 | 破口 |
+|---|---|---|---|
+| 公車頂 | 被包圍的倖存者 | 撐 40 秒到引擎發動 | 4 處爬上車頂（爬上來就撲主角）＋擋風玻璃、車門（被敲破就直接咬司機） |
+| 便利店 | 倖存者的避難所（大獎） | 撐 45 秒到後門撬開 | 玻璃門、兩扇後窗、右側落地窗、天花板通風口；破了霧屍衝向倖存者，要追上去打兩下 |
+
+急迫感：破口從 2 個越開越多、爬得越來越快；鏡頭慢慢拉近；破口要破時頭上冒紅色「！」；倖存者會喊叫；
+自己或倖存者血少時畫面四周發紅、心跳；最後五秒大字倒數。勝利時公車輾開屍群衝出去／一家人從後門逃走。
+結果：成功、失敗（倖存者死了，自己逃走受點傷）、倒下（跟一般探索倒下一樣）。
+
+![公車頂](screenshots/explore-events/siege-bus-late.png)
+![便利店](screenshots/explore-events/siege-store-start.png)
+
+事件用 `{ type: 'siege', siege: { layout: 'bus' | 'store', seconds, title } }`；版面、破口位置與喊叫台詞在 `SiegeScene.ts` 的 `LAYOUTS`。
+
 ## 單軸空間（橫向捲軸）
 
 除了 2.5D 的戰場，探索多了一種**只能左右移動**的單軸模式（`FieldSpec.axis = 'single'`）：所有人的腳底都壓在同一條線上，
@@ -67,7 +125,7 @@
 ![事件卡](screenshots/exploration/event.png)
 
 - **搜刮**：快速翻（少、安靜）或仔細搜（多、吵）。
-- **QTE**（[QteScene](../src/scenes/QteScene.ts)）
+- **QTE**（[QteScene](../src/scenes/QteScene.ts)；招牌事件用漫畫分鏡演出，見上方）
   - 時機條：指針進綠區時按空白鍵／點擊，可失誤 1 次
   - 方向鍵序列：照順序按，限時，按錯即失敗（觸控有方向按鈕）
   - 連打：限時內連按，不按會慢慢掉
@@ -104,6 +162,6 @@
 - `src/data/explore.ts`：所有數值與內容（區域、事件、掉落表、情報、用品）。新增事件只要在 `EVENTS` 加一筆。
 - `src/explore/Expedition.ts`：一趟探索的狀態與結算（路線、噪音、血量、背包、入帳／失敗）。
 - `src/explore/Supplies.ts`：醫療包（夜晚與探索共用）。
-- `src/scenes/ExploreMapScene.ts` → `ExpeditionScene.ts` →（`QteScene` / `ExploreFieldScene`）→ 回到 `DefenseScene`。
+- `src/scenes/ExploreMapScene.ts` → `ExpeditionScene.ts` →（`QteScene` / `LockScene` / `SiegeScene` / `ExploreFieldScene`）→ 回到路線圖。
 - `GameState`：`supplies`、`dayTime`、`exploredToday`、`intel`，隊員多了 `injuredDays`；舊存檔載入時自動補上。
 - `ZombieContext.aggroRange`：探索戰鬥裡霧屍會一路追過來，不必靠近才發現。
