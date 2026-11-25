@@ -41,7 +41,7 @@ export const DROP_TUNING = {
 };
 
 /**
- * 職業 → 掉落表。武器只會掉還沒擁有的；擁有了就重抽其他項目。
+ * 職業 → 掉落表。霧屍不掉武器：武器只在指定的地點撿得到（見 src/data/weapons.ts 的 found）。
  * 平民、腫脹霧屍（會爆開）、動物不掉。
  */
 export const ZOMBIE_DROPS: Partial<Record<string, DropTable>> = {
@@ -52,8 +52,6 @@ export const ZOMBIE_DROPS: Partial<Record<string, DropTable>> = {
       { weight: 2, icon: 'ammo', loot: { ammo: { '357': 6 } } },
       { weight: 2, icon: 'shells', loot: { ammo: { '12ga': 5 } } },
       { weight: 1, icon: 'tool', repair: 30, label: '鎮暴盾牌：路障 +30' },
-      { weight: 0.35, icon: 'gun', loot: { weapons: ['python'] } },
-      { weight: 0.3, icon: 'gun', loot: { weapons: ['r870'] } },
     ],
   },
   soldier: {
@@ -63,8 +61,6 @@ export const ZOMBIE_DROPS: Partial<Record<string, DropTable>> = {
       { weight: 3, icon: 'rifle', loot: { ammo: { '762': 10 } } },
       { weight: 3, icon: 'rifle', loot: { ammo: { '556': 10 } } },
       { weight: 1, icon: 'med', loot: { supplies: { medkit: 1 } }, label: '急救包 +1' },
-      { weight: 0.3, icon: 'gun', loot: { weapons: ['m4a1'] } },
-      { weight: 0.25, icon: 'gun', loot: { weapons: ['ak47'] } },
     ],
   },
   nurse: {
@@ -79,7 +75,6 @@ export const ZOMBIE_DROPS: Partial<Record<string, DropTable>> = {
     entries: [
       { weight: 4, icon: 'tool', repair: 40, label: '木板鐵釘：路障 +40' },
       { weight: 3, icon: 'scrap', loot: { scrap: 10 } },
-      { weight: 0.4, icon: 'gun', loot: { weapons: ['sledge'] } },
     ],
   },
   firefighter: {
@@ -88,7 +83,6 @@ export const ZOMBIE_DROPS: Partial<Record<string, DropTable>> = {
       { weight: 3, icon: 'tool', repair: 55, label: '破門工具：路障 +55' },
       { weight: 2, icon: 'heal', heal: 20, label: '氧氣面罩：生命 +20' },
       { weight: 1, icon: 'med', loot: { supplies: { medkit: 1 } } },
-      { weight: 0.5, icon: 'gun', loot: { weapons: ['axe'] } },
     ],
   },
   prisoner: {
@@ -97,7 +91,6 @@ export const ZOMBIE_DROPS: Partial<Record<string, DropTable>> = {
       { weight: 3, icon: 'pick', loot: { supplies: { lockpick: 1 } } },
       { weight: 3, icon: 'scrap', loot: { scrap: 8 } },
       { weight: 1, icon: 'tool', loot: { supplies: { decoy: 1 } }, label: '噪音誘餌 +1' },
-      { weight: 0.4, icon: 'gun', loot: { weapons: ['machete'] } },
     ],
   },
   runner: {

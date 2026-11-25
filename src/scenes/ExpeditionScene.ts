@@ -508,8 +508,8 @@ export class ExpeditionScene extends Phaser.Scene {
     this.cardFrame(`完成　${ch.title}`, ch.outro.join('\n'), '#f5d76e');
     const unlocked: string[] = [];
     for (const id of ch.openZones) unlocked.push(`新區域：${getZone(id)?.name ?? id}`);
-    const guns = ch.shop.map((id) => getWeapon(id)?.name ?? id);
-    if (guns.length) unlocked.push(`軍械庫進貨：${guns.join('、')}`);
+    const guns = (ch.reward.weapons ?? []).map((id) => getWeapon(id)?.name ?? id);
+    if (guns.length) unlocked.push(`陳列架新增：${guns.join('、')}`);
     const nextCh = GameState.chapter;
     if (nextCh) unlocked.push(`下一章：${nextCh.title}（第 ${nextCh.minDay} 天起）`);
     unlocked.forEach((l, i) => this.card.add(pixelText(this, CARD_X + 24, CARD_Y + CARD_H - 50 - (unlocked.length - i) * 13, l, 8, '#9ad17a')));

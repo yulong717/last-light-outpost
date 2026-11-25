@@ -24,6 +24,16 @@ export interface ShotResult {
   angle: number;
 }
 
+/** 可回收的彈藥（十字弓的箭）落在哪裡：插在霧屍身上（z）或掉在地上 */
+export interface LandedProjectile {
+  ammo: AmmoType;
+  x: number;
+  y: number;
+  /** 射出時的槍口高度：沒打中時用來換算落點的地面 y */
+  fromY: number;
+  z?: Zombie;
+}
+
 /** 各口徑備彈；WeaponSystem 直接扣這個物件（通常就是 GameState.data.armory.ammo） */
 export type AmmoPool = Record<AmmoType, number>;
 
@@ -69,6 +79,10 @@ export class WeaponSystem {
   /** 栓動／泵動槍打斷換彈後，下一發前要先上膛 */
   private needsRack = false;
   private lastKillStop = -1e9;
+  /** 開鏡中（巴雷特）：場景的 ScopeView 每幀設定 */
+  scoped = false;
+  /** 可回收的彈藥落地時通知（BoltPickups 會接） */
+  onLanded?: (l: LandedProjectile) => void;
 
   constructor(
     private scene: Phaser.Scene,
@@ -198,7 +212,11 @@ export class WeaponSystem {
    */
   spreadNow(moveFactor: number): number {
     const d = this.active.def;
-    return d.spread + this.bloom + d.moveSpread * FEEL.aim.movePenalty * Phaser.Math.Clamp(moveFactor, 0, 1);
+    // 開鏡：基礎散射幾乎歸零、連射散射減半；邊走邊開鏡照樣會晃
+    const scoped = this.scoped && !!d.scope;
+    const base = scoped ? d.scope!.spread : d.spread;
+    const bloom = scoped ? this.bloom * 0.5 : this.bloom;
+    return base + bloom + d.moveSpread * FEEL.aim.movePenalty * Phaser.Math.Clamp(moveFactor, 0, 1);
   }
 
   update(dt: number): void {
@@ -440,6 +458,15 @@ export class WeaponSystem {
       endY = ray.y2;
     }
     if (rayKills >= 2) fx?.popText(endX - dirX * 10, endY - 14, `貫穿 ×${rayKills}`, '#ffd180');
+    // 箭：插在第一隻身上，沒打中就掉在射程盡頭的地上
+    if (def.recoverable) {
+      const first = chain[0];
+      this.onLanded?.({ ammo: def.ammo, x: first ? first.x : endX, y: first ? first.y : endY, fromY, z: first?.z });
+      if (def.cls === 'bow') {
+        this.drawBolt(fromX, fromY, endX, endY);
+        return;
+      }
+    }
     this.drawTracer(fromX, fromY, endX, endY);
   }
 
@@ -453,6 +480,18 @@ export class WeaponSystem {
     g.lineStyle(1, PLACEHOLDER_COLORS.bullet, 0.9);
     g.lineBetween(x1, y1, x2, y2);
     this.scene.tweens.add({ targets: g, alpha: 0, duration: 70, onComplete: () => g.destroy() });
+  }
+
+  /** 箭飛出去：一根短短的箭桿沿彈道快速飛到落點（不是曳光彈的亮線） */
+  private drawBolt(x1: number, y1: number, x2: number, y2: number): void {
+    const a = Math.atan2(y2 - y1, x2 - x1);
+    const g = this.scene.add.graphics().setDepth(DEPTH_FX);
+    g.lineStyle(1, 0xc9a43a, 1).lineBetween(-5, 0, 3, 0);
+    g.fillStyle(0xdfe4ea, 1).fillRect(3, -1, 2, 2);
+    g.fillStyle(0x9b2b22, 1).fillRect(-6, -1, 2, 2);
+    g.setPosition(x1, y1).setRotation(a);
+    const dist = Phaser.Math.Distance.Between(x1, y1, x2, y2);
+    this.scene.tweens.add({ targets: g, x: x2, y: y2, duration: Math.max(40, dist / 1.6), onComplete: () => g.destroy() });
   }
 
   private spawnHitSpark(x: number, y: number, head: boolean): void {

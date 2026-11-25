@@ -7,7 +7,7 @@ import { getFirearm, getMelee, type WeaponClass } from './weapons';
  *
  * - 體格：血量、速度、閃避、近戰力道、後座控制、負重都不同，畫面上身形也真的變寬變窄。
  * - 出身：決定會用哪些武器、用得多好（武器熟練度 0～4）。0 = 不會用，不能配發。
- * - 重武器有體格限制：瘦小的人扛不動機槍、揮不動大鐵鎚。
+ * - 重武器有體格限制：瘦小的人扛不動機槍、揮不動消防斧。
  */
 
 // ───────────────────────── 體格 ─────────────────────────
@@ -33,7 +33,7 @@ export interface BodyDef {
   height: number;
   /** 扛得動機槍 */
   heavyGuns: boolean;
-  /** 揮得動重型近戰（大鐵鎚） */
+  /** 揮得動重型近戰（消防斧） */
   heavyMelee: boolean;
 }
 
@@ -155,6 +155,8 @@ const CLASS_GROUP: Record<WeaponClass, WeaponGroup> = {
   shotgun: 'shotgun',
   sniper: 'sniper',
   lmg: 'lmg',
+  // 十字弓跟狙擊槍一樣靠瞄準
+  bow: 'sniper',
 };
 
 export function weaponGroup(id: string): WeaponGroup | null {
@@ -232,7 +234,7 @@ export const BACKGROUNDS: BackgroundDef[] = [
     face: ['beard', 'stubble'],
     gear: ['backpack'],
     jackets: [1, 6, 7, 9],
-    kit: 'mosin',
+    kit: 'crossbow',
   },
   {
     id: 'gangster',
@@ -254,7 +256,7 @@ export const BACKGROUNDS: BackgroundDef[] = [
     gear: ['hivis', 'toolbelt'],
     jackets: [7, 11, 4],
     repair: 1.2,
-    kit: 'sledge',
+    kit: 'axe',
   },
   {
     id: 'mechanic',
@@ -345,9 +347,9 @@ export function canWield(m: CrewBodyInfo, weaponId: string): { ok: boolean; reas
   if (!g) return { ok: false, reason: '不是武器' };
   if ((m.prof[g] ?? 0) <= 0) return { ok: false, reason: `不會用${WEAPON_GROUPS.find((x) => x.id === g)?.name}` };
   const body = BODIES[m.body] ?? BODIES.average;
-  if (g === 'lmg' && !body.heavyGuns) return { ok: false, reason: `${body.name}扛不動機槍` };
+  if ((g === 'lmg' || weaponId === 'barrett') && !body.heavyGuns) return { ok: false, reason: `${body.name}扛不動${g === 'lmg' ? '機槍' : '巴雷特'}` };
   const melee = getMelee(weaponId);
-  if (melee && weaponId === 'sledge' && !body.heavyMelee) return { ok: false, reason: `${body.name}揮不動` };
+  if (melee && weaponId === 'axe' && !body.heavyMelee) return { ok: false, reason: `${body.name}揮不動` };
   return { ok: true };
 }
 

@@ -42,6 +42,9 @@ export const SUPPLIES: Record<SupplyId, SupplyDef> = {
 
 export const MEDKIT_HEAL = 45;
 
+/** 軍械庫商店的物資價格（廢料）。商店只賣彈藥和物資，武器要自己去撿 */
+export const SUPPLY_PRICE: Record<SupplyId, number> = { medkit: 25, lockpick: 15, decoy: 12 };
+
 // ── 掉落 ───────────────────────────────────────────────
 
 /** 一份戰利品（探索背包、事件獎勵都用這個） */
@@ -63,8 +66,6 @@ export interface LootTable {
   scrap: [number, number];
   ammo: Partial<Record<AmmoType, number>>;
   supplies: Partial<Record<SupplyId, number>>;
-  /** 可能掉的武器（依序越後面越稀有） */
-  weapons: string[];
 }
 
 /** 各級戰利品：掉幾份彈藥、幾件用品、武器與倖存者機率 */
@@ -120,7 +121,7 @@ export const ZONES: ZoneDef[] = [
     mapY: 160,
     color: 0x5a8ae0,
     zombies: { basic: 7, runner: 3 },
-    loot: { scrap: [10, 18], ammo: { '9mm': 3 }, supplies: { medkit: 2, decoy: 1 }, weapons: ['bat'] },
+    loot: { scrap: [10, 18], ammo: { '9mm': 3 }, supplies: { medkit: 2, decoy: 1 } },
     survivors: { medic: 1, engineer: 1 },
     tags: ['醫療包', '廢料', '9mm'],
     floor: 0x2e3236,
@@ -138,7 +139,7 @@ export const ZONES: ZoneDef[] = [
     mapY: 265,
     color: 0x7a8a4a,
     zombies: { basic: 8, runner: 3, police: 1 },
-    loot: { scrap: [14, 22], ammo: { '556': 2, '9mm': 3 }, supplies: { medkit: 1 }, weapons: ['machete'] },
+    loot: { scrap: [14, 22], ammo: { '556': 2, '9mm': 3 }, supplies: { medkit: 1 } },
     survivors: { shooter: 2, medic: 1 },
     tags: ['5.56', '9mm'],
     floor: 0x2c2a2a,
@@ -156,7 +157,7 @@ export const ZONES: ZoneDef[] = [
     mapY: 95,
     color: 0xd05a8a,
     zombies: { basic: 8, runner: 2 },
-    loot: { scrap: [16, 24], ammo: { '357': 2, '9mm': 2 }, supplies: { lockpick: 2, medkit: 1, decoy: 1 }, weapons: ['bat'] },
+    loot: { scrap: [16, 24], ammo: { '357': 2, '9mm': 2 }, supplies: { lockpick: 2, medkit: 1, decoy: 1 } },
     survivors: { engineer: 1, medic: 1 },
     tags: ['廢料', '開鎖工具', '.357'],
     floor: 0x2e2830,
@@ -174,7 +175,7 @@ export const ZONES: ZoneDef[] = [
     mapY: 250,
     color: 0xe0a040,
     zombies: { basic: 6, worker: 3, runner: 1, dog: 1.5 },
-    loot: { scrap: [14, 22], ammo: { '9mm': 4, '12ga': 2 }, supplies: { decoy: 2, lockpick: 1 }, weapons: ['bat', 'machete'] },
+    loot: { scrap: [14, 22], ammo: { '9mm': 4, '12ga': 2 }, supplies: { decoy: 2, lockpick: 1 } },
     survivors: { engineer: 3, shooter: 1 },
     tags: ['廢料', '9mm', '誘餌'],
     floor: 0x34302a,
@@ -192,9 +193,9 @@ export const ZONES: ZoneDef[] = [
     mapY: 190,
     color: 0x7ac060,
     zombies: { basic: 6, runner: 2, worker: 1, crow: 1 },
-    loot: { scrap: [16, 26], ammo: { '9mm': 3, '12ga': 3, '357': 1 }, supplies: { medkit: 3, decoy: 1 }, weapons: ['bat', 'coach'] },
+    loot: { scrap: [16, 26], ammo: { '9mm': 3, '12ga': 3, '357': 1, bolt: 2 }, supplies: { medkit: 3, decoy: 1 } },
     survivors: { medic: 1, engineer: 1, shooter: 1 },
-    tags: ['醫療包', '霰彈', '綜合'],
+    tags: ['醫療包', '霰彈', '十字弓箭'],
     floor: 0x2c3330,
     wall: 0x3c4840,
   },
@@ -210,9 +211,9 @@ export const ZONES: ZoneDef[] = [
     mapY: 110,
     color: 0x80a0e0,
     zombies: { basic: 7, runner: 2, nurse: 1, dog: 1.5, crow: 1 },
-    loot: { scrap: [12, 20], ammo: { '9mm': 2, '357': 2, '12ga': 2 }, supplies: { medkit: 2, lockpick: 2 }, weapons: ['machete', 'axe', 'python'] },
+    loot: { scrap: [12, 20], ammo: { '9mm': 2, '357': 2, '12ga': 2 }, supplies: { medkit: 2, lockpick: 2 } },
     survivors: { shooter: 2, medic: 2, engineer: 2 },
-    tags: ['倖存者', '近戰武器', '.357'],
+    tags: ['倖存者', '.357'],
     floor: 0x2e2c34,
     wall: 0x403c4a,
   },
@@ -228,9 +229,9 @@ export const ZONES: ZoneDef[] = [
     mapY: 120,
     color: 0xe06a6a,
     zombies: { basic: 4, nurse: 3, runner: 2, brute: 1, dog: 1 },
-    loot: { scrap: [20, 32], ammo: { '9mm': 3, '556': 1 }, supplies: { medkit: 5 }, weapons: ['mp5', 'axe'] },
+    loot: { scrap: [20, 32], ammo: { '9mm': 3, '556': 1 }, supplies: { medkit: 5 } },
     survivors: { medic: 4, shooter: 1 },
-    tags: ['大量醫療包', '醫護', 'MP5'],
+    tags: ['大量醫療包', '醫護', '9mm'],
     floor: 0x2a3034,
     wall: 0x48545a,
   },
@@ -246,7 +247,7 @@ export const ZONES: ZoneDef[] = [
     mapY: 230,
     color: 0x5a80d0,
     zombies: { police: 4, basic: 3, prisoner: 2, runner: 1 },
-    loot: { scrap: [24, 36], ammo: { '9mm': 3, '357': 2, '12ga': 3, '556': 1 }, supplies: { lockpick: 2 }, weapons: ['python', 'm1014', 'mp5', 'm4a1'] },
+    loot: { scrap: [24, 36], ammo: { '9mm': 3, '357': 2, '12ga': 3, '556': 1 }, supplies: { lockpick: 2 } },
     survivors: { shooter: 4, engineer: 1 },
     tags: ['槍械', '霰彈', '射手'],
     floor: 0x272b34,
@@ -264,9 +265,9 @@ export const ZONES: ZoneDef[] = [
     mapY: 140,
     color: 0x9a9a50,
     zombies: { soldier: 4, runner: 2, brute: 2, firefighter: 1, dog: 2, bear: 0.6 },
-    loot: { scrap: [30, 44], ammo: { '556': 4, '762': 3, '12ga': 1 }, supplies: { medkit: 2 }, weapons: ['ak47', 'm4a1', 'mosin', 'm249'] },
+    loot: { scrap: [30, 44], ammo: { '556': 4, '762': 3, '12ga': 1, '50': 1 }, supplies: { medkit: 2 } },
     survivors: { shooter: 3, engineer: 2 },
-    tags: ['步槍彈', '重武器'],
+    tags: ['步槍彈', '.50'],
     floor: 0x2e2f28,
     wall: 0x44463a,
   },

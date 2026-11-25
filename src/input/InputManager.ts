@@ -25,6 +25,8 @@ export interface InputState {
   meleeHeld: boolean;
   /** 切換近戰模式（4、X 或觸控「持刀」鍵）：槍收起來，攻擊鍵改成揮擊 */
   toggleMelee: boolean;
+  /** 開／關狙擊鏡（Z 或觸控「瞄準」鍵；只有巴雷特有用） */
+  scopeToggle: boolean;
   /**
    * 瞄準點是「舊的」：觸控時沒有手指正在瞄（只按搖桿或按鈕），aimX/aimY 是上一次點的位置。
    * 這時近戰方向改看搖桿／面向（見 touchMeleeAimX）。滑鼠永遠是 false。
@@ -79,8 +81,8 @@ function inRect(r: Rect, x: number, y: number): boolean {
 }
 
 /** 讓 UI 按鈕（換彈、換槍）也能送出動作。 */
-const queued = { reload: false, next: false, melee: false, stance: false };
-export function queueAction(action: 'reload' | 'next' | 'melee' | 'stance'): void {
+const queued = { reload: false, next: false, melee: false, stance: false, scope: false };
+export function queueAction(action: 'reload' | 'next' | 'melee' | 'stance' | 'scope'): void {
   queued[action] = true;
 }
 
@@ -93,7 +95,7 @@ export function holdAction(action: 'melee', down: boolean): void {
 export class InputManager {
   private scene: Phaser.Scene;
   private keys: Record<
-    'reload' | 'one' | 'two' | 'three' | 'four' | 'stance' | 'swap' | 'melee' | 'melee2' | 'up' | 'down' | 'left' | 'right' | 'w' | 'a' | 's' | 'd',
+    'reload' | 'one' | 'two' | 'three' | 'four' | 'stance' | 'swap' | 'melee' | 'melee2' | 'scope' | 'up' | 'down' | 'left' | 'right' | 'w' | 'a' | 's' | 'd',
     Phaser.Input.Keyboard.Key
   > | null = null;
   private movePointerId: number | null = null;
@@ -117,6 +119,7 @@ export class InputManager {
     meleePressed: false,
     meleeHeld: false,
     toggleMelee: false,
+    scopeToggle: false,
     aimStale: false,
   };
 
@@ -139,6 +142,7 @@ export class InputManager {
         melee: kb.addKey(Phaser.Input.Keyboard.KeyCodes.V),
         melee2: kb.addKey(Phaser.Input.Keyboard.KeyCodes.E),
         swap: kb.addKey(Phaser.Input.Keyboard.KeyCodes.Q),
+        scope: kb.addKey(Phaser.Input.Keyboard.KeyCodes.Z),
         up: kb.addKey(Phaser.Input.Keyboard.KeyCodes.UP),
         down: kb.addKey(Phaser.Input.Keyboard.KeyCodes.DOWN),
         left: kb.addKey(Phaser.Input.Keyboard.KeyCodes.LEFT),
@@ -255,7 +259,9 @@ export class InputManager {
     queued.reload = false;
     queued.next = false;
     queued.melee = false;
+    s.scopeToggle = (k ? jd(k.scope) : false) || queued.scope;
     queued.stance = false;
+    queued.scope = false;
     return s;
   }
 }

@@ -44,7 +44,7 @@ interface Lerp {
   t: number;
 }
 
-type ReloadKind = 'magazine' | 'single' | 'revolver' | 'break' | 'belt';
+type ReloadKind = 'magazine' | 'single' | 'revolver' | 'break' | 'belt' | 'bow';
 
 interface ReloadAnim {
   kind: ReloadKind;
@@ -64,6 +64,7 @@ function reloadKind(d: FirearmDef): ReloadKind {
   if (d.reload === 'single') return 'single';
   if (d.cls === 'revolver') return 'revolver';
   if (d.cls === 'lmg') return 'belt';
+  if (d.cls === 'bow') return 'bow';
   return 'break';
 }
 
@@ -310,6 +311,19 @@ export class WeaponRig {
             support = this.lerpTo(belt, ejectL, ease(seg(k, 0.5, 0.78)));
             heldTex = 'shell_12ga';
           }
+          break;
+        }
+        case 'bow': {
+          // 十字弓：槍口朝下、拉弦上膛，再從腰間拿一支箭卡上去
+          tilt = -18 * (tin - tout);
+          if (k < 0.4) {
+            support = this.lerpTo(belt, actL, ease(seg(k, 0.05, 0.3)));
+            this.actionK = ease(seg(k, 0.1, 0.35));
+          } else if (k < 0.85) {
+            support = k < 0.62 ? this.lerpTo(actL, belt, ease(seg(k, 0.4, 0.62))) : this.lerpTo(belt, ejectL, ease(seg(k, 0.62, 0.85)));
+            if (k >= 0.62) heldTex = 'round_small';
+            this.actionK = 1;
+          } else this.actionK = 0;
           break;
         }
         case 'belt': {

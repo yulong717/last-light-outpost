@@ -1,3 +1,4 @@
+import { getFirearm } from '../data/weapons';
 import Phaser from 'phaser';
 import { GAME_HEIGHT, GAME_WIDTH } from '../config';
 import { heroTouch } from '../systems/HeroSystem';
@@ -91,7 +92,7 @@ export class UIScene extends Phaser.Scene {
   }[] = [];
 
   // 動作鍵
-  private keys: Partial<Record<'reload' | 'stance' | 'medkit' | 'skill', ActionKey>> = {};
+  private keys: Partial<Record<'reload' | 'stance' | 'medkit' | 'skill' | 'scope', ActionKey>> = {};
   /** 按鈕位置（教學時閃框提示用） */
   private buttonRects: Partial<Record<Exclude<TutorialFocus, null>, Rect>> = {};
   /** 開局教學的提示框 */
@@ -323,6 +324,8 @@ export class UIScene extends Phaser.Scene {
       this.keys.stance = this.actionKey(W - 102, H - 46, 40, 'knife', '持刀', () => queueAction('stance'));
       this.keys.medkit = this.actionKey(W - 46, H - 92, 34, 'medkit', undefined, () => this.scene.get('Defense').events.emit('use-medkit'));
       if (soldier) this.keys.skill = this.actionKey(W - 144, H - 40, 34, 'fist', undefined, () => (heroTouch.skill = true));
+      // 狙擊鏡（只有身上帶巴雷特才出現）
+      if (GameState.data.armory.loadout.some((id) => getFirearm(id)?.scope)) this.keys.scope = this.actionKey(W - 94, H - 92, 34, 'scope', undefined, () => queueAction('scope'));
       this.buttonRects.reload = this.keys.reload.rect;
       this.buttonRects.stance = this.keys.stance.rect;
       this.buttonRects.melee = this.keys.stance.rect;
@@ -609,6 +612,7 @@ export class UIScene extends Phaser.Scene {
       this.setKey(st, !h.unarmed, h.meleeStance ? PAL.amber : undefined);
     }
     this.setKey(this.keys.reload, !h.meleeStance && !h.unarmed && h.ammo < h.magazine && !h.reloading);
+    if (this.keys.scope) this.setKey(this.keys.scope, !h.meleeStance && !!getFirearm(h.weaponId)?.scope);
   }
 
   private onWaveStart(wave: number, total: number, horde = false): void {

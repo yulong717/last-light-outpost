@@ -159,23 +159,6 @@ export const WEAPON_MAPS: Record<string, WeaponMap> = {
     drop: 1,
   },
   // ── 霰彈槍 ───────────────────────────────────────────
-  r870: {
-    body: [
-      '                              ',
-      'WWw      ggggggglllllllllllllk',
-      'wwwwwwwwgggggggggggggggggggggg',
-      ' Wwwwwwwgggggg      gggggggggg',
-      '       ww kk                  ',
-      '        ww                    ',
-    ],
-    action: { map: ['wwwwww', 'WWWWWW'], x: 16, y: 3, travel: [-6, 0] },
-    grip: [9, 4],
-    fore: [18, 4],
-    muzzle: [30, 1],
-    eject: [12, 2],
-    reach: 6,
-    drop: 1,
-  },
   coach: {
     body: [
       '            ',
@@ -218,21 +201,27 @@ export const WEAPON_MAPS: Record<string, WeaponMap> = {
     drop: 1,
   },
   // ── 狙擊、機槍 ───────────────────────────────────────
-  mosin: {
+  // 巴雷特：粗槍管、大型制退器、上方長狙擊鏡、前面兩腳架
+  barrett: {
     body: [
-      '                                    ',
-      'WWw          ggg                    ',
-      'wwwwwwwwwwggggggggggggggggggggggggggg',
-      ' Wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwk    ',
-      '      ww  k                         ',
+      '            kkkkkkkkkk                    ',
+      '           kggllllllggk                   ',
+      'kkkk        kkkkkkkkkk                    ',
+      'kgggkk    kkkkkkkkkkkkkkkkkkkkkkkkkkk  kkk',
+      'kggggkkkkkkggggggggggggggggggggggggggggggk',
+      'kkkkk   kkkkkkggggggggkkkkkkkkkkkkkkkgkkkk',
+      '        kkk  k              k k           ',
+      '        kkk                k   k          ',
+      '         kk               k     k         ',
     ],
-    action: { map: ['  l', 'lll', '  l'], x: 13, y: 2, travel: [-5, 0] },
-    grip: [8, 3],
-    fore: [20, 3],
-    muzzle: [37, 2],
-    eject: [15, 1],
+    action: { map: ['ll'], x: 12, y: 4, travel: [-5, 0] },
+    mag: { map: ['ggggg', 'ggggg', 'ggggg'], x: 14, y: 6 },
+    grip: [9, 6],
+    fore: [22, 5],
+    muzzle: [42, 4],
+    eject: [16, 3],
     reach: 6,
-    drop: 1,
+    drop: 2,
   },
   m249: {
     body: [
@@ -253,6 +242,27 @@ export const WEAPON_MAPS: Record<string, WeaponMap> = {
     eject: [16, 3],
     reach: 6,
     drop: 2,
+  },
+  // ── 十字弓（弓臂在前端上下張開，弦拉到扳機上方） ─────────
+  crossbow: {
+    body: [
+      '                   kk  ',
+      '                  kgk  ',
+      '                 kgk   ',
+      'WWw     kkkkkkkkkgkkkk ',
+      'wwwwwwwwwwwwwwwwwgwwwwe',
+      ' Wwwwwwwkkkkkkkkkgkkkk ',
+      '       ww k      kgk   ',
+      '        ww        kgk  ',
+      '                   kk  ',
+    ],
+    action: { map: ['ttttttttt'], x: 8, y: 3, travel: [3, 0] },
+    grip: [9, 6],
+    fore: [15, 5],
+    muzzle: [22, 4],
+    eject: [12, 3],
+    reach: 6,
+    drop: 1,
   },
   // ── 近戰（握柄底端在左，刃朝右） ─────────────────────
   knife: {
@@ -294,17 +304,16 @@ export const WEAPON_MAPS: Record<string, WeaponMap> = {
     reach: 10,
     drop: 0,
   },
-  sledge: {
+  // 武士刀：纏繩刀柄、金色刀鐔、微彎的長刀身
+  katana: {
     body: [
-      '                     ggggg',
-      '                     glllg',
-      'wwwwwwwwwwwwwwwwwwwwwglllg',
-      'WWWWWWWWWWWWWWWWWWWWWglllg',
-      '                     glllg',
-      '                     ggggg',
+      '        y                      ',
+      'rhrhrhrhyysssssssssssssssssseee ',
+      'hrhrhrhryyggggggggggggggggggggee',
+      '        y                       ',
     ],
-    grip: [1, 2],
-    muzzle: [25, 2],
+    grip: [3, 1],
+    muzzle: [31, 2],
     eject: [0, 0],
     reach: 10,
     drop: 0,

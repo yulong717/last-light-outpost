@@ -147,11 +147,27 @@ export const SFX: Record<string, SfxDef> = {
   shot_mp5: shot({ len: 0.36, crack: 0.004, body: 0.03, thumpHz: 175, thumpLen: 0.03, tone: 4400, tail: 0.1, verb: 0.2 }, { volume: 0.42, voices: 6, gap: 18, pitch: 1.4 }),
   shot_m4a1: shot({ len: 0.5, crack: 0.003, body: 0.04, thumpHz: 140, thumpLen: 0.045, tone: 7200, tail: 0.16, verb: 0.26 }, { volume: 0.5, voices: 6, gap: 18 }),
   shot_ak47: shot({ len: 0.66, crack: 0.005, body: 0.062, thumpHz: 105, thumpLen: 0.065, tone: 5000, tail: 0.22, verb: 0.3 }, { volume: 0.58, voices: 6, gap: 22 }),
-  shot_r870: shot({ len: 0.95, crack: 0.01, body: 0.11, thumpHz: 95, thumpLen: 0.12, tone: 3600, tail: 0.32, verb: 0.38 }, { volume: 0.7, variants: 3, voices: 3, gap: 60 }),
   shot_coach: shot({ len: 1.05, crack: 0.012, body: 0.13, thumpHz: 82, thumpLen: 0.15, tone: 3200, tail: 0.38, verb: 0.42 }, { volume: 0.78, variants: 3, voices: 3, gap: 50 }),
   shot_m1014: shot({ len: 0.8, crack: 0.01, body: 0.1, thumpHz: 100, thumpLen: 0.1, tone: 3900, tail: 0.28, verb: 0.35 }, { volume: 0.66, variants: 3, voices: 3, gap: 50 }),
-  shot_mosin: shot({ len: 1.4, crack: 0.005, body: 0.09, thumpHz: 78, thumpLen: 0.12, tone: 6500, tail: 0.6, verb: 0.55 }, { volume: 0.75, variants: 3, voices: 2, gap: 120, pitch: 0.6 }),
+  // 巴雷特：最低沉、尾音最長的一聲，整條街都在回音
+  shot_barrett: shot({ len: 1.8, crack: 0.006, body: 0.14, thumpHz: 58, thumpLen: 0.18, tone: 5200, tail: 0.85, verb: 0.65 }, { volume: 0.85, variants: 2, voices: 2, gap: 200, pitch: 0.5 }),
   shot_m249: shot({ len: 0.55, crack: 0.004, body: 0.05, thumpHz: 118, thumpLen: 0.05, tone: 6000, tail: 0.2, verb: 0.28 }, { volume: 0.5, voices: 8, gap: 18 }),
+  /** 十字弓：弦「啪」一聲彈回去，加上箭飛出去的短風切；很小聲，潛入時用 */
+  shot_crossbow: {
+    variants: 3,
+    volume: 0.45,
+    pitch: 0.8,
+    maxVoices: 2,
+    minGapMs: 120,
+    recipe: (fs, r) => {
+      const b = new Buf(fs, 0.35);
+      metalClick(b, 0, 900, r, 0.8, 0.03);
+      thud(b, 0, 220, 0.04, r, 0.6, 900);
+      const w = whoosh(fs, r, 0.18, 1800, 4200, 0.35);
+      b.add(0.01, 0.18, (_t, i) => w.data[i] ?? 0);
+      return b.normalize(0.7);
+    },
+  },
   /** 拉槍栓：上抬、後拉、前推、下壓 */
   bolt: {
     variants: 2,

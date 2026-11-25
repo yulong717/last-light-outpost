@@ -23,7 +23,7 @@ export interface WaveDef {
 export const HORDE = { budgetMul: 1.6, intervalMul: 0.45, warn: 4, breather: 0.75, delayBefore: 8 };
 
 /**
- * 第一個夜晚的波次：開局只有主角一人（M1911＋軍用刀），
+ * 第一個夜晚的波次：開局只有主角一人（M1911＋匕首），
  * 所以比照「教學夜」調得溫和，沒有重型霧屍。
  */
 export const NIGHT_ONE: WaveDef[] = [

@@ -1,3 +1,5 @@
+import { ScopeView } from '../systems/ScopeView';
+import { BoltPickups } from '../systems/BoltPickups';
 import { heroRigColors } from '../art/HeroArt';
 import Phaser from 'phaser';
 import { GAME_HEIGHT, GAME_WIDTH, GROUND_Y, LANE_BOTTOM, LANE_TOP, SINGLE_LANE_Y, clampLaneY, depthForY, setSingleLane } from '../config';
@@ -143,6 +145,9 @@ export class ExploreFieldScene extends Phaser.Scene {
   private fx!: Fx;
   private camFeel!: CameraFeel;
   private crosshair!: Crosshair;
+  /** 巴雷特的狙擊鏡、十字弓射出去的箭 */
+  private scope!: ScopeView;
+  private bolts!: BoltPickups;
   private screenFx!: ScreenFeedback;
   private zombies: Zombie[] = [];
   private sleepers: Sleeper[] = [];
@@ -244,6 +249,8 @@ export class ExploreFieldScene extends Phaser.Scene {
     this.heroSys.onKill = () => this.kills++;
     this.input2 = new InputManager(this, { x: this.player.footX + 200, y: this.player.footY - 30 });
     this.crosshair = new Crosshair(this);
+    this.scope = new ScopeView(this, this.weapons);
+    this.bolts = new BoltPickups(this, this.weapons, armory.ammo, () => this.player.footY - this.rig.muzzle.y, clampLaneY);
     this.screenFx = new ScreenFeedback(this);
     attachAudio(this);
     this.wireFeedback();
@@ -990,6 +997,8 @@ export class ExploreFieldScene extends Phaser.Scene {
         this.tweens.add({ targets: warn, alpha: 0, delay: 700, duration: 400, onComplete: () => warn.destroy() });
       }
     } else {
+      this.scope.update(realDt, inp.scopeToggle, p.alive && melee.gunAllowed && !this.weapons.unarmed, p.footX, inp.aimX, inp.aimY);
+      const def = this.weapons.active.def;
       const shot = p.alive && melee.gunAllowed
         ? this.weapons.tryFire(muzzleX, muzzleY, inp.aimX, inp.aimY, inp.fireHeld, inp.firePressed, this.zombies, p.moveFactor)
         : null;
@@ -997,11 +1006,17 @@ export class ExploreFieldScene extends Phaser.Scene {
         this.rig.fire();
         this.shotFeedback(muzzleX, muzzleY, shot.angle);
         this.kills += shot.kills;
-        this.exp.addNoise(NOISE.perShot);
-        // 潛入中開槍：全部驚醒
-        this.raiseAlarm();
+        if (def.silent) {
+          // 十字弓：不加噪音、巡邏的霧屍聽不到；只有中箭沒死的那隻會叫起來
+          if (shot.hits > shot.kills) this.raiseAlarm();
+        } else {
+          this.exp.addNoise(NOISE.perShot);
+          // 潛入中開槍：全部驚醒
+          this.raiseAlarm();
+        }
       }
     }
+    this.bolts.update(p.footX, p.footY);
     const aimDist = Phaser.Math.Distance.Between(muzzleX, muzzleY, inp.aimX, inp.aimY);
     const climbY = Math.tan(Phaser.Math.DegToRad(this.weapons.climbDeg)) * Math.abs(inp.aimX - muzzleX);
     this.crosshair.update(realDt, inp.aimX, inp.aimY - climbY, this.weapons.spreadNow(p.moveFactor), aimDist, p.alive && !this.melee.stance);
