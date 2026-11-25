@@ -55,9 +55,9 @@ const VICTIM_SHAKE = { light: 1, mid: 3, heavy: 4 };
  * 判定是 2.5D 地面上的扇形：以腳底為圓心、觸及距離為半徑、面向方向張開 arc 度。
  *
  * 武器分兩派（數值見 src/data/weapons.ts）：
- * - 刀類（軍用刀、開山刀）：幾乎不擊退，但收招很早就能接下一刀（chainCancel），
+ * - 刀類（匕首、開山刀、武士刀）：幾乎不擊退，但收招很早就能接下一刀（chainCancel），
  *   一串 3～4 刀、越砍越快，最後一下突刺收尾（加倍傷害、推開一點）
- * - 鈍器與斧頭（鋁棒、大鐵鎚、消防斧）：一下打飛整排、打暈，但每下都要收完整招、
+ * - 鈍器與斧頭（鋁棒、消防斧）：一下打飛整排、打暈，但每下都要收完整招、
  *   再重新掄起（heft），連續性弱；揮擊中幾乎站定
  *
  * 打擊感：卡肉（hit-stop）、鏡頭震動與推鏡、命中閃光／衝擊環、手機震動、
@@ -106,13 +106,37 @@ export class MeleeSystem {
   bonus = { damageMul: 1, knockback: 0, stagger: 0 };
   /** 這一刀起手時的加成（揮到一半停止奔跑也算數） */
   private swingBonus = { damageMul: 1, knockback: 0, stagger: 0 };
+  /** 蓄力斬（武士刀）：按住的秒數；-1 = 沒在按 */
+  private chargeT = -1;
+  /** 這一幀攻擊鍵還按著（trySwing 每幀設定，update 結尾清掉），放開的那一幀出手 */
+  private holdSeen = false;
+  /** 這一下是蓄力一閃，傷害倍率 */
+  private chargeSwing = false;
+  private chargeMul = 1;
+  private chargeAim?: number;
+  private chargeFx?: Phaser.GameObjects.Graphics;
 
   constructor(
     private scene: Phaser.Scene,
     id: string,
   ) {
     this.def = getMelee(id) ?? getMelee('knife')!;
-    scene.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.streakText?.destroy());
+    scene.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.streakText?.destroy();
+      this.chargeFx?.destroy();
+    });
+  }
+
+  /** 正在蓄力（按住超過 tap 秒才算，點一下還是一般連段） */
+  get charging(): boolean {
+    const c = this.def.charge;
+    return !!c && this.chargeT >= c.tap;
+  }
+
+  /** 蓄力比例 0～1（HUD、姿勢用） */
+  get chargeRatio(): number {
+    const c = this.def.charge;
+    return c && this.chargeT >= c.tap ? Math.min(1, (this.chargeT - c.tap) / c.time) : 0;
   }
 
   /** 刀類：可以快速連砍、幾乎不擊退 */
@@ -123,6 +147,8 @@ export class MeleeSystem {
   /** 揮擊姿勢給 WeaponRig 畫手上的武器；近戰模式沒在揮時是「備戰」姿勢 */
   get pose(): { phase: 'ready' | 'windup' | 'active' | 'recovery'; k: number; dir: number; thrust: boolean; contact: boolean; step: number; weapon: string; dash: boolean } | null {
     const weapon = this.def.id;
+    // 蓄力中：刀慢慢舉起來，蓄滿停在最高點
+    if (this.phase === 'idle' && this.charging) return { phase: 'windup', k: this.chargeRatio, dir: 1, thrust: false, contact: false, step: 1, weapon, dash: false };
     if (this.phase === 'idle') return this.stance ? { phase: 'ready', k: 0, dir: this.dir, thrust: false, contact: false, step: 0, weapon, dash: false } : null;
     const len = this.phaseLen(this.phase);
     // 打中之後判定段停在「打到」那一格，卡肉時看得到球棒壓在對方身上
@@ -182,12 +208,14 @@ export class MeleeSystem {
     const attack = this.stance && (inp.firePressed || inp.fireHeld);
     const swing = inp.meleePressed || inp.meleeHeld || attack;
     const pressed = inp.meleePressed || (this.stance && inp.firePressed);
-    return { swing, pressed, gunAllowed: !this.stance && !this.busy };
+    return { swing, pressed, gunAllowed: !this.stance && !this.busy && this.chargeT < 0 };
   }
 
   /** 移動倍率：揮擊中變慢（鈍器幾乎站定），近戰模式比拿槍輕快 */
   moveMul(gunMul: number): number {
-    if (this.busy) return SWING_MOVE[this.def.swing];
+    // 蓄力時照樣能走（武士刀的特技）；一閃衝出去的那一下不減速，衝刺距離才夠
+    if (this.charging) return this.def.charge!.moveMul;
+    if (this.busy) return this.chargeSwing ? 1 : SWING_MOVE[this.def.swing];
     return this.stance ? STANCE_MOVE : gunMul;
   }
 
@@ -199,6 +227,13 @@ export class MeleeSystem {
   /** 按下（或按住）近戰。aimX：往哪邊揮（沒給就照目前面向） */
   trySwing(player: Player, aimX?: number, pressed = true): boolean {
     if (!player.alive) return false;
+    // 蓄力斬：閒著的時候按下開始計時，按住就一直蓄；放開才出手（在 update 裡判斷）
+    if (this.def.charge && !this.busy && this.heftT <= 0) {
+      if (this.chargeT < 0) this.chargeT = 0;
+      this.holdSeen = true;
+      this.chargeAim = aimX;
+      return true;
+    }
     if (this.busy || this.heftT > 0) {
       // 只有「按下」才排下一下；按著不放不會在揮的途中多排一下（點一下＝揮一下）
       if (pressed) {
@@ -234,6 +269,7 @@ export class MeleeSystem {
 
   /** 這一下是連段招式表裡的哪一招（沒有招式表就是 undefined） */
   private get step(): MeleeStep | undefined {
+    if (this.chargeSwing && this.def.charge) return this.def.charge.step;
     if (this.dashSwing && this.def.dashStep) return this.def.dashStep;
     return this.def.steps?.[Math.max(0, this.chainIdx - 1)];
   }
@@ -252,14 +288,16 @@ export class MeleeSystem {
     return d.recovery * this.speed * (this.finisher ? 1.4 : 1) * (this.hitCount > 0 ? HIT_RECOVERY.hit : HIT_RECOVERY.whiff);
   }
 
-  private start(player: Player, aimX?: number): void {
+  private start(player: Player, aimX?: number, charged = 0): void {
     const d = this.def;
+    this.chargeSwing = charged > 0;
+    this.chargeMul = this.chargeSwing && d.charge ? 1 + (d.charge.maxMul - 1) * charged : 1;
     // 刀類：在連段時間內接著揮就是下一刀；一串打完重新開始
     const continuing = this.comboTimer > 0 && d.comboEvery > 1 && this.chainIdx < d.comboEvery;
     this.chainIdx = continuing ? this.chainIdx + 1 : 1;
     // 衝刺攻擊：獨立的一招，打完連段就結束（當成收尾）
-    this.dashSwing = this.dashing && !!d.dashStep && !continuing;
-    if (this.dashSwing) this.chainIdx = Math.max(1, d.comboEvery);
+    this.dashSwing = this.dashing && !!d.dashStep && !continuing && !this.chargeSwing;
+    if (this.dashSwing || this.chargeSwing) this.chainIdx = Math.max(1, d.comboEvery);
     const cost = d.stamina * (this.chainIdx > 1 ? 0.8 : 1);
     this.tired = this.stamina < cost;
     this.stamina = Math.max(0, this.stamina - cost);
@@ -274,7 +312,7 @@ export class MeleeSystem {
     this.hitSet.clear();
     this.hitCount = 0;
     // 連段第一下固定由上往下，之後左右來回（橫掃、回掃）
-    this.dir = this.chainIdx === 1 || this.dashSwing ? 1 : -this.dir;
+    this.dir = this.chainIdx === 1 || this.dashSwing || this.chargeSwing ? 1 : -this.dir;
     // 連段中可以轉身：往按下的那一邊揮
     this.facing = aimX !== undefined ? (aimX >= player.footX ? 1 : -1) : player.facing;
     player.facing = this.facing;
@@ -299,6 +337,7 @@ export class MeleeSystem {
   update(dt: number, player: Player, zombies: Zombie[]): MeleeResult {
     const d = this.def;
     const res: MeleeResult = { hits: 0, kills: 0 };
+    this.updateCharge(dt, player);
     this.comboTimer = Math.max(0, this.comboTimer - dt);
     if (this.queued) {
       this.queueT -= dt;
@@ -378,6 +417,62 @@ export class MeleeSystem {
     return res;
   }
 
+  /**
+   * 蓄力斬：按著就累積，放開那一幀出手。
+   * 按不到 tap 秒＝一般連段；超過就是一閃（蓄力比例不到 min 也照 min 算）。
+   */
+  private updateCharge(dt: number, player: Player): void {
+    const c = this.def.charge;
+    if (!c || this.chargeT < 0) {
+      this.chargeFx?.setVisible(false);
+      return;
+    }
+    if (!player.alive) {
+      this.chargeT = -1;
+      this.holdSeen = false;
+      return;
+    }
+    if (this.holdSeen) {
+      const before = this.chargeRatio;
+      this.chargeT += dt;
+      // 蓄滿的那一刻：閃一下＋提示音
+      if (before < 1 && this.chargeRatio >= 1) {
+        Fx.of(this.scene)?.popText(player.footX, player.footY - 70, '蓄滿', '#e3f2fd');
+        GameEvents.of(this.scene).emit('player:melee-swing', { weaponId: this.def.id, x: player.footX, y: player.footY, heavy: false, tired: false, combo: 4, finisher: false });
+        rumble(30, 0.4);
+      }
+      this.drawCharge(player);
+      this.holdSeen = false;
+      return;
+    }
+    // 放開
+    const held = this.chargeT;
+    const ratio = this.chargeRatio;
+    this.chargeT = -1;
+    this.chargeFx?.setVisible(false);
+    if (held < c.tap) this.start(player, this.chargeAim);
+    else this.start(player, this.chargeAim, Math.max(c.min, ratio));
+  }
+
+  /** 蓄力圈：主角腳下一圈越來越亮，蓄滿變白 */
+  private drawCharge(player: Player): void {
+    const r = this.chargeRatio;
+    if (!this.charging) return;
+    if (!this.chargeFx) this.chargeFx = this.scene.add.graphics();
+    const g = this.chargeFx.clear().setVisible(true).setDepth(DEPTH_FX + 2);
+    const full = r >= 1;
+    const color = full ? 0xffffff : 0x9fd3ff;
+    const pulse = full ? 0.6 + 0.4 * Math.sin(this.scene.time.now / 50) : 1;
+    g.lineStyle(1, color, (0.25 + 0.6 * r) * pulse);
+    g.strokeEllipse(player.footX, player.footY, 20 + 18 * r, 7 + 6 * r);
+    // 頭頂的蓄力條
+    const w = 22;
+    const x = player.footX - w / 2;
+    const y = player.footY - 66;
+    g.fillStyle(0x000000, 0.6).fillRect(x - 1, y - 1, w + 2, 4);
+    g.fillStyle(color, 0.95).fillRect(x, y, Math.round(w * r), 2);
+  }
+
   /** 判定期間每幀掃一次扇形，同一刀同一隻只打一次 */
   private sweep(player: Player, zombies: Zombie[], res: MeleeResult): void {
     const d = this.def;
@@ -429,7 +524,7 @@ export class MeleeSystem {
       const b = this.swingBonus;
       // 砸地：離落點越遠越輕（邊緣剩六成）
       const slamMul = slam ? 1 - 0.4 * Math.min(1, dist / slam) : 1;
-      const stepMul = (st ? st.damageMul : fin ? d.comboMul : 1) * slamMul;
+      const stepMul = (st ? st.damageMul : fin ? d.comboMul : 1) * slamMul * (this.chargeSwing ? this.chargeMul : 1);
       const mul = (this.tired ? STAMINA.tiredDamage : 1) * stepMul * (execute ? d.staggerBonus : 1) * b.damageMul;
       // 受力分級：收尾或處決＝重（打飛），鈍器／重武器＝中（滑出去），其他＝輕
       // 有招式表的武器只有收尾那招會打飛（連段中途打飛就接不下去了）
@@ -566,6 +661,16 @@ export class MeleeSystem {
       }
     };
     const deg = Math.PI / 180;
+    if (this.chargeSwing) {
+      // 一閃：沿著衝出去的路線一道白光，蓄得越滿越長、越亮
+      const len = 50 + 40 * (this.chargeMul - 1) / Math.max(0.01, (d.charge?.maxMul ?? 2) - 1);
+      g.lineStyle(2, 0xffffff, 0.85);
+      g.lineBetween(cx - f * 6, cy + 6, cx + f * len, cy + 2);
+      g.lineStyle(1, color, 0.45);
+      g.lineBetween(cx - f * 2, cy + 9, cx + f * (len - 10), cy + 6);
+      this.scene.tweens.add({ targets: g, alpha: 0, duration: 220, ease: 'Quad.easeIn', onComplete: () => g.destroy() });
+      return;
+    }
     if (st?.slam) {
       // 砸地：從頭頂直直砸到落點（地上的震波另外畫）
       arc(-100 * deg, 60 * deg, (st.reach ?? d.reach) + 4, 0.7, 0.75, 4);

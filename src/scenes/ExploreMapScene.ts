@@ -1,3 +1,4 @@
+import { weaponsFoundIn } from '../data/weapons';
 import Phaser from 'phaser';
 import { GAME_HEIGHT, GAME_WIDTH } from '../config';
 import { AudioManager } from '../audio/AudioManager';
@@ -230,6 +231,9 @@ export class ExploreMapScene extends Phaser.Scene {
       if (n.kind !== 'outpost') text(z.blurb);
       text(`風險 ${stars(z.risk)}　搜刮 ${exploreHours(z)} 小時　${z.nodes} 個地點`, '#ff8a6a');
       text(`可能找到：${z.tags.join('、')}`, '#9ad17a');
+      // 綁在這一區的武器：還沒撿到的大獎一定找得到
+      const guns = weaponsFoundIn(z.id);
+      if (guns.length) text(`武器：${guns.map((w) => (GameState.owns(w.id) ? `${w.name}✓` : w.name)).join('、')}`, guns.every((w) => GameState.owns(w.id)) ? '#90a4ae' : '#ffd180', 7);
       if (GameState.isStoryZone(z.id)) text(`★主線　${GameState.chapter!.title}：${GameState.chapter!.objective}`, '#f5d76e', 7);
       const st = GameState.data;
       if (st.intel?.zone === z.id) text(`情報：${INTEL[st.intel.kind].name}　${INTEL[st.intel.kind].desc}`, '#ffd24a', 7);

@@ -18,7 +18,7 @@ import {
   type SupplyId,
   type ZoneDef,
 } from '../data/explore';
-import { AMMO, getWeapon, type AmmoType } from '../data/weapons';
+import { AMMO, getWeapon, weaponsFoundIn, type AmmoType } from '../data/weapons';
 import type { Chapter } from '../data/story';
 import { GameState } from '../state/GameState';
 import { Rng, randomSeed } from '../utils/rng';
@@ -222,16 +222,10 @@ export class Expedition {
       const s = r.weighted(ids, (id) => z.loot.supplies[id] ?? 0);
       if (s) loot.supplies = { [s]: 1 };
     }
-    // 武器：只掉還沒擁有、而且快解鎖的
-    if (r.chance(t.weaponChance * mul * (lucky ? 2 : 1))) {
-      const day = GameState.data.day;
-      const pool = z.loot.weapons.filter((id) => {
-        const def = getWeapon(id);
-        // 只掉軍械庫已經進貨的：主線的關鍵武器要靠劇情拿到
-        return def && !GameState.owns(id) && !this.bag.weapons?.includes(id) && GameState.inShop(id) && def.unlockDay <= day + 2;
-      });
-      if (pool.length) loot.weapons = [r.pick(pool)];
-    }
+    // 武器：只會在綁定的地點撿到（見 src/data/weapons.ts 的 found）。
+    // 大獎第一次一定有這一區還沒撿到的武器；中途的戰利品偶爾也會先找到
+    const pool = weaponsFoundIn(z.id).filter((w) => !GameState.owns(w.id) && !this.bag.weapons?.includes(w.id));
+    if (pool.length && (tier === 'big' || r.chance(t.weaponChance * mul * (lucky ? 2 : 1)))) loot.weapons = [pool[0].id];
     return loot;
   }
 

@@ -8,62 +8,47 @@ import {
   MAX_GUNS,
   MELEE,
   fullReloadTime,
+  getWeapon,
   type AmmoType,
   type FirearmDef,
   type MeleeDef,
 } from '../data/weapons';
+import { SUPPLIES, SUPPLY_PRICE, type SupplyId } from '../data/explore';
 import { registerUIRect } from '../input/InputManager';
-import { weaponUnlockHint } from '../data/story';
 import { GameState } from '../state/GameState';
 import { pixelText, wrapCJK } from '../utils/text';
 
 export interface ArmoryData {
-  /** 買東西後通知白天介面更新廢料 */
+  /** 買東西、換配置後通知白天介面更新 */
   onChange: () => void;
 }
 
-type Tab = 'guns' | 'melee' | 'ammo';
+type Tab = 'rack' | 'shop';
 
 const PX = 20;
 const PY = 30;
 const PW = GAME_WIDTH - 40;
 const PH = GAME_HEIGHT - 40;
-/** 左邊用途欄寬、武器卡寬、右邊說明欄寬 */
-const ROLE_W = 108;
-const CARD_W = 76;
+/** 右邊說明欄寬 */
 const DETAIL_W = 196;
+/** 陳列架（洞洞板）的範圍 */
+const RACK_X = PX + 8;
+const RACK_Y = PY + 30;
+const RACK_W = PW - DETAIL_W - 30;
+const RACK_H = PH - 62;
+/** 槍架：兩欄、每格高度；近戰架在槍架下面一排 */
+const GUN_COLS = 2;
+const GUN_SLOT_H = 32;
+const MELEE_SLOT_H = 44;
 
-/**
- * 依「用途」分組：玩家先想「我缺什麼」，再挑那一組裡的槍。
- * 只是顯示用的分組，數值還是在 src/data/weapons.ts。
- */
-interface RoleGroup {
-  name: string;
-  /** 一句話：什麼時候帶它 */
-  when: string;
-  color: number;
-  ids: string[];
-}
-
-const GUN_ROLES: RoleGroup[] = [
-  { name: '保命副手', when: '換槍快，主槍打空時的退路', color: 0x9ad17a, ids: ['m1911', 'python'] },
-  { name: '近身清場', when: '屍群貼到路障前，一槍清一排', color: 0xff8a5a, ids: ['r870', 'coach', 'm1014'] },
-  { name: '中距主力', when: '大部分的夜晚都靠它', color: 0x6ab0ff, ids: ['mp5', 'ak47', 'm4a1'] },
-  { name: '遠距貫穿', when: '排成一列的霧屍、菁英怪', color: 0xc89aff, ids: ['mosin'] },
-  { name: '壓制屍潮', when: '大波次、屍潮夜', color: 0xf5d76e, ids: ['m249'] },
-];
-
-const MELEE_ROLES: RoleGroup[] = [
-  { name: '快速單殺', when: '省體力，一隻一隻收', color: 0x9ad17a, ids: ['knife', 'machete'] },
-  { name: '控場擊飛', when: '被圍住時把整排打開', color: 0x6ab0ff, ids: ['bat', 'sledge'] },
-  { name: '破甲處決', when: '戴頭盔的、打暈的一擊收掉', color: 0xff8a5a, ids: ['axe'] },
-];
-
-const TAG = { pierce: 0x6a3aa0, crowd: 0xa04a2a, control: 0x2a5a9a, power: 0x8a2a2a, speed: 0x2a7a4a, warn: 0x5a4a1a, neutral: 0x3a3f4a } as const;
+const TAG = { pierce: 0x6a3aa0, crowd: 0xa04a2a, control: 0x2a5a9a, power: 0x8a2a2a, speed: 0x2a7a4a, warn: 0x5a4a1a, neutral: 0x3a3f4a, special: 0x8a6a1a } as const;
 
 /** 槍的特性標籤（從數值推出來，不用另外寫） */
 function gunTags(d: FirearmDef): [string, number][] {
   const t: [string, number][] = [];
+  if (d.scope) t.push(['狙擊鏡・全圖視野', TAG.special]);
+  if (d.silent) t.push(['無聲', TAG.special]);
+  if (d.recoverable) t.push(['箭可回收', TAG.special]);
   if (d.pellets > 1) t.push(['散射', TAG.crowd]);
   if (d.pierce >= 2) t.push([`貫穿 ${d.pierce} 隻`, TAG.pierce]);
   if (d.stopping >= 0.5) t.push(['擊退・解圍', TAG.control]);
@@ -76,11 +61,28 @@ function gunTags(d: FirearmDef): [string, number][] {
   return t.slice(0, 5);
 }
 
-/** 能力條的上限（用全名單的最大值正規化） */
+function meleeTags(m: MeleeDef): [string, number][] {
+  const swing = m.windup + m.active + m.recovery;
+  const t: [string, number][] = [];
+  if (m.charge) t.push(['邊走邊蓄力・一閃', TAG.special]);
+  if (m.maxTargets >= 3) t.push([`一次掃 ${m.maxTargets} 隻`, TAG.crowd]);
+  else t.push(['單體', TAG.neutral]);
+  if (m.knockback >= 24) t.push(['擊飛', TAG.control]);
+  if (m.stagger >= 0.6) t.push(['打暈', TAG.control]);
+  if (m.penetration >= 0.5) t.push(['破頭盔', TAG.pierce]);
+  if ((m.gore ?? 0) >= 2) t.push(['砍斷手腳', TAG.power]);
+  if (m.staggerBonus > 1) t.push(['處決暈眩', TAG.power]);
+  if (m.steps) t.push([`${m.steps.length} 段連擊`, TAG.speed]);
+  if (swing <= 0.4) t.push(['出手快', TAG.speed]);
+  if (swing >= 0.9) t.push(['起手慢', TAG.warn]);
+  return t.slice(0, 6);
+}
+
+/** 能力條的上限（用全名單的最大值正規化；巴雷特單發太誇張，威力上限壓在 100） */
 const MAX = {
-  dmg: Math.max(...FIREARMS.map((d) => d.damage * d.pellets)),
+  dmg: 100,
   dps: Math.max(...FIREARMS.map((d) => dps(d))),
-  range: Math.max(...FIREARMS.map((d) => Math.min(d.range, d.falloffEnd))),
+  range: 900,
   melee: Math.max(...MELEE.map((m) => m.damage)),
 };
 
@@ -96,12 +98,15 @@ function control(d: FirearmDef): number {
 }
 
 /**
- * 軍械庫（白天）：買槍、買近戰武器、買彈藥、決定帶哪三把槍上場。
- * 疊在白天布置介面上方；Esc 或右上角關閉。
+ * 軍械庫（白天）：
+ * - 陳列架：撿到的武器掛在洞洞板上，還沒撿到的只剩黑色剪影，選了會說在哪裡找得到。
+ *   在這裡決定今晚帶哪三把槍、哪一把近戰。武器不能買，只能去指定地點撿（見 src/data/weapons.ts 的 found）。
+ * - 商店：只賣彈藥和物資。
+ * 疊在白天介面上方；Esc 或右上角關閉。
  */
 export class ArmoryScene extends Phaser.Scene {
   private onChange!: () => void;
-  private tab: Tab = 'guns';
+  private tab: Tab = 'rack';
   private selected = 'm1911';
   private root!: Phaser.GameObjects.Container;
   private rects: (() => void)[] = [];
@@ -117,6 +122,8 @@ export class ArmoryScene extends Phaser.Scene {
   create(): void {
     this.rects = [];
     this.root = this.add.container(0, 0);
+    // 一打開先選身上的第一把槍
+    this.selected = GameState.data.armory.loadout[0] ?? GameState.data.armory.melee;
     this.input.keyboard?.on('keydown-ESC', this.close, this);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.input.keyboard?.off('keydown-ESC', this.close, this);
@@ -155,109 +162,134 @@ export class ArmoryScene extends Phaser.Scene {
     this.button(PX + PW - 30, PY + 4, 26, 20, '✕', true, () => this.close());
 
     const tabs: [Tab, string][] = [
-      ['guns', '槍械'],
-      ['melee', '近戰'],
-      ['ammo', '彈藥'],
+      ['rack', '陳列架'],
+      ['shop', '商店'],
     ];
     tabs.forEach(([t, label], i) => {
-      this.button(PX + 200 + i * 64, PY + 4, 60, 20, label, true, () => {
+      this.button(PX + 200 + i * 70, PY + 4, 66, 20, label, true, () => {
         this.tab = t;
-        this.selected = t === 'guns' ? FIREARMS[0].id : t === 'melee' ? MELEE[0].id : '';
         this.redraw();
       }, this.tab === t ? 0x5a4a1a : 0x2a2f3a);
     });
 
-    if (this.tab === 'guns') this.drawGuns();
-    else if (this.tab === 'melee') this.drawMelee();
-    else this.drawAmmo();
+    if (this.tab === 'rack') {
+      this.drawRack();
+      const w = getWeapon(this.selected) ?? FIREARMS[0];
+      if (w.kind === 'firearm') this.gunDetail(w);
+      else this.meleeDetail(w);
+    } else this.drawShop();
     this.drawLoadout();
   }
 
-  // ── 槍械／近戰：依用途分組的卡片 ─────────────────────
+  // ── 陳列架 ──────────────────────────────────────────
 
-  private drawGuns(): void {
-    this.roleGrid(GUN_ROLES, (id) => {
-      const d = FIREARMS.find((f) => f.id === id);
-      return d ? { name: d.name, price: d.price, inUse: GameState.data.armory.loadout.indexOf(d.id) } : null;
+  private drawRack(): void {
+    const g = this.add.graphics();
+    this.root.add(g);
+    // 洞洞板：木框、深色板面、整齊的小洞
+    g.fillStyle(0x4a3524, 1).fillRect(RACK_X, RACK_Y, RACK_W, RACK_H);
+    g.fillStyle(0x2b2f36, 1).fillRect(RACK_X + 4, RACK_Y + 4, RACK_W - 8, RACK_H - 8);
+    g.fillStyle(0x1b1e23, 1);
+    for (let y = RACK_Y + 9; y < RACK_Y + RACK_H - 6; y += 8) for (let x = RACK_X + 9; x < RACK_X + RACK_W - 6; x += 8) g.fillRect(x, y, 1, 1);
+    // 頂燈
+    g.fillStyle(0xf5d76e, 0.05).fillRect(RACK_X + 4, RACK_Y + 4, RACK_W - 8, 40);
+
+    const inner = RACK_W - 16;
+    const slotW = Math.floor((inner - (GUN_COLS - 1) * 6) / GUN_COLS);
+    this.text(RACK_X + 8, RACK_Y + 6, '槍械', 7, '#b0bec5');
+    FIREARMS.forEach((d, i) => {
+      const col = i % GUN_COLS;
+      const row = Math.floor(i / GUN_COLS);
+      const x = RACK_X + 8 + col * (slotW + 6);
+      const y = RACK_Y + 16 + row * (GUN_SLOT_H + 3);
+      const idx = GameState.data.armory.loadout.indexOf(d.id);
+      this.slot(x, y, slotW, GUN_SLOT_H, d.id, d.name, idx >= 0 ? `${idx + 1}` : '');
     });
-    const d = FIREARMS.find((f) => f.id === this.selected) ?? FIREARMS[0];
-    this.gunDetail(d);
-  }
-
-  private drawMelee(): void {
-    this.roleGrid(MELEE_ROLES, (id) => {
-      const m = MELEE.find((x) => x.id === id);
-      return m ? { name: m.name, price: m.price, inUse: GameState.data.armory.melee === m.id ? 0 : -1 } : null;
-    });
-    const m = MELEE.find((d) => d.id === this.selected) ?? MELEE[0];
-    this.meleeDetail(m);
-  }
-
-  /** 左側：每一列是一種用途（色條＋用途名＋一句話），後面排這個用途的武器卡 */
-  private roleGrid(roles: RoleGroup[], info: (id: string) => { name: string; price: number; inUse: number } | null): void {
-    const st = GameState.data;
-    const top = PY + 30;
-    const rowH = Math.min(52, Math.floor((PH - 30 - 30) / roles.length));
-    roles.forEach((r, i) => {
-      const y = top + i * rowH;
-      // 用途標籤
-      this.root.add(this.add.rectangle(PX + 8, y, 3, rowH - 6, r.color).setOrigin(0));
-      this.text(PX + 15, y + 2, r.name, 9, '#' + r.color.toString(16).padStart(6, '0'));
-      wrapCJK(this.text(PX + 15, y + 16, r.when, 7, '#90a4ae'), ROLE_W - 14);
-      r.ids.forEach((id, k) => {
-        const w = info(id);
-        if (!w) return;
-        const x = PX + 8 + ROLE_W + k * (CARD_W + 4);
-        const owned = GameState.owns(id);
-        const locked = !GameState.inShop(id);
-        const tag = w.inUse >= 0 ? (this.tab === 'guns' ? `上場 ${w.inUse + 1}` : '裝備中') : owned ? (GameState.crewHolder(id) ? `${GameState.crewHolder(id)!.name} 拿著` : '擁有') : locked ? '未進貨' : `${w.price} 廢料`;
-        const color = w.inUse >= 0 ? '#9ad17a' : owned ? '#c8c8c8' : locked ? '#6b7280' : st.scrap >= w.price ? '#f5d76e' : '#ff6b6b';
-        this.card(x, y, rowH - 6, id, w.name, tag, color, id === this.selected, locked && !owned, () => {
-          this.selected = id;
-          this.redraw();
-        });
-      });
+    const gunRows = Math.ceil(FIREARMS.length / GUN_COLS);
+    const my = RACK_Y + 16 + gunRows * (GUN_SLOT_H + 3) + 6;
+    // 近戰架：橫木一條
+    g.fillStyle(0x4a3524, 1).fillRect(RACK_X + 4, my - 4, RACK_W - 8, 2);
+    this.text(RACK_X + 8, my - 1, '近戰', 7, '#b0bec5');
+    const mw = Math.floor((inner - (MELEE.length - 1) * 4) / MELEE.length);
+    MELEE.forEach((m, i) => {
+      const x = RACK_X + 8 + i * (mw + 4);
+      this.slot(x, my + 9, mw, Math.min(MELEE_SLOT_H, RACK_Y + RACK_H - my - 14), m.id, m.name, GameState.data.armory.melee === m.id ? '近戰' : '');
     });
   }
 
-  private card(x: number, y: number, h: number, id: string, name: string, tag: string, tagColor: string, active: boolean, dim: boolean, onPress: () => void): void {
-    const bg = this.add
-      .rectangle(x, y, CARD_W, h, active ? 0x3a3320 : 0x1a1d24, 0.95)
+  /**
+   * 陳列架上的一格：擁有的武器掛在兩根掛鉤上；還沒撿到的只剩黑色剪影和問號。
+   * badge：帶上場的編號（槍）或「近戰」。
+   */
+  private slot(x: number, y: number, w: number, h: number, id: string, name: string, badge: string): void {
+    const owned = GameState.owns(id);
+    const active = id === this.selected;
+    const holder = GameState.crewHolder(id);
+    const zone = this.add
+      .rectangle(x, y, w, h, 0xffffff, active ? 0.08 : 0)
       .setOrigin(0)
-      .setStrokeStyle(1, active ? 0xf5d76e : 0xffffff, active ? 0.8 : 0.08)
+      .setStrokeStyle(1, active ? 0xf5d76e : 0xffffff, active ? 0.8 : 0.05)
       .setInteractive({ useHandCursor: true });
-    bg.on('pointerover', () => !active && bg.setFillStyle(0x262a34, 0.95));
-    bg.on('pointerout', () => !active && bg.setFillStyle(0x1a1d24, 0.95));
-    bg.on('pointerdown', (_p: unknown, _x: number, _y: number, e: Phaser.Types.Input.EventData) => {
+    zone.on('pointerover', () => !active && zone.setFillStyle(0xffffff, 0.04));
+    zone.on('pointerout', () => !active && zone.setFillStyle(0xffffff, 0));
+    zone.on('pointerdown', (_p: unknown, _x: number, _y: number, e: Phaser.Types.Input.EventData) => {
       e.stopPropagation();
       AudioManager.ui('tap');
-      this.time.delayedCall(0, onPress);
+      this.time.delayedCall(0, () => {
+        this.selected = id;
+        this.redraw();
+      });
     });
-    this.root.add(bg);
-    const icon = this.icon(x + CARD_W / 2, y + 10, id, 1);
-    if (dim) icon.setTint(0x555a66);
-    this.text(x + CARD_W / 2, y + h - 25, name, 8, dim ? '#8a8f99' : '#ffffff').setOrigin(0.5, 0);
-    this.text(x + CARD_W / 2, y + h - 12, tag, 7, tagColor).setOrigin(0.5, 0);
+    this.root.add(zone);
+
+    const key = `wpn_${id}_icon`;
+    const cx = x + w / 2;
+    const cy = y + (h - 10) / 2 + 1;
+    if (this.textures.exists(key)) {
+      const tex = this.textures.get(key).getSourceImage() as HTMLCanvasElement;
+      const s = Math.max(1, Math.min(2, Math.floor((w - 10) / tex.width), Math.floor((h - 12) / tex.height)));
+      if (owned) {
+        // 掛鉤
+        const g = this.add.graphics();
+        g.fillStyle(0x8d9097, 1);
+        g.fillRect(cx - (tex.width * s) / 4, cy - (tex.height * s) / 2 - 2, 2, 4);
+        g.fillRect(cx + (tex.width * s) / 4, cy - (tex.height * s) / 2 - 2, 2, 4);
+        this.root.add(g);
+        this.root.add(this.add.image(cx + 1, cy + 2, key).setScale(s).setTintFill(0x000000).setAlpha(0.4));
+        const img = this.add.image(cx, cy, key).setScale(s);
+        // 拿在隊員手上：架上只剩淡淡的影子
+        if (holder) img.setAlpha(0.35);
+        this.root.add(img);
+      } else {
+        this.root.add(this.add.image(cx, cy, key).setScale(s).setTintFill(0x0e1014).setAlpha(0.9));
+        this.text(cx, cy - 5, '？', 9, '#5a606b').setOrigin(0.5, 0);
+      }
+    }
+    const label = owned ? (holder ? `${name}（${holder.name}）` : name) : '？？？';
+    this.text(cx, y + h - 10, label, 7, owned ? (badge ? '#9ad17a' : '#d0d4da') : '#5a606b').setOrigin(0.5, 0);
+    if (badge) {
+      const t = pixelText(this, 0, 0, badge, 7, '#10140c');
+      const bw = t.width + 6;
+      this.root.add(this.add.rectangle(x + 2, y + 2, bw, 11, 0x9ad17a, 1).setOrigin(0));
+      t.setPosition(x + 5, y + 2);
+      this.root.add(t);
+    }
   }
 
-  /** 右側：大圖、用途一句話、星等、特性標籤、按鈕 */
-  private detailHeader(id: string, name: string, sub: string, desc: string, role?: RoleGroup): { x: number; y: number; w: number } {
+  /** 右側：展示大圖、名稱、說明 */
+  private detailHeader(id: string, name: string, sub: string, desc: string): { x: number; y: number; w: number } {
     const x = PX + PW - DETAIL_W - 8;
     const w = DETAIL_W;
     this.root.add(this.add.rectangle(x - 6, PY + 28, w + 10, PH - 56, 0x13161d, 0.95).setOrigin(0).setStrokeStyle(1, 0xffffff, 0.08));
     let y = PY + 32;
-    this.showcase(x + w, y, id, w);
+    const owned = GameState.owns(id);
+    this.showcase(x + w, y, id, w, !owned);
     y += 50;
-    const nm = this.text(x, y, name, 11, '#ffffff');
+    const nm = this.text(x, y, name, 11, owned ? '#ffffff' : '#9aa0aa');
     this.text(x + nm.width + 6, y + 4, sub, 7, '#90a4ae');
     y += 17;
-    const t = wrapCJK(this.text(x, y, desc, 8, '#c8c8c8').setLineSpacing(2), w);
+    const t = wrapCJK(this.text(x, y, desc, 8, owned ? '#c8c8c8' : '#8a9099').setLineSpacing(2), w);
     y += t.height + 6;
-    if (role) {
-      const c = '#' + role.color.toString(16).padStart(6, '0');
-      const r = wrapCJK(this.text(x, y, `用途｜${role.name}：${role.when}`, 7, c), w);
-      y += r.height + 6;
-    }
     return { x, y, w };
   }
 
@@ -291,11 +323,15 @@ export class ArmoryScene extends Phaser.Scene {
     return cy + 14;
   }
 
+  /** 還沒撿到：按鈕位置改成「在哪裡撿得到」 */
+  private whereHint(x: number, y: number, w: number, where: string): void {
+    this.root.add(this.add.rectangle(x, y, w, 24, 0x1d2027, 1).setOrigin(0).setStrokeStyle(1, 0xffd180, 0.35));
+    wrapCJK(this.text(x + 6, y + 3, `在「${where}」撿得到`, 7, '#ffd180'), w - 12);
+  }
+
   private gunDetail(d: FirearmDef): void {
     const st = GameState.data;
-    const role = GUN_ROLES.find((r) => r.ids.includes(d.id));
-    let { x, y, w } = this.detailHeader(d.id, d.name, d.model, d.desc, role);
-    // 星等兩欄
+    let { x, y, w } = this.detailHeader(d.id, d.name, d.model, d.desc);
     this.pips(x, y, '威力', (d.damage * d.pellets) / MAX.dmg);
     this.pips(x + w / 2, y, '火力', dps(d) / MAX.dps);
     this.pips(x, y + 12, '射程', Math.min(d.range, d.falloffEnd) / MAX.range);
@@ -304,26 +340,22 @@ export class ArmoryScene extends Phaser.Scene {
     const reserve = d.infiniteReserve && !st.armory.finitePistol ? '無限' : `${st.armory.ammo[d.ammo]}`;
     y = this.chips(x, y, w, gunTags(d));
     this.text(x, y + 2, `彈匣 ${d.magazine}　${AMMO[d.ammo].name}　備彈 ${reserve}`, 7, '#90a4ae');
+    if (d.scope) this.text(x, y + 14, this.sys.game.device.input.touch ? '「瞄準」鍵開鏡，游標推到畫面邊緣看整張地圖' : 'Z 鍵開鏡，游標推到畫面邊緣看整張地圖', 7, '#ffd180');
     const by = PY + PH - 58;
-    const owned = GameState.owns(d.id);
-    if (!owned) {
-      const locked = !GameState.inShop(d.id);
-      const ok = !locked && st.scrap >= d.price;
-      this.button(x, by, w, 24, locked ? weaponUnlockHint(d.id) : `購買　${d.price} 廢料`, ok, () => {
-        if (GameState.buyWeapon(d.id)) AudioManager.ui('confirm');
-        this.changed();
-      });
+    if (!GameState.owns(d.id)) {
+      this.whereHint(x, by, w, d.found.where);
       return;
     }
     const inLoadout = st.armory.loadout.includes(d.id);
     const crewHolder = GameState.crewHolder(d.id);
     const canAdd = st.armory.loadout.length < MAX_GUNS && !crewHolder;
     const label = inLoadout
-      ? st.armory.loadout.length > 1 ? '卸下' : '至少要帶一把槍'
+      ? st.armory.loadout.length > 1 ? '從身上卸下' : '至少要帶一把槍'
       : crewHolder ? `${crewHolder.name} 拿著，先到名冊收回`
       : canAdd ? '帶上場' : `最多帶 ${MAX_GUNS} 把，先卸下一把`;
     this.button(x, by, w, 24, label, inLoadout ? st.armory.loadout.length > 1 : canAdd, () => {
       GameState.toggleLoadout(d.id);
+      AudioManager.ui('confirm');
       this.changed();
     });
   }
@@ -331,67 +363,71 @@ export class ArmoryScene extends Phaser.Scene {
   private meleeDetail(m: MeleeDef): void {
     const st = GameState.data;
     const swing = m.windup + m.active + m.recovery;
-    let { x, y, w } = this.detailHeader(m.id, m.name, m.damageType === 'blunt' ? '鈍器' : '刀刃', m.desc, MELEE_ROLES.find((r) => r.ids.includes(m.id)));
+    let { x, y, w } = this.detailHeader(m.id, m.name, m.damageType === 'blunt' ? '鈍器' : '刀刃', m.desc);
     this.pips(x, y, '傷害', m.damage / MAX.melee);
     this.pips(x + w / 2, y, '出手', Phaser.Math.Clamp(1 - (swing - 0.25) / 0.9, 0.05, 1));
     this.pips(x, y + 12, '範圍', m.arc / 160);
     this.pips(x + w / 2, y + 12, '省力', 1 - m.stamina / 45);
     y += 28;
-    const tags: [string, number][] = [];
-    if (m.maxTargets >= 3) tags.push([`一次掃 ${m.maxTargets} 隻`, TAG.crowd]);
-    else tags.push(['單體', TAG.neutral]);
-    if (m.knockback >= 24) tags.push(['擊飛', TAG.control]);
-    if (m.stagger >= 0.6) tags.push(['打暈', TAG.control]);
-    if (m.penetration >= 0.5) tags.push(['破頭盔', TAG.pierce]);
-    if (m.staggerBonus > 1) tags.push(['處決暈眩', TAG.power]);
-    if (m.steps) tags.push([`${m.steps.length} 段連擊`, TAG.speed]);
-    else if (m.comboEvery > 1) tags.push([`${m.comboEvery} 連砍`, TAG.speed]);
-    if (m.heft > 0 && !m.steps) tags.push(['每下重新掄', TAG.warn]);
-    if (swing <= 0.4) tags.push(['出手快', TAG.speed]);
-    if (swing >= 0.9) tags.push(['起手慢', TAG.warn]);
-    y = this.chips(x, y, w, tags);
-    this.text(x, y + 2, this.sys.game.device.input.touch ? '「近戰」鍵快揮，「持刀」切成近戰模式，按住連續揮' : '右鍵／V／E 快揮，4／X 切成近戰模式，按住連續揮', 7, '#90a4ae');
+    y = this.chips(x, y, w, meleeTags(m));
+    const touch = this.sys.game.device.input.touch;
+    const how = m.charge
+      ? touch ? '按住「近戰」蓄力、放開一閃；點一下是一般連段' : '按住右鍵／V／E 蓄力、放開一閃；點一下是一般連段'
+      : touch ? '「近戰」鍵快揮，「持刀」切成近戰模式，按住連續揮' : '右鍵／V／E 快揮，4／X 切成近戰模式，按住連續揮';
+    wrapCJK(this.text(x, y + 2, how, 7, '#90a4ae'), w);
     const by = PY + PH - 58;
     if (!GameState.owns(m.id)) {
-      const locked = !GameState.inShop(m.id);
-      const ok = !locked && st.scrap >= m.price;
-      this.button(x, by, w, 24, locked ? weaponUnlockHint(m.id) : `購買　${m.price} 廢料`, ok, () => {
-        if (GameState.buyWeapon(m.id)) {
-          GameState.equipMelee(m.id);
-          AudioManager.ui('confirm');
-        }
-        this.changed();
-      });
+      this.whereHint(x, by, w, m.found.where);
       return;
     }
     const eq = st.armory.melee === m.id;
     const holder = GameState.crewHolder(m.id);
     this.button(x, by, w, 24, eq ? '裝備中' : holder ? `${holder.name} 拿著，先到名冊收回` : '裝備', !eq && !holder, () => {
       GameState.equipMelee(m.id);
+      AudioManager.ui('confirm');
       this.changed();
     });
   }
 
-  // ── 彈藥 ──────────────────────────────────────────────
+  // ── 商店：只賣彈藥和物資 ─────────────────────────────
 
-  private drawAmmo(): void {
+  private drawShop(): void {
     const st = GameState.data;
     const x = PX + 12;
-    const w = PW - 24;
-    this.text(x, PY + 32, st.armory.finitePistol ? '你的 M1911 是撿來的，子彈要自己買。彈匣裡剩的天亮會退回備彈。' : 'M1911 備彈無限。其他槍的子彈要在這裡買，彈匣裡剩的天亮會退回備彈。', 8, '#90a4ae');
+    const colW = (PW - 36) / 2;
+    this.text(x, PY + 32, '商店只賣彈藥和物資。武器要自己去找，撿到的會掛上陳列架。', 8, '#90a4ae');
+    this.text(x, PY + 46, '彈藥', 9, '#f5d76e');
     (Object.keys(AMMO) as AmmoType[]).forEach((t, i) => {
       const a = AMMO[t];
-      const y = PY + 52 + i * 34;
+      const y = PY + 60 + i * 30;
       const have = st.armory.ammo[t];
-      const users = FIREARMS.filter((d) => d.ammo === t && (!d.infiniteReserve || st.armory.finitePistol)).map((d) => d.name);
-      this.root.add(this.add.rectangle(x, y, w, 30, 0x1a1d24, 0.9).setOrigin(0));
-      this.text(x + 8, y + 3, a.name, 9, '#ffffff');
-      this.text(x + 8, y + 17, users.join('、'), 7, '#90a4ae');
-      this.text(x + 260, y + 9, `${have} / ${a.max}`, 9, have === 0 ? '#ff6b6b' : '#e8e8e8');
+      const users = FIREARMS.filter((d) => d.ammo === t && (!d.infiniteReserve || st.armory.finitePistol)).map((d) => (GameState.owns(d.id) ? d.name : '？？？'));
+      this.root.add(this.add.rectangle(x, y, colW, 27, 0x1a1d24, 0.9).setOrigin(0));
+      this.text(x + 6, y + 2, a.name, 8, '#ffffff');
+      this.text(x + 6, y + 15, users.join('、'), 7, '#90a4ae');
+      this.text(x + 110, y + 8, `${have}/${a.max}`, 8, have === 0 ? '#ff6b6b' : '#e8e8e8');
       const full = have >= a.max;
       const ok = !full && st.scrap >= a.price;
-      this.button(x + w - 150, y + 4, 142, 22, full ? '已滿' : `買 ${a.box} 發　${a.price} 廢料`, ok, () => {
+      this.button(x + colW - 104, y + 3, 100, 21, full ? '已滿' : `${a.box} 發　${a.price} 廢料`, ok, () => {
         if (GameState.buyAmmo(t) > 0) AudioManager.ui('confirm');
+        this.changed();
+      });
+    });
+
+    const sx = x + colW + 12;
+    this.text(sx, PY + 46, '物資', 9, '#f5d76e');
+    (Object.keys(SUPPLIES) as SupplyId[]).forEach((id, i) => {
+      const s = SUPPLIES[id];
+      const price = SUPPLY_PRICE[id];
+      const y = PY + 60 + i * 44;
+      const have = st.supplies[id];
+      this.root.add(this.add.rectangle(sx, y, colW, 40, 0x1a1d24, 0.9).setOrigin(0));
+      this.text(sx + 6, y + 3, `${s.name}　${have}/${s.max}`, 8, '#ffffff');
+      wrapCJK(this.text(sx + 6, y + 16, s.desc, 7, '#90a4ae'), colW - 118);
+      const full = have >= s.max;
+      const ok = !full && st.scrap >= price;
+      this.button(sx + colW - 104, y + 9, 100, 21, full ? '已滿' : `買 1 個　${price} 廢料`, ok, () => {
+        if (GameState.buySupply(id)) AudioManager.ui('confirm');
         this.changed();
       });
     });
@@ -407,21 +443,23 @@ export class ArmoryScene extends Phaser.Scene {
       return `${i + 1} ${d ? d.name : '—'}`;
     }).join('　');
     const melee = MELEE.find((m) => m.id === st.armory.melee)?.name ?? '—';
+    const found = [...FIREARMS, ...MELEE].filter((w) => GameState.owns(w.id)).length;
     this.text(PX + 10, y + 2, `今晚帶上場：${guns}　｜　近戰 ${melee}`, 8, '#f5d76e');
+    this.text(PX + PW - 10, y + 2, `收集 ${found}/${FIREARMS.length + MELEE.length}`, 8, '#90a4ae').setOrigin(1, 0);
   }
 
   // ── 小元件 ────────────────────────────────────────────
 
   /**
-   * 詳細頁右上的展示架：深色泡棉襯底＋洞洞板，武器放大 3 倍、底下有影子（右上角對齊 x, y）。
-   * 回傳展示架寬度，讓說明文字讓開。
+   * 詳細頁右上的展示框：深色泡棉襯底＋洞洞板，武器放大、底下有影子（右上角對齊 x, y）。
+   * silhouette：還沒撿到，只畫黑色剪影。
    */
-  private showcase(x: number, y: number, id: string, boxW?: number): number {
+  private showcase(x: number, y: number, id: string, boxW: number, silhouette: boolean): void {
     const key = `wpn_${id}_icon`;
-    if (!this.textures.exists(key)) return 0;
+    if (!this.textures.exists(key)) return;
     const tex = this.textures.get(key).getSourceImage() as HTMLCanvasElement;
-    const s = boxW ? Math.max(2, Math.min(4, Math.floor((boxW - 16) / tex.width), Math.floor(30 / tex.height))) : tex.width > 34 ? 2 : 3;
-    const w = boxW ?? tex.width * s + 16;
+    const s = Math.max(1, Math.min(4, Math.floor((boxW - 16) / tex.width), Math.floor(30 / tex.height)));
+    const w = boxW;
     const h = Math.max(44, tex.height * s + 14);
     const left = x - w;
     const g = this.add.graphics();
@@ -435,19 +473,12 @@ export class ArmoryScene extends Phaser.Scene {
     g.fillStyle(0xf5d76e, 0.05).fillRect(left + 3, y + 3, w - 6, Math.round(h / 3));
     const cx = left + w / 2;
     const cy = y + h / 2;
-    const shadow = this.add.image(cx + 2, cy + 3, key).setScale(s).setTintFill(0x000000).setAlpha(0.45);
-    this.root.add(shadow);
+    if (silhouette) {
+      this.root.add(this.add.image(cx, cy, key).setScale(s).setTintFill(0x0e1014));
+      return;
+    }
+    this.root.add(this.add.image(cx + 2, cy + 3, key).setScale(s).setTintFill(0x000000).setAlpha(0.45));
     this.root.add(this.add.image(cx, cy, key).setScale(s));
-    return w;
-  }
-
-  /** 武器圖示（WeaponArt 產生的 wpn_<id>_icon），沒有圖就給個空的佔位 */
-  private icon(x: number, y: number, id: string, scale = 1): Phaser.GameObjects.Image {
-    const key = `wpn_${id}_icon`;
-    const img = this.add.image(x, y, this.textures.exists(key) ? key : '__MISSING').setScale(scale);
-    if (!this.textures.exists(key)) img.setVisible(false);
-    this.root.add(img);
-    return img;
   }
 
   private text(x: number, y: number, s: string, size: number, color: string): Phaser.GameObjects.Text {
@@ -460,5 +491,4 @@ export class ArmoryScene extends Phaser.Scene {
     // 動作會重建整個面板：uiButton 會等這次點擊處理完再做
     this.root.add(uiButton(this, x, y, w, h, label, onPress, { enabled, fill }));
   }
-
 }

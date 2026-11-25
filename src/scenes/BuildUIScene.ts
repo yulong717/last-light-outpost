@@ -73,7 +73,7 @@ export class BuildUIScene extends Phaser.Scene {
 
     this.button(GAME_WIDTH - 104, 2, 100, 22, '開始夜晚 ▶', true, () => this.onStartNight(), 0x7a2a22);
     this.button(GAME_WIDTH - 172, 2, 62, 22, `隊伍 ${GameState.data.crew.length}`, true, () => this.toggleRoster());
-    // 軍械庫：買槍、買彈、配置上場武器
+    // 軍械庫：陳列架配置上場武器、商店買彈藥和物資
     this.button(GAME_WIDTH - 240, 2, 62, 22, '軍械庫', true, () => this.openArmory(), 0x3a4a2a);
     // 白天出發：回到路線圖（今天還有時間、還沒決定在這裡過夜才能出發）
     const route = GameState.data.route;

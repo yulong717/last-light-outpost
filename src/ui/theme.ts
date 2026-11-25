@@ -347,6 +347,17 @@ const ICONS: Record<string, string[]> = {
   shellEmpty: ['.kk.', 'kddk', 'kddk', 'kddk', 'kddk', 'kddk', 'kkkk'],
   pip: ['kkkk', 'kyyk', 'kOOk', 'kkkk'],
   pipEmpty: ['kkkk', 'kddk', 'kddk', 'kkkk'],
+  scope: [
+    '...kkk...',
+    '.kkwkwkk.',
+    '.kw.k.wk.',
+    'kw..k..wk',
+    'kkkkrkkkk',
+    'kw..k..wk',
+    '.kw.k.wk.',
+    '.kkwkwkk.',
+    '...kkk...',
+  ],
   moon: [
     '..kkkk..',
     '.kSSkk..',

@@ -1,3 +1,5 @@
+import { ScopeView } from '../systems/ScopeView';
+import { BoltPickups } from '../systems/BoltPickups';
 import { illustrationFor } from '../art/IllustrationArt';
 import { heroRigColors } from '../art/HeroArt';
 import { barricadeKey } from '../art/ProceduralArt';
@@ -14,6 +16,7 @@ import {
   floorOf,
   setFloors,
   setSingleLane,
+  clampLaneY,
 } from '../config';
 import { barricadeFloors, getOutpostMap, type FloorsDef } from '../data/scenery';
 import { FLOORS_PAD, drawFloorsStructure, drawHouseStructure } from '../scenery/FloorsStructure';
@@ -203,6 +206,9 @@ export class DefenseScene extends Phaser.Scene {
   private scrapEarned = 0;
   private camFeel!: CameraFeel;
   private crosshair!: Crosshair;
+  /** 巴雷特的狙擊鏡、十字弓射出去的箭（入夜才建立） */
+  private scope?: ScopeView;
+  private bolts?: BoltPickups;
   private screenFx!: ScreenFeedback;
   private scenery!: SceneryResult;
   /** 戰場上的油桶、車、木箱、路燈 */
@@ -557,6 +563,8 @@ export class DefenseScene extends Phaser.Scene {
     this.input2 = new InputManager(this, { x: this.player.footX + 200, y: this.player.footY - 30 });
     // 準星會隱藏滑鼠游標，白天要點槽位，所以入夜才建立
     this.crosshair = new Crosshair(this);
+    this.scope = new ScopeView(this, this.weapons);
+    this.bolts = new BoltPickups(this, this.weapons, armory.ammo, () => this.player.footY - this.rig.muzzle.y, clampLaneY);
     this.companions.active = true;
     if (tutorial) {
       // 教學中不會倒下：任何傷害最多打到剩 1 血
@@ -1050,6 +1058,9 @@ export class DefenseScene extends Phaser.Scene {
     this.updateRig(dt, inp.aimX, inp.aimY);
     const muzzleX = this.rig.muzzle.x;
     const muzzleY = this.rig.muzzle.y;
+    // 狙擊鏡：開鏡時鏡頭跟著準星平移到整張地圖（爬樓梯中不能開鏡）
+    this.scope?.update(Math.min(deltaMs / 1000, 0.05), inp.scopeToggle, p.alive && melee.gunAllowed && !this.climb && !this.weapons.unarmed, p.footX, inp.aimX, inp.aimY);
+    this.bolts?.update(p.footX, p.footY);
     const shot = p.alive && melee.gunAllowed && !this.climb
       ? this.weapons.tryFire(muzzleX, muzzleY, inp.aimX, inp.aimY, inp.fireHeld, inp.firePressed, this.zombies, p.moveFactor)
       : null;
@@ -1276,6 +1287,8 @@ export class DefenseScene extends Phaser.Scene {
     if (survived) {
       // 地上還沒撿的掉落物：天亮後收回據點
       this.drops.collectAll(this.player.footX, this.player.footY);
+      // 十字弓的箭：天亮後把插在地上、屍體上的都撿回來
+      this.bolts?.collectAll();
       GameState.data.scrap += ECONOMY.nightBonus;
       this.scrapEarned += ECONOMY.nightBonus;
       // 拾荒好手：多帶回一點廢料

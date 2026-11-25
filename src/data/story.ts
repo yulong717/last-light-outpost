@@ -5,7 +5,7 @@ import type { HeroId } from './heroes';
 /**
  * 主線進程：開局只有主角一人，靠白天探索一章一章找到夥伴、槍械與新區域。
  * 每一章指定一個區域，走到該區最後一站時，大獎換成這章的劇情事件；
- * 事件成功後平安回到據點，這章就算完成：拿到固定獎勵、開放新區域、軍械庫進新貨。
+ * 事件成功後平安回到據點，這章就算完成：拿到固定獎勵、開放新區域。
  * 流程與數值說明見 docs/PROGRESSION.md。
  */
 
@@ -39,13 +39,8 @@ export interface Chapter {
   outro: string[];
   /** 完成後開放的區域 */
   openZones: string[];
-  /** 完成後軍械庫可以用廢料買的武器 */
-  shop: string[];
 }
 
-/** 新遊戲一開始就能去的區域 */
-/** 新遊戲軍械庫就有賣的武器（主角身上的不用列） */
-export const START_SHOP: string[] = ['bat'];
 /** 第一章完成後一起開放的區域（三位主角共用） */
 const AFTER_OPENING = ['gas', 'homes', 'market', 'school', 'downtown', 'nightmarket'];
 
@@ -129,7 +124,6 @@ export const OPENINGS: Record<HeroId, Chapter> = {
     reward: { supplies: { medkit: 2, decoy: 1 }, scrap: 25 },
     outro: ['回到據點，你把藥排在桌上。', '收音機突然傳來敲擊聲：住宅區那邊，好像有人在用手電筒打信號。'],
     openZones: AFTER_OPENING,
-    shop: ['machete'],
   },
   soldier: {
     title: '第一章　回到爆發點',
@@ -167,7 +161,6 @@ export const OPENINGS: Record<HeroId, Chapter> = {
     reward: { ammo: { '556': 60 }, supplies: { medkit: 1 }, scrap: 15 },
     outro: ['無線電的電池只剩一格。', '在一片雜訊裡，你聽到住宅區方向傳來的求救：三短、三長、三短。'],
     openZones: AFTER_OPENING,
-    shop: ['machete'],
   },
   lucky: {
     id: 'open-market',
@@ -206,7 +199,6 @@ export const OPENINGS: Record<HeroId, Chapter> = {
     reward: { ammo: { '357': 24 }, supplies: { lockpick: 1 }, scrap: 40 },
     outro: ['頭獎兌不了現了，但你還是把彩券收進皮夾。', '回程經過住宅區時，你看到二樓窗邊有手電筒在閃。'],
     openZones: AFTER_OPENING,
-    shop: ['machete'],
   },
 };
 
@@ -259,7 +251,6 @@ export const CHAPTERS: Chapter[] = [
     reward: { named: [{ role: 'shooter', name: '阿哲' }], weapons: ['python'], ammo: { '357': 24 } },
     outro: ['阿哲說他知道社區超市後面有個倉庫，保全室裡可能還有槍。', '從今晚起，守夜的不只你一個了。'],
     openZones: [],
-    shop: ['coach', 'axe'],
   },
   {
     id: 'warehouse',
@@ -271,7 +262,7 @@ export const CHAPTERS: Chapter[] = [
     finale: {
       id: 'story-warehouse',
       title: '倉庫鐵捲門',
-      text: '保全室的鐵捲門卡住了，只開了一條縫。縫裡看得到一把雷明頓 870 靠在牆邊。四周的貨架後面傳來拖步聲。',
+      text: '保全室的鐵捲門卡住了，只開了一條縫。縫裡看得到一把雙管獵槍掛在牆上。四周的貨架後面傳來拖步聲。',
       weight: 0,
       options: [
         {
@@ -280,7 +271,7 @@ export const CHAPTERS: Chapter[] = [
           action: {
             type: 'qte',
             qte: { kind: 'mash', prompt: '連打把鐵捲門撐上去！', count: 18, time: 3.4 },
-            success: { text: '鐵捲門嘎啦嘎啦地升起。雷明頓 870、整箱霰彈，還有保全的急救箱。', story: true, noise: 15 },
+            success: { text: '鐵捲門嘎啦嘎啦地升起。雙管獵槍、整箱霰彈，還有保全的急救箱。', story: true, noise: 15 },
             fail: { text: '鐵捲門砸回地上，整間超市的霧屍都朝這裡湧來。你只能先撤。', noise: 40, hurt: 10 },
           },
         },
@@ -290,15 +281,14 @@ export const CHAPTERS: Chapter[] = [
           action: {
             type: 'field',
             field: { mode: 'fight', goal: 'survive', title: '撐 25 秒，等鐵捲門被撬開', zombies: 5, seconds: 25 },
-            success: { text: '門開了。雷明頓 870 還上著膛。', story: true, noise: 15 },
+            success: { text: '門開了。雙管獵槍兩根槍管都上著膛。', story: true, noise: 15 },
           },
         },
       ],
     },
-    reward: { weapons: ['r870'], ammo: { '12ga': 30 }, supplies: { medkit: 2 } },
+    reward: { weapons: ['coach'], ammo: { '12ga': 30 }, supplies: { medkit: 2 } },
     outro: ['倉庫的收音機收到一段斷斷續續的廣播：「這裡是市立醫院……還有人……藥局……」', '醫院離這裡很遠，要花半天。'],
     openZones: ['hospital'],
-    shop: ['mp5'],
   },
   {
     id: 'hospital',
@@ -333,7 +323,6 @@ export const CHAPTERS: Chapter[] = [
     reward: { named: [{ role: 'medic', name: '林醫師' }], supplies: { medkit: 3 }, ammo: { '9mm': 60 } },
     outro: ['林醫師說，霧剛來時警察局把所有人的槍都收進了證物室。', '「拘留室裡還關著一個修車的，叫老周。」她頓了一下，「希望他還在。」'],
     openZones: ['police'],
-    shop: ['sledge', 'm1014'],
   },
   {
     id: 'precinct',
@@ -368,7 +357,6 @@ export const CHAPTERS: Chapter[] = [
     reward: { named: [{ role: 'engineer', name: '老周' }], weapons: ['m4a1'], ammo: { '556': 90 }, supplies: { lockpick: 1 } },
     outro: ['老周翻著證物室的出勤紀錄：「軍方在城北設過檢查站，撤離失敗之後就沒人回來過。」', '「那裡有重武器，還有軍用無線電。」'],
     openZones: ['checkpoint'],
-    shop: ['ak47', 'm4a1'],
   },
   {
     id: 'checkpoint',
@@ -407,16 +395,5 @@ export const CHAPTERS: Chapter[] = [
     reward: { weapons: ['m249'], ammo: { '556': 120, '762': 40 }, supplies: { medkit: 2 } },
     outro: EPILOGUE.lines,
     openZones: [],
-    shop: ['mosin', 'm249'],
   },
 ];
-
-/** 還沒進貨的武器：說明要怎麼拿到（軍械庫用） */
-export function weaponUnlockHint(weaponId: string): string {
-  const i = CHAPTERS.findIndex((c) => c.reward.weapons?.includes(weaponId));
-  const j = CHAPTERS.findIndex((c) => c.shop.includes(weaponId));
-  const short = (k: number) => CHAPTERS[k].title.split('　')[0];
-  if (i >= 0 && (j < 0 || i <= j)) return `${short(i)}劇情取得`;
-  if (j >= 0) return `完成${short(j)}後進貨`;
-  return '探索中可能找到';
-}

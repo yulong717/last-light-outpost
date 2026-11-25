@@ -42,6 +42,8 @@ export function attachAudio(scene: Phaser.Scene): void {
     const d = getFirearm(id);
     if (d?.cls === 'revolver') return ['revolver_out', 'revolver_in'];
     if (d?.cls === 'lmg') return ['belt_open', 'belt_close'];
+    // 十字弓：拉弦上膛（栓動的拉栓聲借來用）、把箭卡上去
+    if (d?.cls === 'bow') return ['bolt', 'reload_in'];
     return ['break_open', 'break_close'];
   };
 

@@ -3,10 +3,10 @@ import { randomSeed } from '../utils/rng';
 import { BACKGROUND_BY_ID, canWield } from '../data/crewBody';
 import { BARRICADE_LEVELS, BUILDINGS, ECONOMY, type BuildingKind } from '../data/buildings';
 import { DAY_HOURS, getNode } from '../data/route';
-import { EXPLORE_TIME, SUPPLIES, ZONES, INTEL, type IntelKind, type Loot, type SupplyId } from '../data/explore';
-import { CHAPTERS, OPENINGS, START_SHOP, chaptersFor, startZones, type Chapter } from '../data/story';
+import { EXPLORE_TIME, SUPPLIES, SUPPLY_PRICE, ZONES, INTEL, type IntelKind, type Loot, type SupplyId } from '../data/explore';
+import { CHAPTERS, chaptersFor, startZones, type Chapter } from '../data/story';
 import { getHero, type HeroId } from '../data/heroes';
-import { AMMO, MAX_GUNS, START_LOADOUT, getFirearm, getMelee, getWeapon, type AmmoType } from '../data/weapons';
+import { AMMO, DUPLICATE_WEAPON_SCRAP, MAX_GUNS, START_LOADOUT, getFirearm, getMelee, getWeapon, type AmmoType } from '../data/weapons';
 
 /**
  * 跨場景的遊戲進度。之後白天探索、據點升級、存檔都會讀寫這裡。
@@ -63,14 +63,12 @@ export interface StoryProgress {
   chapter: number;
   /** 已開放的探索區域 */
   zones: string[];
-  /** 軍械庫有進貨、可以用廢料買的武器 */
-  shop: string[];
   /** 劇情開場播到哪：0 = 序章還沒看，1 = 看完序章，k + 2 = 第 k 章（0 起算）的開場看過了 */
   introSeen: number;
 }
 
 function freshStory(hero: HeroId): StoryProgress {
-  return { chapter: 0, zones: startZones(hero), shop: [...START_SHOP], introSeen: 0 };
+  return { chapter: 0, zones: startZones(hero), introSeen: 0 };
 }
 
 /** 舊存檔（主線之前）：當作主線已完成，全部開放，不打斷原本的進度 */
@@ -78,7 +76,6 @@ function finishedStory(): StoryProgress {
   return {
     chapter: CHAPTERS.length + 1,
     zones: ZONES.map((z) => z.id),
-    shop: [...START_SHOP, ...Object.values(OPENINGS).flatMap((c) => c.shop), ...CHAPTERS.flatMap((c) => c.shop)],
     introSeen: CHAPTERS.length + 3,
   };
 }
@@ -120,7 +117,7 @@ export interface SavedBuilding {
 }
 
 const SAVE_KEY = 'llo-save';
-const SAVE_VERSION = 3;
+const SAVE_VERSION = 4;
 
 function fresh(hero: HeroId = 'soldier'): GameStateData {
   const story = freshStory(hero);
@@ -202,18 +199,12 @@ class GameStateStore {
     return this.data.story.zones.includes(zoneId);
   }
 
-  /** 軍械庫有沒有進這把武器（主角已擁有的也算） */
-  inShop(weaponId: string): boolean {
-    return this.data.story.shop.includes(weaponId) || this.owns(weaponId);
-  }
-
-  /** 完成目前這一章：開放區域、軍械庫進貨。回傳完成的章節 */
+  /** 完成目前這一章：開放區域。回傳完成的章節 */
   completeChapter(): Chapter | undefined {
     const c = this.chapter;
     if (!c) return undefined;
     const st = this.data.story;
     for (const z of c.openZones) if (!st.zones.includes(z)) st.zones.push(z);
-    for (const w of c.shop) if (!st.shop.includes(w)) st.shop.push(w);
     st.chapter++;
     return c;
   }
@@ -349,7 +340,7 @@ class GameStateStore {
       const def = getWeapon(id);
       if (!def) continue;
       if (this.owns(id)) {
-        overflowScrap += Math.round(def.price * 0.3);
+        overflowScrap += DUPLICATE_WEAPON_SCRAP;
         continue;
       }
       d.armory.owned.push(id);
@@ -375,17 +366,6 @@ class GameStateStore {
     return this.data.armory.owned.includes(id);
   }
 
-  /** 買武器；買到槍且配置還有空位就自動帶上。回傳是否成功 */
-  buyWeapon(id: string): boolean {
-    const def = getWeapon(id);
-    const a = this.data.armory;
-    if (!def || this.owns(id) || this.data.scrap < def.price || !this.inShop(id)) return false;
-    this.data.scrap -= def.price;
-    a.owned.push(id);
-    if (def.kind === 'firearm' && a.loadout.length < MAX_GUNS) a.loadout.push(id);
-    return true;
-  }
-
   /** 買一盒彈藥；回傳實際買到幾發（滿了就 0） */
   buyAmmo(type: AmmoType): number {
     const def = AMMO[type];
@@ -396,6 +376,16 @@ class GameStateStore {
     this.data.scrap -= def.price;
     a.ammo[type] += n;
     return n;
+  }
+
+  /** 商店買一件物資（醫療包、開鎖工具、誘餌）；回傳是否成功 */
+  buySupply(id: SupplyId): boolean {
+    const def = SUPPLIES[id];
+    const price = SUPPLY_PRICE[id];
+    if (!def || this.data.supplies[id] >= def.max || this.data.scrap < price) return false;
+    this.data.scrap -= price;
+    this.data.supplies[id]++;
+    return true;
   }
 
   /** 槍帶上／卸下（至少留一把）。已經配給隊員的槍不能直接拿走，要先到名冊收回 */
@@ -477,13 +467,8 @@ class GameStateStore {
     try {
       const raw = localStorage.getItem(SAVE_KEY);
       if (!raw) return false;
-      const parsed = JSON.parse(raw) as GameStateData & { ammoReserve?: number };
-      // v2 → v3：舊存檔沒有軍械庫，補上起始配置
-      if (parsed.version === 2) {
-        delete parsed.ammoReserve;
-        parsed.armory = freshArmory('soldier');
-        parsed.version = SAVE_VERSION;
-      }
+      const parsed = JSON.parse(raw) as GameStateData;
+      // 開發中不做舊存檔轉換：版本不同就當作沒有存檔（v4：武器改版、商店不賣槍）
       if (parsed.version !== SAVE_VERSION) return false;
       if (!parsed.armory) parsed.armory = freshArmory('soldier');
       parsed.hero ??= 'soldier';

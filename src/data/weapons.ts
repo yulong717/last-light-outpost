@@ -6,14 +6,16 @@
  *   傷害與穿透依口徑相對大小換算成遊戲數值（霧屍 30 血為基準）。
  * - 手感差異來自「操作方式」而不只是數字：泵動要拉、栓動要拉栓、
  *   管狀彈倉一顆一顆塞（可以隨時開火打斷）、彈匣槍膛內留一發換彈較快。
- * - 平衡靠三件事：彈藥成本（白天用廢料買）、解鎖天數、負重（移動速度、換槍時間）。
- *   起始手槍備彈無限、近戰不耗彈，玩家永遠不會卡死。
+ * - 平衡靠三件事：彈藥成本（商店用廢料買）、取得地點（越強的槍藏在越危險的地方）、
+ *   負重（移動速度、換槍時間）。起始手槍備彈無限、近戰不耗彈，玩家永遠不會卡死。
+ * - 武器不能買，只能在指定的地點撿到（found），或靠劇情、隊員帶來。
+ *   商店只賣彈藥和物資；撿到的武器掛在軍械庫的陳列架上。
  */
 import type { CompanionGunDef } from './companions';
 import type { DamageType } from '../combat/Damage';
 
 /** 彈藥種類（實際口徑做了簡化合併，見 AMMO） */
-export type AmmoType = '9mm' | '357' | '556' | '762' | '12ga';
+export type AmmoType = '9mm' | '357' | '556' | '762' | '12ga' | '50' | 'bolt';
 
 export interface AmmoDef {
   id: AmmoType;
@@ -34,6 +36,10 @@ export const AMMO: Record<AmmoType, AmmoDef> = {
   '556': { id: '556', name: '5.56 步槍彈', box: 30, price: 12, start: 0, max: 400 },
   '762': { id: '762', name: '7.62 步槍彈', box: 20, price: 12, start: 0, max: 200 },
   '12ga': { id: '12ga', name: '12 號霰彈', box: 10, price: 10, start: 0, max: 80 },
+  // 巴雷特專用：又貴又少，一發要打穿一整排才划算
+  '50': { id: '50', name: '.50 BMG', box: 5, price: 18, start: 0, max: 30 },
+  // 十字弓的箭：射出去的箭可以走過去撿回來
+  bolt: { id: 'bolt', name: '十字弓箭', box: 6, price: 8, start: 0, max: 24 },
 };
 
 /**
@@ -53,7 +59,15 @@ export type FireAction = 'semi' | 'auto' | 'pump' | 'bolt';
  */
 export type ReloadStyle = 'magazine' | 'single' | 'whole';
 
-export type WeaponClass = 'pistol' | 'revolver' | 'smg' | 'rifle' | 'shotgun' | 'sniper' | 'lmg';
+export type WeaponClass = 'pistol' | 'revolver' | 'smg' | 'rifle' | 'shotgun' | 'sniper' | 'lmg' | 'bow';
+
+/** 武器在哪裡撿得到（探索區域 id 見 src/data/explore.ts 的 ZONES） */
+export interface WeaponSource {
+  /** 探索這一區的大獎第一次一定會找到（中途的戰利品也有機會）；沒寫 = 不會在探索中撿到 */
+  zone?: string;
+  /** 陳列架上空位的提示（「警察局的軍械室」） */
+  where: string;
+}
 
 export interface FirearmDef {
   kind: 'firearm';
@@ -116,7 +130,7 @@ export interface FirearmDef {
   perRound?: number;
   /** single：打空時，最後要拉一下泵動／槍栓的秒數 */
   rackTime?: number;
-  /** single：打空時改用彈夾一次壓滿（莫辛納甘的橋夾），一次壓幾發 */
+  /** single：打空時改用彈夾一次壓滿（栓動步槍的橋夾；目前沒有武器用到），一次壓幾發 */
   clip?: number;
 
   // ── 手感 ──
@@ -142,11 +156,19 @@ export interface FirearmDef {
   /** 換到這把槍要幾秒 */
   swapTime: number;
 
+  // ── 特殊 ──
+  /**
+   * 狙擊鏡（巴雷特）：按 Z 開鏡，鏡頭跟著游標平移到整張地圖，看得到畫面外的霧屍。
+   * 開鏡時用 spread 取代基礎散射、移動速度乘 moveMul。
+   */
+  scope?: { spread: number; moveMul: number };
+  /** 無聲（十字弓）：探索中開火不加噪音、不會驚醒巡邏的霧屍（沒射死的那隻還是會醒） */
+  silent?: boolean;
+  /** 射出去的彈藥留在地上或屍體上，走過去能撿回來（十字弓的箭） */
+  recoverable?: boolean;
+
   // ── 取得 ──
-  /** 軍械庫價格（廢料），0 = 開局就有 */
-  price: number;
-  /** 第幾天起軍械庫才會進貨 */
-  unlockDay: number;
+  found: WeaponSource;
 
   // ── 聲音 ──
   /** 槍聲配方（SfxBank 的 key） */
@@ -176,7 +198,7 @@ export interface MeleeStep {
   launch?: boolean;
   /** 刺擊：判定是窄長的直線，畫面上是直刺 */
   thrust?: boolean;
-  /** 迴旋：前後一圈都打得到（大鐵鎚掄一圈、開山刀迴旋砍） */
+  /** 迴旋：前後一圈都打得到（開山刀迴旋砍） */
   spin?: boolean;
   /** 砸地：以前方落點為中心、這個半徑（px）內全部震到，不限扇形 */
   slam?: number;
@@ -228,8 +250,7 @@ export interface MeleeDef {
   trauma: number;
   /** 揮擊時往前踏步（像素 / 秒） */
   lunge: number;
-  price: number;
-  unlockDay: number;
+  found: WeaponSource;
   /** 揮擊軌跡顏色 */
   trailColor: number;
   /** 揮擊音：輕／重 */
@@ -240,6 +261,11 @@ export interface MeleeDef {
   dashStep?: MeleeStep;
   /** 斷肢機率倍率：刀刃砍得斷手腳（開山刀最高） */
   gore?: number;
+  /**
+   * 蓄力斬（武士刀）：按住攻擊鍵蓄力，蓄力時可以照常移動；放開就衝出去一閃。
+   * 點一下（按不到 tap 秒）還是一般連段。傷害 = step 的倍率 × (1～maxMul，依蓄力比例)。
+   */
+  charge?: { time: number; tap: number; min: number; maxMul: number; moveMul: number; step: MeleeStep };
 }
 
 export type WeaponDef = FirearmDef | MeleeDef;
@@ -296,8 +322,7 @@ export const FIREARMS: FirearmDef[] = [
     trauma: 0.1,
     moveMul: 1,
     swapTime: 0.25,
-    price: 0,
-    unlockDay: 1,
+    found: { where: '主角的隨身配槍' },
     sound: 'shot_m1911',
   },
   {
@@ -341,8 +366,7 @@ export const FIREARMS: FirearmDef[] = [
     rumbleMs: 30,
     moveMul: 1,
     swapTime: 0.3,
-    price: 70,
-    unlockDay: 1,
+    found: { zone: 'homes', where: '住宅區某戶的床頭櫃' },
     sound: 'shot_python',
   },
   {
@@ -381,58 +405,8 @@ export const FIREARMS: FirearmDef[] = [
     trauma: 0.04,
     moveMul: 0.98,
     swapTime: 0.35,
-    price: 90,
-    unlockDay: 1,
+    found: { zone: 'hospital', where: '市立醫院的保全室' },
     sound: 'shot_mp5',
-  },
-  {
-    ...base,
-    id: 'r870',
-    name: '雷明頓 870',
-    model: 'Remington 870・12 號',
-    cls: 'shotgun',
-    desc: '泵動霰彈。近距離一槍清一排；子彈一顆顆塞，隨時能開火打斷',
-    ammo: '12ga',
-    damage: 7,
-    pellets: 8,
-    damageType: 'buckshot',
-    penetration: 0.05,
-    pierce: 1,
-    stopping: 0.85,
-    falloffStart: 80,
-    falloffEnd: 260,
-    falloffMin: 0.3,
-    range: 320,
-    headshotMul: 1.8,
-    knockback: 3,
-    stagger: 0.08,
-    action: 'pump',
-    fireRate: 1.25,
-    magazine: 6,
-    reload: 'single',
-    reloadTime: 0.25,
-    reloadEmptyTime: 0,
-    perRound: 0.5,
-    rackTime: 0.45,
-    spread: 8,
-    bloomPerShot: 2,
-    bloomMax: 4,
-    bloomRecover: 6,
-    moveSpread: 2.5,
-    climbPerShot: 5,
-    climbMax: 8,
-    climbRecover: 10,
-    yawJitter: 1,
-    cameraKick: 5,
-    trauma: 0.32,
-    selfKnockback: 70,
-    rumbleMs: 40,
-    moveMul: 0.95,
-    swapTime: 0.45,
-    price: 0,
-    unlockDay: 1,
-    sound: 'shot_r870',
-    cycleSound: 'pump',
   },
   {
     ...base,
@@ -477,8 +451,7 @@ export const FIREARMS: FirearmDef[] = [
     rumbleMs: 60,
     moveMul: 0.96,
     swapTime: 0.4,
-    price: 75,
-    unlockDay: 1,
+    found: { where: '社區超市保全室（主線第三章）' },
     sound: 'shot_coach',
   },
   {
@@ -520,8 +493,7 @@ export const FIREARMS: FirearmDef[] = [
     rumbleMs: 15,
     moveMul: 0.92,
     swapTime: 0.5,
-    price: 140,
-    unlockDay: 2,
+    found: { zone: 'nightmarket', where: '夜市彩券行後面的賭場' },
     sound: 'shot_ak47',
   },
   {
@@ -562,59 +534,8 @@ export const FIREARMS: FirearmDef[] = [
     rumbleMs: 10,
     moveMul: 0.94,
     swapTime: 0.45,
-    price: 150,
-    unlockDay: 2,
+    found: { zone: 'police', where: '警察局的軍械室' },
     sound: 'shot_m4a1',
-  },
-  {
-    ...base,
-    id: 'mosin',
-    name: '莫辛納甘',
-    model: 'Mosin-Nagant M91/30・7.62×54R',
-    cls: 'sniper',
-    desc: '一槍貫穿整排。每發要拉栓，打空用橋夾一次壓 5 發；移動時很不準',
-    ammo: '762',
-    damage: 75,
-    penetration: 0.85,
-    pierce: 6,
-    stopping: 0.3,
-    pierceFalloff: 0.85,
-    falloffStart: 9999,
-    falloffEnd: 10000,
-    falloffMin: 1,
-    range: 900,
-    headshotMul: 3,
-    knockback: 10,
-    stagger: 0.35,
-    action: 'bolt',
-    fireRate: 0.9,
-    magazine: 5,
-    chamber: false,
-    reload: 'single',
-    reloadTime: 0.3,
-    reloadEmptyTime: 0,
-    perRound: 0.55,
-    rackTime: 0.4,
-    clip: 5,
-    spread: 0.15,
-    bloomPerShot: 3,
-    bloomMax: 3,
-    bloomRecover: 4,
-    moveSpread: 7,
-    climbPerShot: 6,
-    climbMax: 6,
-    climbRecover: 8,
-    yawJitter: 0.2,
-    cameraKick: 6,
-    trauma: 0.3,
-    selfKnockback: 40,
-    rumbleMs: 45,
-    moveMul: 0.9,
-    swapTime: 0.6,
-    price: 160,
-    unlockDay: 3,
-    sound: 'shot_mosin',
-    cycleSound: 'bolt',
   },
   {
     ...base,
@@ -660,8 +581,7 @@ export const FIREARMS: FirearmDef[] = [
     rumbleMs: 35,
     moveMul: 0.94,
     swapTime: 0.45,
-    price: 220,
-    unlockDay: 4,
+    found: { zone: 'police', where: '警察局的軍械室' },
     sound: 'shot_m1014',
   },
   {
@@ -703,9 +623,97 @@ export const FIREARMS: FirearmDef[] = [
     rumbleMs: 12,
     moveMul: 0.75,
     swapTime: 0.9,
-    price: 320,
-    unlockDay: 5,
+    found: { zone: 'checkpoint', where: '軍方檢查站的機槍堡' },
     sound: 'shot_m249',
+  },
+  {
+    ...base,
+    id: 'barrett',
+    name: '巴雷特',
+    model: 'Barrett M82A1・.50 BMG',
+    cls: 'sniper',
+    desc: '一發打穿整條街。按 Z 開鏡，鏡頭能拉到整張地圖，畫面外的霧屍也打得到；腰射很不準',
+    ammo: '50',
+    damage: 150,
+    penetration: 1,
+    pierce: 8,
+    stopping: 0.35,
+    pierceFalloff: 0.92,
+    falloffStart: 9999,
+    falloffEnd: 10000,
+    falloffMin: 1,
+    range: 1500,
+    headshotMul: 2.5,
+    knockback: 14,
+    stagger: 0.5,
+    action: 'semi',
+    fireRate: 1.3,
+    magazine: 10,
+    reload: 'magazine',
+    reloadTime: 3.0,
+    reloadEmptyTime: 3.8,
+    spread: 5,
+    bloomPerShot: 4,
+    bloomMax: 6,
+    bloomRecover: 5,
+    moveSpread: 9,
+    climbPerShot: 9,
+    climbMax: 9,
+    climbRecover: 10,
+    yawJitter: 0.3,
+    cameraKick: 8,
+    trauma: 0.45,
+    selfKnockback: 90,
+    rumbleMs: 70,
+    moveMul: 0.82,
+    swapTime: 0.9,
+    scope: { spread: 0.05, moveMul: 0.45 },
+    found: { zone: 'checkpoint', where: '軍方檢查站的狙擊塔' },
+    sound: 'shot_barrett',
+  },
+  {
+    ...base,
+    id: 'crossbow',
+    name: '十字弓',
+    model: '複合十字弓・獵用箭',
+    cls: 'bow',
+    desc: '完全無聲，潛入時射倒巡邏的霧屍也不會驚動其他隻。射出去的箭留在地上或屍體上，走過去撿回來',
+    ammo: 'bolt',
+    damage: 42,
+    penetration: 0.35,
+    pierce: 1,
+    stopping: 0.5,
+    falloffStart: 420,
+    falloffEnd: 720,
+    falloffMin: 0.8,
+    range: 720,
+    headshotMul: 3,
+    knockback: 6,
+    stagger: 0.3,
+    action: 'semi',
+    fireRate: 2,
+    magazine: 1,
+    chamber: false,
+    reload: 'whole',
+    reloadTime: 1.3,
+    reloadEmptyTime: 1.3,
+    spread: 0.4,
+    bloomPerShot: 0,
+    bloomMax: 0,
+    bloomRecover: 10,
+    moveSpread: 3,
+    climbPerShot: 1,
+    climbMax: 1,
+    climbRecover: 10,
+    yawJitter: 0.1,
+    cameraKick: 1,
+    trauma: 0.04,
+    moveMul: 0.96,
+    swapTime: 0.4,
+    silent: true,
+    recoverable: true,
+    found: { zone: 'market', where: '社區超市的運動用品區' },
+    sound: 'shot_crossbow',
   },
 ];
 
@@ -713,29 +721,30 @@ export const MELEE: MeleeDef[] = [
   {
     kind: 'melee',
     id: 'knife',
-    name: '軍用刀',
-    desc: '刺、連刺、橫劃、重戳四連，出手最快；幾乎不擊退，打暈的霧屍處決加倍',
-    damage: 14,
+    name: '匕首',
+    desc: '連刺：四下快刺接一記重戳，越刺越快、出手最快；幾乎不擊退，打暈的霧屍處決加倍',
+    damage: 13,
     damageType: 'slash',
     penetration: 0.2,
     reach: 22,
-    arc: 60,
+    arc: 50,
     maxTargets: 1,
-    windup: 0.035,
-    active: 0.06,
-    recovery: 0.15,
-    stamina: 6,
+    windup: 0.03,
+    active: 0.05,
+    recovery: 0.12,
+    stamina: 5,
     knockback: 0,
     stagger: 0.12,
     staggerBonus: 1.8,
-    comboEvery: 4,
-    chainCancel: 0.15,
-    // 四連：左手刺 → 右手刺 → 反手橫劃（掃開兩隻）→ 壓低身體重戳（貫穿、硬直）
+    comboEvery: 5,
+    chainCancel: 0.1,
+    // 五連：刺 → 連刺 → 連刺 → 連刺（每下更快）→ 壓低身體重戳（貫穿、硬直）
     steps: [
-      { name: '刺', windup: 0.035, active: 0.05, recovery: 0.14, reach: 22, arc: 40, damageMul: 1, knockback: 0, stagger: 0.12, hitStop: 25, trauma: 0, lunge: 40, thrust: true, maxTargets: 1 },
-      { name: '連刺', windup: 0.03, active: 0.05, recovery: 0.14, reach: 22, arc: 40, damageMul: 1, knockback: 0, stagger: 0.12, hitStop: 25, trauma: 0, lunge: 36, thrust: true, maxTargets: 1 },
-      { name: '橫劃', windup: 0.05, active: 0.07, recovery: 0.18, reach: 20, arc: 130, damageMul: 0.9, knockback: 2, stagger: 0.2, hitStop: 35, trauma: 0, lunge: 24, maxTargets: 2 },
-      { name: '重戳', windup: 0.11, active: 0.08, recovery: 0.32, reach: 30, arc: 26, damageMul: 2.3, knockback: 10, stagger: 0.45, hitStop: 70, trauma: 0, lunge: 70, thrust: true, maxTargets: 2 },
+      { name: '刺', windup: 0.035, active: 0.05, recovery: 0.13, reach: 22, arc: 40, damageMul: 1, knockback: 0, stagger: 0.12, hitStop: 22, trauma: 0, lunge: 40, thrust: true, maxTargets: 1 },
+      { name: '連刺', windup: 0.03, active: 0.045, recovery: 0.12, reach: 22, arc: 40, damageMul: 1, knockback: 0, stagger: 0.12, hitStop: 22, trauma: 0, lunge: 34, thrust: true, maxTargets: 1 },
+      { name: '連刺', windup: 0.025, active: 0.045, recovery: 0.11, reach: 22, arc: 40, damageMul: 1.05, knockback: 0, stagger: 0.12, hitStop: 22, trauma: 0, lunge: 34, thrust: true, maxTargets: 1 },
+      { name: '連刺', windup: 0.02, active: 0.045, recovery: 0.1, reach: 22, arc: 40, damageMul: 1.1, knockback: 0, stagger: 0.14, hitStop: 24, trauma: 0, lunge: 34, thrust: true, maxTargets: 1 },
+      { name: '重戳', windup: 0.1, active: 0.08, recovery: 0.3, reach: 30, arc: 26, damageMul: 2.5, knockback: 10, stagger: 0.45, hitStop: 70, trauma: 0, lunge: 70, thrust: true, maxTargets: 2 },
     ],
     // 衝刺：壓低身體滑步突刺，一路刺穿前面兩隻
     dashStep: { name: '滑步突刺', windup: 0.03, active: 0.12, recovery: 0.3, reach: 36, arc: 26, damageMul: 1.8, knockback: 8, stagger: 0.4, hitStop: 60, trauma: 0, lunge: 110, thrust: true, maxTargets: 2 },
@@ -746,8 +755,7 @@ export const MELEE: MeleeDef[] = [
     hitStop: 25,
     trauma: 0.05,
     lunge: 40,
-    price: 0,
-    unlockDay: 1,
+    found: { zone: 'school', where: '市立高中的教官室' },
     trailColor: 0xdfe6ee,
     swing: 'light',
   },
@@ -755,10 +763,10 @@ export const MELEE: MeleeDef[] = [
     kind: 'melee',
     id: 'machete',
     name: '開山刀',
-    desc: '斜劈、反手砍、跳劈三連，最容易砍斷手腳；衝刺中出手是迴旋砍',
-    damage: 24,
+    desc: '劈砍：斜劈、回劈、跳起來往下劈三連，刀刀砍進肉裡，最容易砍斷手腳；衝刺中出手是迴旋砍',
+    damage: 26,
     damageType: 'slash',
-    penetration: 0.15,
+    penetration: 0.2,
     reach: 28,
     arc: 100,
     maxTargets: 2,
@@ -771,23 +779,23 @@ export const MELEE: MeleeDef[] = [
     staggerBonus: 1.5,
     comboEvery: 3,
     chainCancel: 0.25,
-    // 三連：斜劈 → 反手橫砍（最寬）→ 跳起來往下劈（最重，最容易砍斷手腳）
+    // 三連都是由上往下的劈：斜劈 → 回劈（掃到兩三隻）→ 跳起來往下劈（最重，最容易砍斷手腳）
+    // 每一刀卡肉都比匕首久：砍進去、拔出來的手感
     steps: [
-      { name: '斜劈', windup: 0.07, active: 0.08, recovery: 0.22, reach: 28, arc: 100, damageMul: 1, knockback: 1, stagger: 0.22, hitStop: 40, trauma: 0, lunge: 46 },
-      { name: '反手砍', windup: 0.05, active: 0.08, recovery: 0.2, reach: 26, arc: 150, damageMul: 0.9, knockback: 2, stagger: 0.22, hitStop: 40, trauma: 0, lunge: 40, maxTargets: 3 },
-      { name: '跳劈', windup: 0.15, active: 0.1, recovery: 0.34, reach: 32, arc: 70, damageMul: 1.9, knockback: 12, stagger: 0.5, hitStop: 80, trauma: 0, lunge: 64 },
+      { name: '斜劈', windup: 0.08, active: 0.08, recovery: 0.22, reach: 28, arc: 100, damageMul: 1.1, knockback: 2, stagger: 0.28, hitStop: 55, trauma: 0, lunge: 46 },
+      { name: '回劈', windup: 0.07, active: 0.08, recovery: 0.22, reach: 27, arc: 130, damageMul: 1, knockback: 3, stagger: 0.28, hitStop: 55, trauma: 0, lunge: 40, maxTargets: 3 },
+      { name: '跳劈', windup: 0.15, active: 0.1, recovery: 0.34, reach: 32, arc: 70, damageMul: 2.1, knockback: 12, stagger: 0.55, hitStop: 90, trauma: 0, lunge: 64 },
     ],
     // 衝刺：轉一圈的迴旋砍，四周都砍得到
     dashStep: { name: '迴旋砍', windup: 0.06, active: 0.16, recovery: 0.36, reach: 30, arc: 360, damageMul: 1.2, knockback: 8, stagger: 0.35, hitStop: 60, trauma: 0, lunge: 60, spin: true, maxTargets: 4 },
-    gore: 1.8,
+    gore: 2.2,
     heft: 0,
     finisherKnock: 12,
     comboMul: 1.7,
     hitStop: 35,
     trauma: 0.08,
     lunge: 50,
-    price: 30,
-    unlockDay: 1,
+    found: { zone: 'downtown', where: '鬧區的五金行' },
     trailColor: 0xc9d3dc,
     swing: 'light',
   },
@@ -825,8 +833,7 @@ export const MELEE: MeleeDef[] = [
     ],
     // 衝刺攻擊：幾乎不用起手，帶著衝勁往前滑一大段，判定長、把前方一排撞飛
     dashStep: { name: '衝刺打', windup: 0.05, active: 0.16, recovery: 0.4, reach: 38, arc: 110, damageMul: 1.3, knockback: 44, stagger: 0.9, hitStop: 105, trauma: 0.28, lunge: 90, launch: true },
-    price: 25,
-    unlockDay: 1,
+    found: { zone: 'school', where: '市立高中的器材室' },
     trailColor: 0xb8c4cf,
     swing: 'heavy',
   },
@@ -864,48 +871,54 @@ export const MELEE: MeleeDef[] = [
     hitStop: 70,
     trauma: 0.2,
     lunge: 45,
-    price: 60,
-    unlockDay: 2,
+    found: { zone: 'gas', where: '加油站牆上的消防箱' },
     trailColor: 0xff8a65,
     swing: 'heavy',
   },
   {
     kind: 'melee',
-    id: 'sledge',
-    name: '大鐵鎚',
-    desc: '掄一圈前後都打，再高舉砸地震暈一整圈；最慢最重，揮完要喘一下',
-    damage: 55,
-    damageType: 'blunt',
-    penetration: 0.3,
-    reach: 32,
-    arc: 160,
-    maxTargets: 5,
-    windup: 0.36,
-    active: 0.14,
-    recovery: 0.58,
-    stamina: 38,
-    knockback: 56,
-    stagger: 1.2,
-    staggerBonus: 1.3,
+    id: 'katana',
+    name: '武士刀',
+    desc: '點一下是拔刀斬、返身斬兩連；按住蓄力（可以邊走邊蓄），放開衝出去一閃，直線上的霧屍全部斬斷',
+    damage: 30,
+    damageType: 'slash',
+    penetration: 0.4,
+    reach: 30,
+    arc: 110,
+    maxTargets: 2,
+    windup: 0.07,
+    active: 0.08,
+    recovery: 0.22,
+    stamina: 12,
+    knockback: 2,
+    stagger: 0.25,
+    staggerBonus: 1.5,
     comboEvery: 2,
-    chainCancel: 0.7,
-    heft: 0.28,
-    // 兩下：掄一圈（前後都打、震飛整圈）→ 高舉砸地（落點一圈全部震暈）
+    chainCancel: 0.3,
+    // 兩連：拔刀橫斬（最寬）→ 返身斜斬
     steps: [
-      { name: '掄圈', windup: 0.36, active: 0.16, recovery: 0.58, reach: 32, arc: 360, damageMul: 1, knockback: 50, stagger: 1.1, hitStop: 95, trauma: 0, lunge: 20, spin: true, maxTargets: 5 },
-      { name: '砸地', windup: 0.44, active: 0.1, recovery: 0.72, reach: 26, arc: 360, damageMul: 1.3, knockback: 30, stagger: 1.6, hitStop: 130, trauma: 0, lunge: 30, slam: 52, maxTargets: 8, launch: true },
+      { name: '拔刀斬', windup: 0.06, active: 0.08, recovery: 0.22, reach: 32, arc: 130, damageMul: 1, knockback: 2, stagger: 0.25, hitStop: 40, trauma: 0, lunge: 40, maxTargets: 3 },
+      { name: '返身斬', windup: 0.07, active: 0.08, recovery: 0.3, reach: 30, arc: 100, damageMul: 1.3, knockback: 8, stagger: 0.4, hitStop: 55, trauma: 0, lunge: 50, maxTargets: 2 },
     ],
-    // 衝刺：拖著鎚往前衝，最後往前一砸
-    dashStep: { name: '衝鋒砸', windup: 0.08, active: 0.12, recovery: 0.6, reach: 30, arc: 360, damageMul: 1.4, knockback: 40, stagger: 1.4, hitStop: 120, trauma: 0, lunge: 80, slam: 44, maxTargets: 6, launch: true },
-    finisherKnock: 0,
-    comboMul: 1,
-    hitStop: 95,
-    trauma: 0.35,
-    lunge: 25,
-    price: 110,
-    unlockDay: 3,
-    trailColor: 0x90a4ae,
-    swing: 'heavy',
+    // 蓄力一閃：滿蓄力 1 秒、最高 3.2 倍；衝刺距離約 70 px，判定是一條直線
+    charge: {
+      time: 1,
+      tap: 0.18,
+      min: 0.25,
+      maxMul: 3.2,
+      moveMul: 0.85,
+      step: { name: '一閃', windup: 0.02, active: 0.16, recovery: 0.42, reach: 44, arc: 40, damageMul: 2.2, knockback: 10, stagger: 0.8, hitStop: 95, trauma: 0, lunge: 700, thrust: true, maxTargets: 8 },
+    },
+    gore: 1.6,
+    heft: 0,
+    finisherKnock: 8,
+    comboMul: 1.3,
+    hitStop: 40,
+    trauma: 0.06,
+    lunge: 40,
+    found: { zone: 'nightmarket', where: '夜市角頭的神明廳' },
+    trailColor: 0xe8eef5,
+    swing: 'light',
   },
 ];
 
@@ -988,3 +1001,11 @@ export function companionGunFor(id: string): CompanionGunDef {
     knockback: d.knockback * Math.min(3, d.pellets),
   };
 }
+
+/** 在這一區撿得到的武器（依名單順序） */
+export function weaponsFoundIn(zone: string): WeaponDef[] {
+  return [...FIREARMS, ...MELEE].filter((w) => w.found.zone === zone);
+}
+
+/** 撿到已經有的武器：拆成廢料 */
+export const DUPLICATE_WEAPON_SCRAP = 20;
