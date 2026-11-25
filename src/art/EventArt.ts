@@ -18,14 +18,14 @@ const FY = 72;
 const W = VIG_W;
 const H = VIG_H;
 
-interface Look {
+export interface Look {
   wall: number;
   floor: number;
   light: number;
   sky: [number, number];
 }
 
-function lookFor(zone: string): Look {
+export function lookFor(zone: string): Look {
   const t = THEMES[zone] ?? THEMES.gas;
   return { wall: t.wall, floor: t.floor, light: t.light, sky: t.sky };
 }
@@ -128,7 +128,7 @@ function vignette(p: Painter): void {
 // ── 共用：光 ─────────────────────────────────────
 
 /** 圓形光暈（一圈圈疊淡色） */
-function glow(p: Painter, cx: number, cy: number, r: number, c: number, a = 0.08): void {
+export function glow(p: Painter, cx: number, cy: number, r: number, c: number, a = 0.08): void {
   for (let k = r; k > 2; k -= 3) p.circle(cx, cy, k, c, a);
 }
 
@@ -142,7 +142,7 @@ function cone(p: Painter, x: number, y: number, topW: number, botW: number, c: n
 }
 
 /** 動作線（撞擊、晃動） */
-function shake(p: Painter, x: number, y: number, c = 0xffffff, a = 0.7): void {
+export function shake(p: Painter, x: number, y: number, c = 0xffffff, a = 0.7): void {
   p.line(x, y, x + 4, y - 3, c, a);
   p.line(x + 1, y + 4, x + 6, y + 3, c, a);
   p.line(x, y + 8, x + 4, y + 10, c, a);
@@ -173,10 +173,17 @@ const FIG = {
   zStand: ['...hh..', '..hsss.', '..sess.', '...ss..', '.bbbbb.', 'bbbbbbb', 'sbbbbbs', 's.bbb.s', '..lll..', '.ll.ll.', '.l...l.', '.k...k.'],
   zReach: ['s.....s', 's.hh..s', 'b.sss.b', 'bbsesbb', '.bbbbb.', '.bbbbb.', '.bbbbb.', '..bbb..', '..lll..', '.ll.ll.', '.l...l.', '.k...k.'],
   zSleep: ['.........', '..hh.....', '.hsss....', '.ssss....', '.bbbbb...', 'bbbbbbs..', 'bbbbbb...', 'lllllllll', 'lllllllkk'],
+  // 漫畫分鏡用（src/art/ComicArt.ts）
+  kick: ['..hhh....', '.hhhhh...', '.hhsss...', '..sss....', '.bbbbb...', 'bbbbbbs..', 'sbbbbb...', '.bbbbb...', '.lllllll.', '.ll...llk', '.ll......', '.kk......'],
+  fall: ['.kk.kk.', '.ll.ll.', '.ll.ll.', '.lllll.', '.bbbbb.', 'sbbbbbs', 'bbbbbbb', 's.bbb.s', '..sss..', '.hhsss.', '.hhhhh.', '..hhh..'],
+  hang: ['s.....s', 's.....s', 'b.hhh.b', 'bhhhhhb', 'b.sss.b', '.bbbbb.', '.bbbbb.', '.bbbbb.', '.lllll.', '.ll.ll.', '.l...l.', 'k.....k'],
+  dog: ['.........hh..', '........hsss.', 'b.......ssess', 'bbbbbbbbsssss', '.bbbbbbbbbss.', '.bbbbbbbbb...', '.ll.....ll...', '.ll.....ll...', '.kk.....kk...'],
+  dogLeap: ['...........hh..', 'b.........hsss.', '.b.......sssess', '..bbbbbbbsssss.', '.bbbbbbbbbbss..', 'll.bbbbbbbll...', 'k..........ll..', '............k..'],
 };
+export type { FigName };
 type FigName = keyof typeof FIG;
 
-interface Pal {
+export interface Pal {
   h: number;
   s: number;
   b: number;
@@ -186,7 +193,7 @@ interface Pal {
   g?: number;
 }
 
-const PAL = {
+export const PAL = {
   you: { h: 0x2a2018, s: 0xd8a878, b: 0x4a5a3a, l: 0x2e3440 } as Pal,
   survivor: { h: 0x3a2a1c, s: 0xd0a070, b: 0x8a5a3a, l: 0x3a3a48 } as Pal,
   nurse: { h: 0x2a2018, s: 0xd8a878, b: 0xc8d8d8, l: 0x6a8a8a } as Pal,
@@ -201,7 +208,7 @@ const PAL = {
  * 依字元圖畫一個人：先畫一圈深色外框，再填色，s = 每格幾像素。
  * h 頭髮、s 皮膚、b 衣服、l 褲子、k 鞋、e 發光的眼睛、g 槍。
  */
-function fig(p: Painter, x: number, foot: number, name: FigName, pal: Pal, s = 3, flip = false, dim = 0): void {
+export function fig(p: Painter, x: number, foot: number, name: FigName, pal: Pal, s = 3, flip = false, dim = 0): void {
   const rows = FIG[name];
   const w = rows[0].length;
   const top = foot - rows.length * s;
@@ -231,14 +238,14 @@ function shadow(p: Painter, x: number, w: number, a = 0.35): void {
 
 // ── 共用：物件 ─────────────────────────────────────
 
-function crate(p: Painter, x: number, y: number, w: number, h: number, c = 0x8a6038): void {
+export function crate(p: Painter, x: number, y: number, w: number, h: number, c = 0x8a6038): void {
   p.box(x, y, w, h, c);
   p.line(x + 1, y + 1, x + w - 2, y + h - 2, tone(c, -0.3));
   p.line(x + w - 2, y + 1, x + 1, y + h - 2, tone(c, -0.3));
   p.rect(x + 1, y + Math.floor(h / 2), w - 2, 1, tone(c, -0.25));
 }
 
-function carton(p: Painter, x: number, y: number, w: number, h: number, open = false): void {
+export function carton(p: Painter, x: number, y: number, w: number, h: number, open = false): void {
   const c = 0xa07a4a;
   p.box(x, y, w, h, c);
   p.rect(x + Math.floor(w / 2), y + 1, 1, 3, tone(c, -0.35));
@@ -262,7 +269,7 @@ function cabinet(p: Painter, x: number, y: number, w: number, h: number, c = 0x5
   p.rect(mid + 2, y + h / 2 - 2, 2, 5, 0x9aa0a8);
 }
 
-function padlock(p: Painter, x: number, y: number): void {
+export function padlock(p: Painter, x: number, y: number): void {
   p.rect(x + 1, y - 5, 6, 6, OUTLINE);
   p.rect(x + 2, y - 4, 4, 5, 0x1a1a1a);
   p.rect(x + 2, y - 4, 1, 4, 0xb0a070);
@@ -315,14 +322,14 @@ function car(p: Painter, x: number, c: number, flip = false): void {
   p.rect(flip ? x + 1 : x + 50, y + 8, 3, 2, 0xf0d060);
 }
 
-function grenadeIcon(p: Painter, x: number, y: number): void {
+export function grenadeIcon(p: Painter, x: number, y: number): void {
   p.ellipse(x + 3, y + 5, 3, 4, OUTLINE);
   p.ellipse(x + 3, y + 5, 2, 3, 0x5a6a3a);
   p.rect(x + 2, y, 3, 2, 0x8a8a90);
   p.rect(x + 2, y + 3, 1, 1, 0x7a8a5a);
 }
 
-function ammoBox(p: Painter, x: number, y: number, w = 20, h = 11): void {
+export function ammoBox(p: Painter, x: number, y: number, w = 20, h = 11): void {
   p.box(x, y, w, h, 0x4a5a2a);
   p.rect(x + 3, y + 3, w - 6, 4, 0xc8a040);
   p.rect(x + 4, y + 4, 2, 2, OUTLINE);
@@ -737,6 +744,7 @@ export type IconId =
   | 'melee'
   | 'trade'
   | 'fast'
+  | 'siege'
   | 'none';
 
 /** 字元圖：# 外框、其他字元對應下面的顏色 */
@@ -763,6 +771,7 @@ const ICONS: Record<Exclude<IconId, 'none'>, { rows: string[]; pal: Record<strin
   walk: { rows: ['....##......', '...#hh#.....', '...#ss#.....', '..######....', '.#bbbbb#....', '.#bbbbb##...', '..#bbbb#....', '..#ll#l#....', '.#ll#.#l#...', '#ll#...#l#..', '###.....##..', '............'], pal: { h: 0x2a2018, s: 0xd8a878, b: 0x4a5a3a, l: 0x2e3440 } },
   melee: { rows: ['.........##.', '........#ww#', '.......#ww#.', '......#ww#..', '.....#ww#...', '....#ww#....', '.##.#w#.....', '.#b##.......', '..#bb#......', '.#b##b#.....', '#b#..#......', '##..........'], pal: { w: 0xc8d0d8, b: 0x6a4a2a } },
   fast: { rows: ['............', '.#...#......', '#y#.#y#.....', '#yy##yy#....', '.#yy##yy#...', '..#yy##yy#..', '..#yy##yy#..', '.#yy##yy#...', '#yy##yy#....', '#y#.#y#.....', '.#...#......', '............'], pal: { y: 0xf5d76e } },
+  siege: { rows: ['..##....##..', '.#rr#..#rr#.', '#rr#.##.#rr#', '.#.#wwww#.#.', '..#ww#www#..', '.#www#wwww#.', '.#www###ww#.', '.#wwwwwwww#.', '..#wwwwww#..', '...######...', '..#......#..', '............'], pal: { r: 0xd03030, w: 0xe8e0c8 } },
   trade: { rows: ['............', '.####..####.', '#yyyy##yyyy#', '#y##y##y##y#', '#yyyy##yyyy#', '.####..####.', '...#....#...', '..#......#..', '.#ssssssss#.', '#ssssssssss#', '.##########.', '............'], pal: { y: 0xc8a040, s: 0xd8a878 } },
 };
 

@@ -36,7 +36,7 @@ export interface SupplyDef {
 
 export const SUPPLIES: Record<SupplyId, SupplyDef> = {
   medkit: { id: 'medkit', name: '醫療包', desc: '回復 45 生命（探索中或夜裡 H 鍵）', max: 5, start: 1 },
-  lockpick: { id: 'lockpick', name: '開鎖工具', desc: '直接打開上鎖的櫃子和門，不必 QTE', max: 3, start: 0 },
+  lockpick: { id: 'lockpick', name: '開鎖工具', desc: '直接打開上鎖的櫃子和門，或在開鎖小遊戲裡讓這次變簡單', max: 3, start: 0 },
   decoy: { id: 'decoy', name: '噪音誘餌', desc: '引開屍群：跳過一場戰鬥，或讓噪音歸零', max: 3, start: 0 },
 };
 
@@ -303,6 +303,30 @@ export const NOISE = {
 
 export type QteKind = 'timing' | 'sequence' | 'mash';
 
+/** QTE 的評等：great 大成功（一次都沒失誤／剩很多時間）、ok 成功、fail 失敗 */
+export type QteGrade = 'great' | 'ok' | 'fail';
+
+/** 開鎖小遊戲：密碼轉盤（線索藏在場景裡）、彈子鎖（抓時機推栓）、電箱接線（旋轉接頭把電接通） */
+export type LockKind = 'dial' | 'pins' | 'wires';
+
+export interface LockSpec {
+  /** 可以給幾種，進場時隨機抽一種（同一個櫃子不會每次都一樣） */
+  kinds: LockKind[];
+  /** 難度 1～3：彈子數、密碼位數、接線格子大小 */
+  tier: 1 | 2 | 3;
+  /** 開鎖畫面上方的說明 */
+  prompt: string;
+}
+
+/** 圍困救援：小場景、大量霧屍、倒數計時（見 src/scenes/SiegeScene.ts） */
+export interface SiegeSpec {
+  /** bus：公車頂撐到引擎發動；store：便利店裡守住窗門，撐到後門撬開 */
+  layout: 'bus' | 'store';
+  /** 撐幾秒（目標進度條跑滿的時間） */
+  seconds: number;
+  title: string;
+}
+
 export interface QteSpec {
   kind: QteKind;
   /** 題目說明（例如「抓準時機跳過去」） */
@@ -365,7 +389,12 @@ export interface Outcome {
 
 export type EventAction =
   | { type: 'outcome'; outcome: Outcome }
-  | { type: 'qte'; qte: QteSpec; success: Outcome; fail: Outcome }
+  /** comic：有漫畫分鏡的招牌事件（src/data/comics.ts）；great：大成功的結果（沒填就跟 success 一樣） */
+  | { type: 'qte'; qte: QteSpec; success: Outcome; fail: Outcome; great?: Outcome; comic?: string }
+  /** 開鎖小遊戲 */
+  | { type: 'lock'; lock: LockSpec; success: Outcome; fail: Outcome }
+  /** 圍困救援 */
+  | { type: 'siege'; siege: SiegeSpec; success: Outcome; fail: Outcome }
   | { type: 'field'; field: FieldSpec; success: Outcome; /** 潛入沒被發現 */ clean?: Outcome }
   /** 屬性檢定：成功率 = base + 隊伍最高該屬性 × perPoint；有指定職業同行直接成功 */
   | { type: 'check'; attr: AttrKey; base: number; perPoint: number; role?: CompanionRole; success: Outcome; fail: Outcome };
@@ -419,13 +448,13 @@ export const EVENTS: ExploreEvent[] = [
     options: [
       { label: '用開鎖工具', consume: 'lockpick', hint: '安靜打開', action: { type: 'outcome', outcome: { text: '喀一聲，鎖開了。', loot: 'big' } } },
       {
-        label: '撬開它',
-        hint: 'QTE 連打・失敗很吵',
+        label: '自己開鎖',
+        hint: '開鎖小遊戲・失敗會弄出聲響',
         action: {
-          type: 'qte',
-          qte: mash('連打把鎖撬開！', 16, 3.2),
-          success: { text: '鎖頭被你硬生生扭斷。', loot: 'medium', noise: 10 },
-          fail: { text: '撬棍滑掉，砸在鐵櫃上發出巨響。你只來得及抓一點東西。', loot: 'small', noise: 30 },
+          type: 'lock',
+          lock: { kinds: ['pins', 'dial'], tier: 1, prompt: '打開鐵櫃的鎖' },
+          success: { text: '最後一根彈子卡進去，鎖頭彈開了。', loot: 'big' },
+          fail: { text: '鎖芯卡死了。你只好拿撬棍硬撬，砸出好大一聲，只來得及抓一點東西。', loot: 'small', noise: 25 },
         },
       },
       {
@@ -443,6 +472,46 @@ export const EVENTS: ExploreEvent[] = [
       },
     ],
   },
+  {
+    id: 'safe',
+    title: '辦公室的保險箱',
+    text: '經理室角落有一個轉盤保險箱。桌上、牆上到處是便條紙，密碼八成就寫在這房間的某個地方。',
+    weight: 2,
+    options: [
+      {
+        label: '找線索、轉密碼',
+        hint: '開鎖小遊戲：密碼轉盤',
+        action: {
+          type: 'lock',
+          lock: { kinds: ['dial'], tier: 2, prompt: '在房間裡找密碼，轉開保險箱' },
+          success: { text: '轉盤停在最後一格，門把一壓就開了。裡面是有人藏起來的家當。', loot: 'big', bonus: { scrap: 10 } },
+          fail: { text: '轉錯太多次，警報器嗶嗶亂叫。你踹了箱子一腳，悻悻離開。', noise: 30 },
+        },
+      },
+      { label: '用開鎖工具', consume: 'lockpick', hint: '聽著齒輪聲慢慢轉開', action: { type: 'outcome', outcome: { text: '你貼著箱門聽了半天，喀、喀、喀，門開了。', loot: 'big' } } },
+      { label: '不浪費時間', action: { type: 'outcome', outcome: { text: '你順手拿了桌上的零錢罐就走。', bonus: { scrap: 4 } } } },
+    ],
+  },
+  {
+    id: 'fusebox',
+    title: '斷電的倉庫門',
+    text: '電動鐵捲門沒電了，旁邊的電箱蓋子被扯開，線路亂成一團。接通的話門就會自己升起來。',
+    weight: 3,
+    options: [
+      {
+        label: '重新接線',
+        hint: '開鎖小遊戲：電箱接線',
+        action: {
+          type: 'lock',
+          lock: { kinds: ['wires'], tier: 2, prompt: '轉動接頭，把電從左邊接到右邊' },
+          success: { text: '電箱啪一聲亮起，鐵捲門緩緩升了上去。', loot: 'medium', bonus: { scrap: 6 } },
+          fail: { text: '火花一閃，你被電得整隻手發麻。門紋風不動。', hurt: 12, noise: 10 },
+        },
+      },
+      { label: '讓工兵處理', hint: '屬性：手速・有工兵必成功', action: { type: 'check', attr: 'hand', base: 0.2, perPoint: 0.12, role: 'engineer', success: { text: '隊員接了兩條線，門就升起來了。', loot: 'medium' }, fail: { text: '保險絲燒了，門再也開不了。', noise: 5 } } },
+      { label: '放棄', action: { type: 'outcome', outcome: { text: '你轉頭走向下一個地方。' } } },
+    ],
+  },
   // ── QTE ──
   {
     id: 'floor',
@@ -452,10 +521,12 @@ export const EVENTS: ExploreEvent[] = [
     options: [
       {
         label: '抓準時機跳過去',
-        hint: 'QTE 時機條',
+        hint: 'QTE 時機條・漫畫分鏡',
         action: {
           type: 'qte',
+          comic: 'floor',
           qte: timing('指針進到綠區時按下！', 3, 1.1),
+          great: { text: '你一口氣跳過三根橫樑，還在對面撿到一個沒人碰過的背包。', loot: 'medium' },
           success: { text: '你穩穩落在對面，順手撿起地上的背包。', loot: 'small' },
           fail: { text: '橫樑斷了，你摔了下去，狼狽地爬回來。', hurt: 22, noise: 15 },
         },
@@ -471,10 +542,12 @@ export const EVENTS: ExploreEvent[] = [
     options: [
       {
         label: '推開牠！',
-        hint: 'QTE 方向鍵',
+        hint: 'QTE 方向鍵・漫畫分鏡',
         action: {
           type: 'qte',
+          comic: 'ambush',
           qte: sequence('照順序按方向鍵掙脫！', 5, 3),
+          great: { text: '你反手把牠壓進衣櫃，一棒了結，連衣櫃裡的東西都歸你。', loot: 'medium' },
           success: { text: '你把牠推倒，一刀了結。牠身上還掛著一個腰包。', loot: 'small', noise: 5 },
           fail: { text: '牠在你手臂上咬了一口才被甩開。', hurt: 18, noise: 15 },
         },
@@ -489,10 +562,12 @@ export const EVENTS: ExploreEvent[] = [
     options: [
       {
         label: '硬抬上去',
-        hint: 'QTE 連打',
+        hint: 'QTE 連打・漫畫分鏡',
         action: {
           type: 'qte',
+          comic: 'door',
           qte: mash('連打把門抬起來！', 18, 3.4),
+          great: { text: '你一口氣把門推到頂，卡榫喀一聲扣住，裡面的箱子全都搬得出來。', loot: 'big', noise: 10 },
           success: { text: '鐵捲門嘎嘎作響地升了上去。', loot: 'medium', noise: 15 },
           fail: { text: '門砸了下來，差點壓到手。', hurt: 10, noise: 20 },
         },
@@ -509,6 +584,48 @@ export const EVENTS: ExploreEvent[] = [
           fail: { text: '卡在半路，被刮得滿身是傷才退出來。', crewHurt: 20 },
         },
       },
+    ],
+  },
+  {
+    id: 'chase',
+    title: '樓梯間的跑者',
+    text: '樓梯間上方傳來急促的腳步聲。一隻跑者發現你了，正從樓上衝下來！',
+    weight: 3,
+    options: [
+      {
+        label: '閃開牠！',
+        hint: 'QTE 方向鍵・漫畫分鏡',
+        action: {
+          type: 'qte',
+          comic: 'chase',
+          qte: sequence('照順序按方向鍵閃身！', 4, 2.4),
+          great: { text: '你側身一讓，牠整個摔下樓梯折斷了脖子。牠口袋裡還有東西。', loot: 'small', bonus: { scrap: 6 } },
+          success: { text: '你閃過牠的撲咬，回身一棒把牠打下樓梯。' },
+          fail: { text: '牠撞上你，一人一屍滾下半層樓，你被抓得滿身血痕。', hurt: 20, noise: 15 },
+        },
+      },
+      { label: '往回跑', hint: '屬性：腳程', action: { type: 'check', attr: 'agi', base: 0.45, perPoint: 0.1, success: { text: '你們甩掉了牠，躲進一間辦公室。' }, fail: { text: '牠追上了殿後的隊員。', crewHurt: 22, noise: 10 } } },
+    ],
+  },
+  {
+    id: 'dogs',
+    title: '野狗',
+    text: '停車場的車底下傳來低吼。一隻皮肉翻開的大狗慢慢爬了出來，盯著你的喉嚨。',
+    weight: 2,
+    options: [
+      {
+        label: '等牠撲過來再打',
+        hint: 'QTE 時機條・漫畫分鏡',
+        action: {
+          type: 'qte',
+          comic: 'dogs',
+          qte: timing('牠撲過來的瞬間揮下去！', 2, 0.95),
+          great: { text: '一棒正中鼻樑。牠在地上抽了兩下就不動了，車裡還有人留下的補給。', loot: 'medium' },
+          success: { text: '你把牠打退，牠夾著尾巴鑽回車底。', loot: 'small' },
+          fail: { text: '牠咬住你的小腿死不放口，好不容易才甩開。', hurt: 24, noise: 10 },
+        },
+      },
+      { label: '丟誘餌引開', consume: 'decoy', hint: '安全通過', action: { type: 'outcome', outcome: { text: '鬧鐘一響，牠衝向另一頭。', loot: 'small' } } },
     ],
   },
   // ── 潛入 ──
@@ -569,16 +686,17 @@ export const EVENTS: ExploreEvent[] = [
   {
     id: 'trapped',
     title: '被包圍的倖存者',
-    text: '「救命！」一個人爬上了公車頂，下面圍滿了霧屍。',
+    text: '「救命！」一台公車被屍群團團圍住，司機縮在駕駛座上猛轉鑰匙，引擎一直發不動。',
     weight: 3,
     options: [
       {
-        label: '救他下來',
-        hint: '條件戰鬥：保護倖存者 25 秒',
+        label: '爬上車頂掩護他',
+        hint: '圍困救援：撐到引擎發動',
         action: {
-          type: 'field',
-          field: { mode: 'fight', goal: 'protect', title: '保護倖存者，撐過 25 秒', zombies: 4, seconds: 25 },
-          success: { text: '倖存者跳下車頂，決定跟你回據點。', survivor: true, noise: 10 },
+          type: 'siege',
+          siege: { layout: 'bus', seconds: 40, title: '把爬上來的霧屍打下去，撐到引擎發動' },
+          success: { text: '引擎轟一聲發動，公車輾開屍群衝了出去。司機決定跟你回據點。', survivor: true, noise: 15 },
+          fail: { text: '車窗被撞破，司機被拖了下去。你只能從車頂跳到旁邊的雨遮上逃走。', hurt: 10, noise: 20 },
         },
       },
       { label: '太危險了，離開', action: { type: 'outcome', outcome: { text: '你轉身離開，背後的呼救聲越來越小。' } } },
@@ -684,10 +802,12 @@ export const EVENTS: ExploreEvent[] = [
     options: [
       {
         label: '小心拆除',
-        hint: 'QTE 時機條・成功拿到零件',
+        hint: 'QTE 時機條・漫畫分鏡',
         action: {
           type: 'qte',
+          comic: 'trap',
           qte: timing('穩住手，在綠區剪線', 2, 1.4),
+          great: { text: '引信完整拆下，連手榴彈的鐵罐都能拆成好零件。', bonus: { scrap: 16 } },
           success: { text: '拆下來了，引信和鐵罐都能拆成零件。', bonus: { scrap: 8 } },
           fail: { text: '轟！你被炸飛了出去。', hurt: 30, noise: 40 },
         },
@@ -727,17 +847,18 @@ export const EVENTS: ExploreEvent[] = [
   {
     id: 'shelter',
     title: '倖存者的避難所',
-    text: '一扇用家具堵住的門後傳來人聲。外面的霧屍正在撞門。',
+    text: '便利店裡擠著一家人，玻璃門外的霧屍越聚越多。後門被貨架堵死了，有人正拚命把它撬開。',
     weight: 2,
     finale: true,
     options: [
       {
-        label: '幫他們守住',
-        hint: '條件戰鬥：撐 30 秒',
+        label: '衝進去幫他們守',
+        hint: '圍困救援：撐到後門撬開',
         action: {
-          type: 'field',
-          field: { mode: 'fight', goal: 'protect', title: '守住避難所的門 30 秒', zombies: 5, seconds: 30 },
-          success: { text: '他們打開門，一位倖存者決定跟你走，還分了你一些物資。', survivor: true, loot: 'medium' },
+          type: 'siege',
+          siege: { layout: 'store', seconds: 45, title: '守住窗門，別讓霧屍碰到倖存者，撐到後門撬開' },
+          success: { text: '後門終於撬開了。一家人跟著你從後巷逃出來，其中一位決定跟你走，還分了你一些物資。', survivor: true, loot: 'medium' },
+          fail: { text: '玻璃整片碎了，屍群湧進店裡。你拉著還活著的人從後門擠出去，什麼也沒帶走。', hurt: 15, noise: 25 },
         },
       },
       { label: '敲門交易', scrap: 30, hint: '30 廢料換大量物資', action: { type: 'outcome', outcome: { text: '門縫裡塞出一大袋東西。', scrapCost: 30, loot: 'big' } } },
@@ -753,8 +874,18 @@ export const EVENTS: ExploreEvent[] = [
     options: [
       { label: '用開鎖工具', consume: 'lockpick', hint: '安靜打開', action: { type: 'outcome', outcome: { text: '櫃門一個個彈開。', loot: 'big', bonus: { scrap: 10 } } } },
       {
+        label: '破解電子鎖',
+        hint: '開鎖小遊戲・最難',
+        action: {
+          type: 'lock',
+          lock: { kinds: ['wires', 'pins', 'dial'], tier: 3, prompt: '破解槍械櫃的鎖' },
+          success: { text: '櫃門的電磁鎖喀一聲鬆開，一排槍安安靜靜地掛在裡面。', loot: 'big', bonus: { scrap: 10 } },
+          fail: { text: '警報大作！穿制服的霧屍全轉過頭來。你搶了一盒子彈就跑。', loot: 'small', noise: 35 },
+        },
+      },
+      {
         label: '先清場再撬',
-        hint: '條件戰鬥＋QTE',
+        hint: '條件戰鬥',
         action: {
           type: 'field',
           field: { mode: 'fight', goal: 'clear', title: '清掉槍械櫃旁的霧屍', zombies: 6 },
