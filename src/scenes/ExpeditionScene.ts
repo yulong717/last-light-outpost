@@ -409,7 +409,6 @@ export class ExpeditionScene extends Phaser.Scene {
       case 'lock': {
         const data: LockData = {
           spec: a.lock,
-          kind: this.exp.rng.pick(a.lock.kinds),
           zone: this.exp.zone.id,
           ease: this.exp.qteEase(),
           onDone: (ok) => {

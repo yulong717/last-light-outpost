@@ -306,13 +306,12 @@ export type QteKind = 'timing' | 'sequence' | 'mash';
 /** QTE 的評等：great 大成功（一次都沒失誤／剩很多時間）、ok 成功、fail 失敗 */
 export type QteGrade = 'great' | 'ok' | 'fail';
 
-/** 開鎖小遊戲：密碼轉盤（線索藏在場景裡）、彈子鎖（抓時機推栓）、電箱接線（旋轉接頭把電接通） */
-export type LockKind = 'dial' | 'pins' | 'wires';
+/** 開鎖小遊戲的鎖：外觀不同（掛鎖、門鎖、櫃鎖、保險箱），裡面都是真的彈子鎖芯 */
+export type LockModel = 'padlock' | 'door' | 'cabinet' | 'safe';
 
 export interface LockSpec {
-  /** 可以給幾種，進場時隨機抽一種（同一個櫃子不會每次都一樣） */
-  kinds: LockKind[];
-  /** 難度 1～3：彈子數、密碼位數、接線格子大小 */
+  model: LockModel;
+  /** 難度 1～3：彈子數（3～5）、彈簧多硬、剪切線判定多窄 */
   tier: 1 | 2 | 3;
   /** 開鎖畫面上方的說明 */
   prompt: string;
@@ -452,7 +451,7 @@ export const EVENTS: ExploreEvent[] = [
         hint: '開鎖小遊戲・失敗會弄出聲響',
         action: {
           type: 'lock',
-          lock: { kinds: ['pins', 'dial'], tier: 1, prompt: '打開鐵櫃的鎖' },
+          lock: { model: 'padlock', tier: 1, prompt: '撬開鐵櫃上的掛鎖' },
           success: { text: '最後一根彈子卡進去，鎖頭彈開了。', loot: 'big' },
           fail: { text: '鎖芯卡死了。你只好拿撬棍硬撬，砸出好大一聲，只來得及抓一點東西。', loot: 'small', noise: 25 },
         },
@@ -475,37 +474,37 @@ export const EVENTS: ExploreEvent[] = [
   {
     id: 'safe',
     title: '辦公室的保險箱',
-    text: '經理室角落有一個轉盤保險箱。桌上、牆上到處是便條紙，密碼八成就寫在這房間的某個地方。',
+    text: '經理室角落有一個舊式保險箱，轉盤早就壞了，但下面還有一個備用鑰匙孔。',
     weight: 2,
     options: [
       {
-        label: '找線索、轉密碼',
-        hint: '開鎖小遊戲：密碼轉盤',
+        label: '撬備用鑰匙孔',
+        hint: '開鎖小遊戲',
         action: {
           type: 'lock',
-          lock: { kinds: ['dial'], tier: 2, prompt: '在房間裡找密碼，轉開保險箱' },
-          success: { text: '轉盤停在最後一格，門把一壓就開了。裡面是有人藏起來的家當。', loot: 'big', bonus: { scrap: 10 } },
-          fail: { text: '轉錯太多次，警報器嗶嗶亂叫。你踹了箱子一腳，悻悻離開。', noise: 30 },
+          lock: { model: 'safe', tier: 2, prompt: '撬開保險箱的備用鑰匙孔' },
+          success: { text: '鎖芯一轉，門把一壓就開了。裡面是有人藏起來的家當。', loot: 'big', bonus: { scrap: 10 } },
+          fail: { text: '撥片斷在鎖孔裡，警報器嗶嗶亂叫。你踹了箱子一腳，悻悻離開。', noise: 30 },
         },
       },
-      { label: '用開鎖工具', consume: 'lockpick', hint: '聽著齒輪聲慢慢轉開', action: { type: 'outcome', outcome: { text: '你貼著箱門聽了半天，喀、喀、喀，門開了。', loot: 'big' } } },
+      { label: '用開鎖工具', consume: 'lockpick', hint: '直接打開', action: { type: 'outcome', outcome: { text: '專業的工具就是不一樣，喀、喀、喀，門開了。', loot: 'big' } } },
       { label: '不浪費時間', action: { type: 'outcome', outcome: { text: '你順手拿了桌上的零錢罐就走。', bonus: { scrap: 4 } } } },
     ],
   },
   {
     id: 'fusebox',
     title: '斷電的倉庫門',
-    text: '電動鐵捲門沒電了，旁邊的電箱蓋子被扯開，線路亂成一團。接通的話門就會自己升起來。',
+    text: '倉庫的鐵捲門用一個上鎖的控制箱控制。打開控制箱、按下開關，門就會自己升起來。',
     weight: 3,
     options: [
       {
-        label: '重新接線',
-        hint: '開鎖小遊戲：電箱接線',
+        label: '撬開控制箱',
+        hint: '開鎖小遊戲',
         action: {
           type: 'lock',
-          lock: { kinds: ['wires'], tier: 2, prompt: '轉動接頭，把電從左邊接到右邊' },
-          success: { text: '電箱啪一聲亮起，鐵捲門緩緩升了上去。', loot: 'medium', bonus: { scrap: 6 } },
-          fail: { text: '火花一閃，你被電得整隻手發麻。門紋風不動。', hurt: 12, noise: 10 },
+          lock: { model: 'cabinet', tier: 2, prompt: '撬開鐵捲門控制箱的鎖' },
+          success: { text: '控制箱一開，你按下開關，鐵捲門緩緩升了上去。', loot: 'medium', bonus: { scrap: 6 } },
+          fail: { text: '你一氣之下硬扳箱門，碰到裡面的電線，被電得整隻手發麻。門紋風不動。', hurt: 12, noise: 10 },
         },
       },
       { label: '讓工兵處理', hint: '屬性：手速・有工兵必成功', action: { type: 'check', attr: 'hand', base: 0.2, perPoint: 0.12, role: 'engineer', success: { text: '隊員接了兩條線，門就升起來了。', loot: 'medium' }, fail: { text: '保險絲燒了，門再也開不了。', noise: 5 } } },
@@ -874,12 +873,12 @@ export const EVENTS: ExploreEvent[] = [
     options: [
       { label: '用開鎖工具', consume: 'lockpick', hint: '安靜打開', action: { type: 'outcome', outcome: { text: '櫃門一個個彈開。', loot: 'big', bonus: { scrap: 10 } } } },
       {
-        label: '破解電子鎖',
+        label: '撬開槍櫃的鎖',
         hint: '開鎖小遊戲・最難',
         action: {
           type: 'lock',
-          lock: { kinds: ['wires', 'pins', 'dial'], tier: 3, prompt: '破解槍械櫃的鎖' },
-          success: { text: '櫃門的電磁鎖喀一聲鬆開，一排槍安安靜靜地掛在裡面。', loot: 'big', bonus: { scrap: 10 } },
+          lock: { model: 'door', tier: 3, prompt: '撬開槍械櫃的鎖（五根彈子）' },
+          success: { text: '最後一根彈子卡上去，櫃門鬆開了，一排槍安安靜靜地掛在裡面。', loot: 'big', bonus: { scrap: 10 } },
           fail: { text: '警報大作！穿制服的霧屍全轉過頭來。你搶了一盒子彈就跑。', loot: 'small', noise: 35 },
         },
       },
