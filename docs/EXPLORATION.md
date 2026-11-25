@@ -31,18 +31,18 @@
 
 ### 漫畫格 QTE（6 個招牌事件）
 
-腐朽的樓板、櫃子裡衝出來的霧屍、卡住的鐵捲門、可疑的絆線、樓梯間的跑者（新）、野狗（新）不再跳出單純的 QTE 面板，
-而是像美式漫畫一樣一格一格滑進來：
+腐朽的樓板、櫃子裡衝出來的霧屍、卡住的鐵捲門、可疑的絆線、樓梯間的跑者、野狗不再跳出單純的 QTE 面板，
+而是用全遊戲共用的**漫畫分格演出**（[COMIC_CINEMATICS.md](COMIC_CINEMATICS.md)）一格一格進場：
 
-1. 第 1、2 格交代狀況（旁白框＋狀聲詞），點一下可以跳過等待。
-2. 第 3 格是動作格：第 2 格放大、壓暗，QTE 就在這格裡進行。
-3. 第 4 格依結果換成不同的結果圖：**大成功**（時機條沒失誤、方向鍵／連打剩一半左右的時間）、**成功**、**失敗**，蓋上評等章，點一下繼續。
+1. 上排兩格交代狀況（旁白框＋擬聲字），點一下快轉。
+2. 左下動作格從左往右揭開：第 2 格放大、壓暗、速度線，QTE 就在這格裡進行；前面兩格退到背景。
+3. 右下結果格依結果換圖：**大成功**、**失敗**會整格砸進來（白閃、震動），**成功**從下方滑入，蓋上評等字，點一下繼續。
 
 大成功有自己的獎勵（`great`，例如樓板多一個背包、絆線拆出兩倍零件），沒填就跟成功一樣。
 
-![漫畫格：QTE 進行中](screenshots/explore-events/comic-floor-qte.png)
-![漫畫格：大成功](screenshots/explore-events/comic-floor-great.png)
+![漫畫格：QTE 進行中](screenshots/explore-events/comic-ambush-qte.png)
 ![漫畫格：失敗](screenshots/explore-events/comic-ambush-fail.png)
+![漫畫格：大成功](screenshots/explore-events/comic-door-great.png)
 
 - 分鏡內容（旁白、狀聲詞）：`src/data/comics.ts`。
 - 分鏡圖（每格 128×78，畫面上放大 2 倍，跟著區域換配色）：`src/art/ComicArt.ts`，每個事件五格 `s1`、`s2`、`great`、`ok`、`fail`。

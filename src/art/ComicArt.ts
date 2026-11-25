@@ -4,7 +4,8 @@ import { carton, crate, fig, glow, grenadeIcon, lookFor, PAL, shake, type Look, 
 import type { QteGrade } from '../data/explore';
 
 /**
- * 招牌 QTE 事件的漫畫分鏡（每格 128×78 邏輯像素，畫面上放大 2 倍）。
+ * 招牌 QTE 事件的漫畫分鏡（每格 128×78 邏輯像素，演出時依畫格大小放大、裁切、運鏡）。
+ * 插圖 id 寫成 qte/<事件>/<格>（src/comic/art.ts 解析）。
  * 一個事件五格：s1、s2（交代狀況）、great／ok／fail（依 QTE 結果）。動作格沿用 s2 放大裁切。
  * 美式漫畫的味道靠：速度線、網點、爆炸框、斜構圖、大特寫。
  * 全部用 Painter 程式畫，同一格在不同區域會換上那一區的牆色與天色。貼圖 key = comic_<事件>_<格>_<區域>。
