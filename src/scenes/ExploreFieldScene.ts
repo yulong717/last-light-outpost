@@ -20,6 +20,8 @@ import { Crosshair } from '../feel/Crosshair';
 import { FEEL } from '../feel/FeelConfig';
 import { rumble } from '../feel/Haptics';
 import { ScreenFeedback } from '../feel/ScreenFeedback';
+import { AimReadout } from '../ui/AimReadout';
+import { HeroStatus } from '../ui/HeroStatus';
 import { createAtmosphere } from '../fx/Atmosphere';
 import { Fx } from '../fx/Fx';
 import { touchMeleeAimX, InputManager, holdAction, queueAction, registerUIRect } from '../input/InputManager';
@@ -164,9 +166,10 @@ export class ExploreFieldScene extends Phaser.Scene {
   private survivor?: { img: Phaser.GameObjects.Image; hp: number; maxHp: number; x: number; y: number; bar: (r: number) => void };
   private goalText!: Phaser.GameObjects.Text;
   private infoText!: Phaser.GameObjects.Text;
-  private ammoText!: Phaser.GameObjects.Text;
-  private setHp!: (r: number) => void;
-  private setNoise!: (r: number) => void;
+  /** 準星旁的彈匣格、換彈圈 */
+  private aim!: AimReadout;
+  /** 主角腳下的生命光圈、體力弧、噪音聲波 */
+  private status!: HeroStatus;
   private takedownHint!: Phaser.GameObjects.Text;
   private noGunCooldown = 0;
   private unregister: (() => void)[] = [];
@@ -820,33 +823,24 @@ export class ExploreFieldScene extends Phaser.Scene {
       o.setDepth(200);
       return o;
     };
-    fix(this.add.rectangle(0, 0, GAME_WIDTH, 24, 0x000000, 0.5).setOrigin(0));
-    fix(pixelText(this, 6, 6, '生命', 8));
-    this.setHp = this.hudBar(32, 8, 70, 7, 0xef5350);
-    if (this.stage) {
-      // 序章沒有噪音系統：左上改成樓層
-      fix(pixelText(this, 110, 6, `市立高中・${this.stage.floor}`, 8, '#f5d76e'));
-      this.setNoise = () => {};
-    } else {
-      fix(pixelText(this, 110, 6, '噪音', 8, '#ffcc80'));
-      this.setNoise = this.hudBar(136, 8, 60, 7, 0xffa726);
-    }
+    // 不鋪頂端黑條：生命是主角腳下的光、噪音是主角身上的聲波圈（src/ui/HeroStatus.ts），
+    // 上方只留一行標題（序章是樓層）與一條細細的路程線
     const title = this.stage
       ? this.spec.title
       : this.spec.mode === 'stealth' ? `潛入：${this.spec.title}` : this.spec.meleeOnly ? `${this.spec.title}（禁止開槍）` : this.spec.title;
-    this.goalText = fix(pixelText(this, GAME_WIDTH / 2, 30, title, 9, '#ffd24a').setOrigin(0.5, 0).setStroke('#000000', 3));
-    this.infoText = fix(pixelText(this, GAME_WIDTH - 6, 6, '', 8).setOrigin(1, 0));
+    this.goalText = fix(pixelText(this, GAME_WIDTH / 2, 6, title, 8, '#ffd24a').setOrigin(0.5, 0).setStroke('#000000', 3));
+    this.infoText = fix(pixelText(this, GAME_WIDTH - 6, 6, '', 7).setOrigin(1, 0).setStroke('#000000', 3));
     if (this.spec.walk) {
-      // 路程條：起點 → 下一站
+      // 路程線：畫面最上緣一條細線，起點 → 下一站
       const x0 = GAME_WIDTH / 2 - 90;
-      fix(this.add.rectangle(x0, 48, 180, 3, 0x000000, 0.6).setOrigin(0, 0.5));
-      fix(this.add.rectangle(x0, 48, 180, 1, 0x5a606b).setOrigin(0, 0.5));
-      fix(this.add.rectangle(x0 + 180, 48, 7, 7, 0xffd24a).setStrokeStyle(1, 0x000000));
-      this.walkDot = fix(this.add.rectangle(x0, 48, 5, 5, 0x9ad17a).setStrokeStyle(1, 0x000000));
+      fix(this.add.rectangle(x0, 2, 180, 2, 0x000000, 0.5).setOrigin(0, 0));
+      fix(this.add.rectangle(x0 + 180, 3, 4, 4, 0xffd24a).setStrokeStyle(1, 0x000000));
+      this.walkDot = fix(this.add.rectangle(x0, 3, 4, 4, 0x9ad17a).setStrokeStyle(1, 0x000000));
     }
     const touch = this.sys.game.device.input.touch;
-    const wx = touch ? 210 : 6;
-    this.ammoText = fix(pixelText(this, wx, GAME_HEIGHT - 28, '', 9));
+    // 彈藥改到準星旁邊（src/ui/AimReadout.ts）
+    this.aim = new AimReadout(this);
+    this.status = new HeroStatus(this, this.player.sprite);
     const help = this.stage
       ? touch
         ? ''
@@ -866,7 +860,9 @@ export class ExploreFieldScene extends Phaser.Scene {
         : touch
           ? ''
           : 'F 互動（封門・斷電）・射擊油桶引爆・H 醫療包';
-    fix(pixelText(this, GAME_WIDTH / 2, GAME_HEIGHT - 14, help, 7, '#90a4ae').setOrigin(0.5));
+    // 操作說明：開場看幾秒就淡出，不一直壓在地面上
+    const helpText = fix(pixelText(this, GAME_WIDTH / 2, GAME_HEIGHT - 14, help, 7, '#90a4ae').setOrigin(0.5).setStroke('#000000', 3));
+    this.tweens.add({ targets: helpText, alpha: 0, delay: 8000, duration: 800 });
     this.interactHint = pixelText(this, 0, 0, '', 8, '#90caf9').setOrigin(0.5).setDepth(70).setStroke('#000000', 3).setVisible(false);
     this.hiddenHint = pixelText(this, 0, 0, '', 7, '#9ad17a').setOrigin(0.5).setDepth(70).setStroke('#000000', 3).setVisible(false);
     this.takedownHint = pixelText(this, 0, 0, touch ? '近戰：暗殺' : 'E 暗殺', 8, '#c8e6c9').setOrigin(0.5).setDepth(70).setStroke('#000000', 3).setVisible(false);
@@ -886,16 +882,10 @@ export class ExploreFieldScene extends Phaser.Scene {
     }
   }
 
-  private hudBar(x: number, y: number, w: number, h: number, color: number): (r: number) => void {
-    const bg = this.add.rectangle(x, y, w, h, 0x000000).setOrigin(0).setScrollFactor(0).setDepth(200);
-    const bar = this.add.rectangle(x + 1, y + 1, w - 2, h - 2, color).setOrigin(0).setScrollFactor(0).setDepth(201);
-    void bg;
-    return (r) => (bar.width = (w - 2) * Phaser.Math.Clamp(r, 0, 1));
-  }
-
   private touchButton(x: number, y: number, label: string, fn: () => void, onRelease?: () => void): Phaser.GameObjects.Text {
     const b = this.add.circle(x + 16, y + 16, 16, 0x000000, 0.45).setStrokeStyle(1, 0xffffff, 0.5).setScrollFactor(0).setDepth(200);
-    const text = pixelText(this, x + 16, y + 16, label, 7).setOrigin(0.5).setScrollFactor(0).setDepth(201);
+    const text = pixelText(this, x + 16, y + 16, label, 7).setOrigin(0.5).setScrollFactor(0).setDepth(201).setAlpha(0.8);
+    b.setAlpha(0.75);
     b.setInteractive().on('pointerdown', (_p: Phaser.Input.Pointer, _x: number, _y: number, e: Phaser.Types.Input.EventData) => {
       e.stopPropagation();
       fn();
@@ -908,23 +898,13 @@ export class ExploreFieldScene extends Phaser.Scene {
   private refreshHud(): void {
     const p = this.player;
     if (this.walkDot) this.walkDot.x = GAME_WIDTH / 2 - 90 + 180 * Phaser.Math.Clamp((p.footX - 60) / (this.exitX - 70), 0, 1);
-    this.setHp(p.hp / p.maxHp);
-    this.setNoise(this.exp.noise / NOISE.max);
-    const w = this.weapons.active;
-    const res = this.weapons.reserve();
     this.stanceLabel?.setText(this.melee.stance ? '持槍' : '持刀');
-    const ch = this.melee.chain;
-    const pips = ch.len > 1 ? '　' + Array.from({ length: ch.len }, (_, i) => (i < ch.idx ? '■' : '□')).join('') : '';
-    this.ammoText.setText(
-      this.melee.stance ? `近戰：${this.melee.def.name}${pips}` : `${w.def.name}  ${w.ammo}/${w.def.magazine}  ${res === Infinity ? '∞' : res}${this.weapons.reloading ? '  換彈中…' : ''}`,
-    );
     const s = GameState.data.supplies;
     const parts = [`醫療 ${s.medkit}`];
     if (this.spec.seconds && this.spec.mode === 'fight') parts.unshift(`剩 ${Math.max(0, Math.ceil(this.spec.seconds - this.elapsed))} 秒`);
     else if (this.alerted) parts.unshift(`剩 ${this.zombies.length + this.toSpawn} 隻`);
     const hh = this.heroSys?.hud();
-    if (hh?.grabbed) parts.unshift(hh.grabbed > 1 ? `被 ${hh.grabbed} 隻纏住！` : '被抓住！');
-    else if (hh?.sprinting) parts.unshift('衝刺中');
+    if (hh?.sprinting) parts.unshift('衝刺中');
     if (hh?.skill) parts.push(`${hh.skill} ${hh.skillReady ? '就緒' : '…'}`);
     this.infoText.setText(parts.join('　'));
   }
@@ -1021,6 +1001,27 @@ export class ExploreFieldScene extends Phaser.Scene {
     const climbY = Math.tan(Phaser.Math.DegToRad(this.weapons.climbDeg)) * Math.abs(inp.aimX - muzzleX);
     this.crosshair.update(realDt, inp.aimX, inp.aimY - climbY, this.weapons.spreadNow(p.moveFactor), aimDist, p.alive && !this.melee.stance);
     this.screenFx.update(realDt, p.hp, p.maxHp);
+    // 狀態畫在主角身上（src/ui/）：生命＝腳下的光、體力＝藍弧、噪音＝聲波圈、彈藥跟著準星
+    this.status.update(realDt, { footX: p.footX, footY: p.footY, hp: p.hp, maxHp: p.maxHp, alive: p.alive, stamina: this.melee.staminaRatio, noise: this.stage ? undefined : this.exp.noise / NOISE.max });
+    const wa = this.weapons.active;
+    this.aim.update(realDt, {
+      aimX: inp.aimX,
+      aimY: inp.aimY - climbY,
+      gun: p.alive && !this.melee.stance && !this.weapons.unarmed,
+      ammo: wa.ammo,
+      magazine: wa.def.magazine,
+      reserve: this.weapons.reserve(),
+      reloading: this.weapons.reloading,
+      reloadProgress: this.weapons.reloadProgress,
+      weaponId: wa.def.id,
+      weaponName: wa.def.name,
+      meleeStance: this.melee.stance,
+      meleeName: this.melee.def.name,
+      chain: this.melee.chain,
+      headX: p.footX,
+      headY: p.footY - 62,
+      grabbed: this.heroSys?.hud()?.grabbed,
+    });
 
     this.updateFollowers(dt);
     this.props.update(dt);

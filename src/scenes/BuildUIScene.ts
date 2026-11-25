@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
-import { uiButton, uiPanel, uiTopBar } from '../explore/ui';
+import { uiButton, uiPanel } from '../explore/ui';
 import { PAL } from '../ui/theme';
-import { GAME_WIDTH } from '../config';
+import { GAME_HEIGHT, GAME_WIDTH } from '../config';
 import { BARRICADE_LEVELS, BUILDINGS, LAMP, SPIKES, TURRET, type BuildingKind } from '../data/buildings';
 import type { BuildMode } from '../build/BuildMode';
 import type { Quote } from '../build/Outpost';
@@ -31,7 +31,7 @@ const PANEL_Y = 34;
 const PANEL_W = 340;
 
 /**
- * 白天布置的介面：上方資訊列（天數、廢料、開始夜晚），
+ * 白天布置的介面：左上一行天數與資源，左下出發探索／軍械庫／隊伍，右下「開始夜晚」，
  * 選到槽位／路障／外牆時在天空區域跳出操作面板。
  * 面板放在天空那一塊，不會蓋住地面上的槽位。
  */
@@ -43,6 +43,9 @@ export class BuildUIScene extends Phaser.Scene {
   private panel!: Phaser.GameObjects.Container;
   private hint!: Phaser.GameObjects.Text;
   private objective?: Phaser.GameObjects.Text;
+  /** 操作提示（只有第一天顯示） */
+  private hintOn = true;
+  private drawInfoPlate: () => void = () => {};
   private panelRects: (() => void)[] = [];
   private fixedRects: (() => void)[] = [];
   /** 隊伍名冊面板是否打開 */
@@ -66,36 +69,56 @@ export class BuildUIScene extends Phaser.Scene {
     this.fixedRects = [];
     const touch = this.sys.game.device.input.touch;
 
-    uiTopBar(this, 26, 0);
-    pixelText(this, 8, 6, `第 ${GameState.data.day} 天・白天`, 9, '#f5d76e');
-    this.scrapText = pixelText(this, 96, 6, '', 9, '#e8e8e8');
-    this.fixedRects.push(registerUIRect({ x: 0, y: 0, w: GAME_WIDTH, h: 26 }));
+    // 不再鋪滿版頂端列：左上一行天數與資源，左下三個入口，右下一個主要動作
+    const H = GAME_HEIGHT;
+    const plate = this.add.graphics().setDepth(99);
+    pixelText(this, 10, 5, `第 ${GameState.data.day} 天・白天`, 9, '#f5d76e');
+    this.scrapText = pixelText(this, 96, 5, '', 9, '#e8e8e8');
+    this.drawInfoPlate = () => {
+      const w = 96 + this.scrapText.width + 10;
+      plate.clear().fillStyle(0x0c0d10, 0.6).fillRect(4, 3, w, 18);
+      this.fixedRects.forEach((fn) => fn());
+      this.fixedRects = [registerUIRect({ x: 4, y: 3, w, h: 18 }), ...bottomRects.map((r) => registerUIRect(r))];
+    };
 
-    this.button(GAME_WIDTH - 104, 2, 100, 22, '開始夜晚 ▶', true, () => this.onStartNight(), 0x7a2a22);
-    this.button(GAME_WIDTH - 172, 2, 62, 22, `隊伍 ${GameState.data.crew.length}`, true, () => this.toggleRoster());
-    // 軍械庫：陳列架配置上場武器、商店買彈藥和物資
-    this.button(GAME_WIDTH - 240, 2, 62, 22, '軍械庫', true, () => this.openArmory(), 0x3a4a2a);
+    const bottomRects: { x: number; y: number; w: number; h: number }[] = [];
+    const bottom = (x: number, y: number, w: number, h: number, label: string, enabled: boolean, fn: () => void, fill?: number) => {
+      this.button(x, y, w, h, label, enabled, fn, fill);
+      bottomRects.push({ x, y, w, h });
+    };
+    bottom(GAME_WIDTH - 112, H - 30, 106, 24, '開始夜晚 ▶', true, () => this.onStartNight(), 0x7a2a22);
     // 白天出發：回到路線圖（今天還有時間、還沒決定在這裡過夜才能出發）
     const route = GameState.data.route;
     const left = route ? (GameState.data.dayTime > 0 ? route.hours : 0) : GameState.data.dayTime;
     const label = route ? (left > 0 ? `出發（剩 ${route.hours} 小時）` : '今晚在此過夜') : `出發探索 ${'●'.repeat(left)}${'○'.repeat(Math.max(0, EXPLORE_TIME.slotsPerDay - left))}`;
-    this.button(GAME_WIDTH - 358, 2, 112, 22, label, left > 0, () => this.onExplore(), 0x2a3a5a);
+    bottom(6, H - 21, 112, 18, label, left > 0, () => this.onExplore(), 0x2a3a5a);
+    // 軍械庫：陳列架配置上場武器、商店買彈藥和物資
+    bottom(122, H - 21, 56, 18, '軍械庫', true, () => this.openArmory(), 0x3a4a2a);
+    bottom(182, H - 21, 56, 18, `隊伍 ${GameState.data.crew.length}`, true, () => this.toggleRoster());
 
+    // 操作提示只在第一天出現
     this.hint = pixelText(
       this,
       GAME_WIDTH / 2,
-      34,
+      26,
       touch ? '點地上的槽位建造　點路障或外牆修理／強化' : '點地上的槽位建造　點路障或外牆修理／強化　右鍵或 Esc 取消　Enter 開始夜晚',
       8,
       '#c8c8c8',
     ).setOrigin(0.5, 0);
-    this.tweens.add({ targets: this.hint, alpha: 0.4, duration: 900, yoyo: true, repeat: -1 });
-    // 主線目標
+    this.hintOn = GameState.data.day <= 1;
+    this.hint.setStroke('#000000', 3);
+    this.tweens.add({ targets: this.hint, alpha: 0.4, duration: 900, yoyo: true, repeat: 4 });
+    // 看一下就收起來，不一直壓在二樓陽台、天空的槽位上
+    this.time.delayedCall(9000, () => {
+      this.hintOn = false;
+      this.tweens.add({ targets: this.hint, alpha: 0, duration: 500 });
+    });
+    // 主線目標：左上那一行下面
     const ch = GameState.chapter;
     if (ch) {
       const zn = getZone(ch.zone)?.name ?? '';
       const goal = GameState.chapterReady() ? `★ ${ch.title}：${ch.objective}（${zn}）` : `★ ${ch.title}　第 ${ch.minDay} 天開始`;
-      this.objective = pixelText(this, GAME_WIDTH / 2, 48, goal, 8, '#f5d76e').setOrigin(0.5, 0);
+      this.objective = pixelText(this, 10, 23, goal, 7, '#f5d76e').setStroke('#000000', 3);
     }
 
     this.panel = this.add.container(0, 0);
@@ -122,10 +145,11 @@ export class BuildUIScene extends Phaser.Scene {
   private refresh(): void {
     const s = GameState.data.supplies;
     this.scrapText.setText(`廢料 ${GameState.data.scrap}　醫療 ${s.medkit}`);
+    this.drawInfoPlate();
     this.clearPanel();
     const sel = this.mode.selection;
     if (sel) this.rosterOpen = false;
-    this.hint.setVisible(!sel && !this.rosterOpen);
+    this.hint.setVisible(this.hintOn && !sel && !this.rosterOpen);
     this.objective?.setVisible(!sel && !this.rosterOpen);
     if (!sel) {
       if (this.rosterOpen) this.showRoster();
