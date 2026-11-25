@@ -306,8 +306,8 @@ export type QteKind = 'timing' | 'sequence' | 'mash';
 /** QTE 的評等：great 大成功（一次都沒失誤／剩很多時間）、ok 成功、fail 失敗 */
 export type QteGrade = 'great' | 'ok' | 'fail';
 
-/** 開鎖小遊戲的鎖：外觀不同（掛鎖、門鎖、櫃鎖、保險箱），裡面都是真的彈子鎖芯 */
-export type LockModel = 'padlock' | 'door' | 'cabinet' | 'safe';
+/** 開鎖小遊戲的鎖：外觀不同（掛鎖、門鎖、櫃鎖、保險箱），裡面都是真的彈子鎖芯；fusebox 是電箱接線（旋轉接頭把電接通） */
+export type LockModel = 'padlock' | 'door' | 'cabinet' | 'safe' | 'fusebox';
 
 export interface LockSpec {
   model: LockModel;
@@ -494,17 +494,17 @@ export const EVENTS: ExploreEvent[] = [
   {
     id: 'fusebox',
     title: '斷電的倉庫門',
-    text: '倉庫的鐵捲門用一個上鎖的控制箱控制。打開控制箱、按下開關，門就會自己升起來。',
+    text: '電動鐵捲門沒電了，旁邊的電箱蓋子被扯開，線路亂成一團。接通的話門就會自己升起來。',
     weight: 3,
     options: [
       {
-        label: '撬開控制箱',
-        hint: '開鎖小遊戲',
+        label: '重新接線',
+        hint: '小遊戲：電箱接線',
         action: {
           type: 'lock',
-          lock: { model: 'cabinet', tier: 2, prompt: '撬開鐵捲門控制箱的鎖' },
-          success: { text: '控制箱一開，你按下開關，鐵捲門緩緩升了上去。', loot: 'medium', bonus: { scrap: 6 } },
-          fail: { text: '你一氣之下硬扳箱門，碰到裡面的電線，被電得整隻手發麻。門紋風不動。', hurt: 12, noise: 10 },
+          lock: { model: 'fusebox', tier: 2, prompt: '轉動接頭，把電從左邊接到右邊' },
+          success: { text: '電箱啪一聲亮起，鐵捲門緩緩升了上去。', loot: 'medium', bonus: { scrap: 6 } },
+          fail: { text: '火花一閃，你被電得整隻手發麻。門紋風不動。', hurt: 12, noise: 10 },
         },
       },
       { label: '讓工兵處理', hint: '屬性：手速・有工兵必成功', action: { type: 'check', attr: 'hand', base: 0.2, perPoint: 0.12, role: 'engineer', success: { text: '隊員接了兩條線，門就升起來了。', loot: 'medium' }, fail: { text: '保險絲燒了，門再也開不了。', noise: 5 } } },

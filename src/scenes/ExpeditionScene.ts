@@ -419,8 +419,10 @@ export class ExpeditionScene extends Phaser.Scene {
         };
         this.input.enabled = false;
         this.clearCard();
-        this.scene.launch('Lock', data);
-        this.scene.bringToTop('Lock');
+        // 電箱接線是另一個小遊戲，其他都是彈子鎖
+        const key = a.lock.model === 'fusebox' ? 'Wiring' : 'Lock';
+        this.scene.launch(key, data);
+        this.scene.bringToTop(key);
         break;
       }
       case 'siege': {

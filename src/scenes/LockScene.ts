@@ -21,7 +21,7 @@ const PY = 24;
 const PW = GAME_WIDTH - 80;
 const PH = GAME_HEIGHT - 48;
 
-const MODEL_NAME: Record<LockModel, string> = { padlock: '掛鎖', door: '門鎖', cabinet: '櫃鎖', safe: '保險箱鎖' };
+const MODEL_NAME: Record<LockModel, string> = { padlock: '掛鎖', door: '門鎖', cabinet: '櫃鎖', safe: '保險箱鎖', fusebox: '電箱' };
 /** 失誤幾次（撥片斷掉）就失敗 */
 const MAX_MISTAKES = 3;
 const MISTAKE_NOISE = 4;
