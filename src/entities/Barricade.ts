@@ -12,6 +12,8 @@ export class Barricade {
   hp: number;
   maxHp: number;
   private segments: Phaser.GameObjects.Image[] = [];
+  /** 頭上的小耐久條：受損才出現，被打時亮起、之後淡成半透明 */
+  private bar: Phaser.GameObjects.Graphics;
 
   /**
    * dir：霧屍從哪一側來（1 = 右邊，預設；-1 = 左邊，雙面據點的左側路障）。
@@ -36,6 +38,7 @@ export class Barricade {
         .setFlipX(dir < 0);
       this.segments.push(img);
     }
+    this.bar = scene.add.graphics().setDepth(depthForY(bottom) + 0.5).setAlpha(0.55);
   }
 
   get alive(): boolean {
@@ -55,6 +58,9 @@ export class Barricade {
     if (!this.alive) return;
     this.hp = Math.max(0, this.hp - amount);
     this.refreshLook();
+    this.scene.tweens.killTweensOf(this.bar);
+    this.bar.setAlpha(1);
+    this.scene.tweens.add({ targets: this.bar, alpha: 0.55, delay: 1800, duration: 600 });
     const seg = this.segmentNear(hitY ?? (LANE_TOP + LANE_BOTTOM) / 2);
     // 被打：木屑飛濺 + 那一段晃一下
     const fx = Fx.of(this.scene);
@@ -91,6 +97,7 @@ export class Barricade {
   /** 依耐久切換損壞階段的影格（ProceduralArt 用程式畫的 3 格），沒有影格時改用透明度 */
   private refreshLook(): void {
     const ratio = this.maxHp > 0 ? this.hp / this.maxHp : 0;
+    this.drawBar(ratio);
     for (const s of this.segments) {
       if (!this.alive) {
         s.setAlpha(0.18);
@@ -112,6 +119,21 @@ export class Barricade {
     this.hp = Math.min(this.maxHp, this.hp + amount);
     this.refreshLook();
     return this.hp - before;
+  }
+
+  /** 耐久條畫在最遠那段柵欄的頂上；滿血或倒了就不畫 */
+  private drawBar(ratio: number): void {
+    const g = this.bar.clear();
+    if (!this.alive || ratio >= 1) return;
+    const top = this.segments.reduce((m, s) => Math.min(m, s.y - s.displayHeight), Infinity);
+    const far = this.segments[0];
+    const w = 22;
+    const x = Math.round(far.x - w / 2);
+    const y = Math.round(top - 6);
+    const c = ratio > 0.5 ? 0xd9a35a : ratio > 0.25 ? 0xf2c14e : 0xd8402f;
+    g.fillStyle(0x000000, 0.75).fillRect(x - 1, y - 1, w + 2, 5);
+    g.fillStyle(0x3a2a20, 1).fillRect(x, y, w, 3);
+    g.fillStyle(c, 1).fillRect(x, y, Math.max(1, Math.round(w * ratio)), 3);
   }
 
   private segmentNear(y: number): Phaser.GameObjects.Image {

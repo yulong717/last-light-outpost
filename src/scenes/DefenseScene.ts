@@ -40,6 +40,8 @@ import { createAtmosphere, nightGrade } from '../fx/Atmosphere';
 import { Fx } from '../fx/Fx';
 import { CameraFeel } from '../feel/CameraFeel';
 import { Crosshair } from '../feel/Crosshair';
+import { HeroStatus } from '../ui/HeroStatus';
+import { AimReadout } from '../ui/AimReadout';
 import { FEEL } from '../feel/FeelConfig';
 import { rumble } from '../feel/Haptics';
 import { ScreenFeedback } from '../feel/ScreenFeedback';
@@ -206,6 +208,10 @@ export class DefenseScene extends Phaser.Scene {
   private scrapEarned = 0;
   private camFeel!: CameraFeel;
   private crosshair!: Crosshair;
+  /** 主角腳下的生命光圈與體力弧（入夜才建立） */
+  private heroStatus?: HeroStatus;
+  /** 準星旁的彈匣格、換彈圈 */
+  private aimReadout?: AimReadout;
   /** 巴雷特的狙擊鏡、十字弓射出去的箭（入夜才建立） */
   private scope?: ScopeView;
   private bolts?: BoltPickups;
@@ -566,6 +572,8 @@ export class DefenseScene extends Phaser.Scene {
     this.input2 = new InputManager(this, { x: this.player.footX + 200, y: this.player.footY - 30 });
     // 準星會隱藏滑鼠游標，白天要點槽位，所以入夜才建立
     this.crosshair = new Crosshair(this);
+    this.heroStatus = new HeroStatus(this, this.player.sprite);
+    this.aimReadout = new AimReadout(this);
     this.scope = new ScopeView(this, this.weapons);
     this.bolts = new BoltPickups(this, this.weapons, armory.ammo, () => this.player.footY - this.rig.muzzle.y, clampLaneY);
     this.companions.active = true;
@@ -584,7 +592,7 @@ export class DefenseScene extends Phaser.Scene {
         onDone: () => this.finishTutorial(),
       });
       this.events.once('tutorial-skip', () => this.finishTutorial(true));
-      this.input.keyboard?.once('keydown-ESC', () => this.finishTutorial(true));
+      // 電腦：Esc 打開暫停畫面，從那裡跳過教學（UIScene）
       this.scene.launch('UI', { tutorial: true });
       // UIScene 要先建好才收得到第一則提示
       this.time.delayedCall(50, () => this.tutorial?.start());
@@ -1080,6 +1088,27 @@ export class DefenseScene extends Phaser.Scene {
     const climbY = Math.tan(Phaser.Math.DegToRad(this.weapons.climbDeg)) * Math.abs(inp.aimX - muzzleX);
     this.crosshair.update(realDt, inp.aimX, inp.aimY - climbY, this.weapons.spreadNow(p.moveFactor), aimDist, p.alive && !this.melee.stance);
     this.screenFx.update(realDt, p.hp, p.maxHp);
+    // 狀態畫在主角身上：生命＝腳下的光、體力＝藍弧、彈藥跟著準星（src/ui/）
+    this.heroStatus?.update(realDt, { footX: p.footX, footY: p.footY, hp: p.hp, maxHp: p.maxHp, alive: p.alive, stamina: this.melee.staminaRatio });
+    const wa = this.weapons.active;
+    this.aimReadout?.update(realDt, {
+      aimX: inp.aimX,
+      aimY: inp.aimY - climbY,
+      gun: p.alive && !this.melee.stance && !this.weapons.unarmed,
+      ammo: wa.ammo,
+      magazine: wa.def.magazine,
+      reserve: this.weapons.reserve(),
+      reloading: this.weapons.reloading,
+      reloadProgress: this.weapons.reloadProgress,
+      weaponId: wa.def.id,
+      weaponName: wa.def.name,
+      meleeStance: this.melee.stance,
+      meleeName: this.melee.def.name,
+      chain: this.melee.chain,
+      headX: p.footX,
+      headY: p.footY - 62,
+      grabbed: this.heroSys?.hud()?.grabbed,
+    });
 
     // NPC 夥伴
     const ally = this.companions.update(
