@@ -110,6 +110,8 @@ export interface CrewMember {
   standby?: boolean;
   /** 雙面據點（孤島小店）守哪一側：1 = 右、-1 = 左；沒設就左右輪流 */
   side?: 1 | -1;
+  /** 多樓層據點（爛尾樓）守第幾層：0 = 1F；沒設就照地圖的 crewFloors 輪流 */
+  floor?: number;
 }
 
 /** 這位隊員現在能不能出戰／探索 */
