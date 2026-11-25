@@ -3,9 +3,9 @@ import type { QteGrade } from './explore';
 /**
  * 招牌 QTE 事件的漫畫分鏡（美式漫畫：一格一格滑進來）。
  *
- * 流程（src/scenes/QteScene.ts 的漫畫模式）：
- *   第 1 格、第 2 格依序滑進來交代狀況 → 第 3 格是動作格，QTE 就在這格裡進行
- *   → 第 4 格依結果（大成功／成功／失敗）換成不同的結果圖。
+ * 流程（src/scenes/QteScene.ts 的漫畫模式，用共用的分格演出引擎 src/comic/ComicSequencer.ts）：
+ *   第 1 格、第 2 格依序進場交代狀況 → 動作格揭開，QTE 就在這格裡進行
+ *   → 結果格依結果（大成功／成功／失敗）換成不同的結果圖。
  *
  * 每格的圖在 src/art/ComicArt.ts（貼圖 key = comic_<事件>_<格>），同一格在不同區域會換上那一區的配色。
  * 新增招牌事件：這裡加一筆、ComicArt 的 PANELS 加五個畫圖函式，事件的 qte 動作填 comic: '<id>'。

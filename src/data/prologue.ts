@@ -68,11 +68,6 @@ export interface PrologueStage {
   hints: StageHint[];
 }
 
-export const PROLOGUE_TITLE = {
-  title: '序章　放學後',
-  lines: ['午休的時候，你躲到頂樓水塔後面打盹。', '醒來的時候，太陽已經快下山了。', '樓下很安靜。安靜得不像一間學校。'],
-};
-
 export const PROLOGUE_STAGES: PrologueStage[] = [
   {
     id: 'roof',

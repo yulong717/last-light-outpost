@@ -2,10 +2,11 @@ import Phaser from 'phaser';
 import { GAME_HEIGHT, GAME_WIDTH } from '../config';
 import { AudioManager } from '../audio/AudioManager';
 import type { QteGrade, QteSpec } from '../data/explore';
-import { COMICS, GRADE_LABEL, type ComicDef, type ComicPanel } from '../data/comics';
-import { ensureComicPanel, PANEL_H, PANEL_W, type PanelSlot } from '../art/ComicArt';
+import { COMICS, GRADE_LABEL, type ComicDef } from '../data/comics';
+import { ComicSequencer } from '../comic/ComicSequencer';
+import type { Beat, ComicScript, Rect } from '../comic/types';
 import { uiPanel } from '../explore/ui';
-import { pixelText, wrapCJK } from '../utils/text';
+import { pixelText } from '../utils/text';
 import { rumble } from '../feel/Haptics';
 
 export interface QteData {
@@ -23,13 +24,13 @@ const DIRS: Dir[] = ['up', 'down', 'left', 'right'];
 
 /** 一般模式：畫面中間的面板 */
 const BOX = { x: 120, y: 110, w: GAME_WIDTH - 240, h: 150 };
-/** 漫畫模式：2×2 分鏡格（每格 128×78 放大 2 倍） */
-const SCALE = 2;
-const CELL_W = PANEL_W * SCALE;
-const CELL_H = PANEL_H * SCALE;
-const GX = [Math.round((GAME_WIDTH - CELL_W * 2 - 28) / 2), 0];
-GX[1] = GX[0] + CELL_W + 28;
-const GY = [14, 14 + CELL_H + 16];
+/** 漫畫模式的版面：上排兩格交代狀況、左下動作格（QTE 在裡面）、右下結果格 */
+const COMIC_RECT: Record<'s1' | 's2' | 'act' | 'result', Rect> = {
+  s1: { x: 18, y: 14, w: 300, h: 158 },
+  s2: { x: 332, y: 22, w: 290, h: 150 },
+  act: { x: 22, y: 188, w: 364, h: 160 },
+  result: { x: 400, y: 184, w: 222, h: 164 },
+};
 
 /**
  * 快速反應事件（疊在探索畫面上）：
@@ -39,8 +40,8 @@ const GY = [14, 14 + CELL_H + 16];
  *
  * 結果分三級：大成功（時機條沒失誤、方向鍵／連打剩很多時間）、成功、失敗。
  *
- * 漫畫模式（data.comic）：像美式漫畫一樣一格一格滑進來——
- * 第 1、2 格交代狀況 → 第 3 格是動作格，QTE 就在這格裡 → 第 4 格依結果換成不同的結果圖，點一下繼續。
+ * 漫畫模式（data.comic）：用共用的分格演出引擎（src/comic/ComicSequencer.ts）——
+ * 第 1、2 格交代狀況 → 動作格揭開，QTE 就在這格裡 → 結果格依評等換圖砸進來，點一下繼續。
  */
 export class QteScene extends Phaser.Scene {
   private data0!: QteData;
@@ -59,6 +60,9 @@ export class QteScene extends Phaser.Scene {
   private comic: ComicDef | null = null;
   /** 時機條失誤次數（大成功判定） */
   private misses = 0;
+  /** 漫畫模式：QTE 結束時交還給分格演出 */
+  private resolveQte: ((grade: string) => void) | null = null;
+  private grade: QteGrade = 'fail';
 
   constructor() {
     super('Qte');
@@ -73,11 +77,14 @@ export class QteScene extends Phaser.Scene {
     this.timeLeft = 0;
     this.comic = data.comic ? COMICS[data.comic.id] ?? null : null;
     this.ready = !this.comic;
+    this.resolveQte = null;
+    this.grade = 'fail';
     if (this.comic) {
-      this.PX = GX[0];
-      this.PY = GY[1];
-      this.PW = CELL_W;
-      this.PH = CELL_H;
+      const r = COMIC_RECT.act;
+      this.PX = r.x;
+      this.PY = r.y;
+      this.PW = r.w;
+      this.PH = r.h;
     } else {
       this.PX = BOX.x;
       this.PY = BOX.y;
@@ -114,106 +121,61 @@ export class QteScene extends Phaser.Scene {
     }
   }
 
-  // ── 漫畫分鏡 ──
+  // ── 漫畫分鏡（src/comic/ComicSequencer.ts） ──
 
-  /** 一格分鏡：黑框、放大的插圖、旁白框、狀聲詞；從 dir 方向滑進來 */
-  private panel(col: number, row: number, slot: PanelSlot, p: ComicPanel | null, dir: 'left' | 'right' | 'up', delay: number, art = true): Phaser.GameObjects.Container {
-    const id = this.data0.comic!.id;
-    const zone = this.data0.comic!.zone;
-    const x = GX[col];
-    const y = GY[row];
-    const c = this.add.container(x, y).setDepth(60);
-    c.add(this.add.rectangle(-3, -3, CELL_W + 6, CELL_H + 6, 0x000000).setOrigin(0));
-    c.add(this.add.rectangle(-1, -1, CELL_W + 2, CELL_H + 2, 0xf0e6d0).setOrigin(0));
-    if (art) c.add(this.add.image(0, 0, ensureComicPanel(this, id, slot, zone)).setOrigin(0).setScale(SCALE));
-    if (p) this.caption(c, p);
-    const dx = dir === 'left' ? -GAME_WIDTH * 0.6 : dir === 'right' ? GAME_WIDTH * 0.6 : 0;
-    const dy = dir === 'up' ? GAME_HEIGHT * 0.5 : 0;
-    c.x += dx;
-    c.y += dy;
-    c.setAlpha(0);
-    this.tweens.add({ targets: c, x, y, alpha: 1, duration: 280, delay, ease: 'Cubic.easeOut', onStart: () => AudioManager.ui('tap') });
-    return c;
-  }
-
-  /** 旁白框（左上，黃底黑字）＋狀聲詞（右下，大字斜放） */
-  private caption(c: Phaser.GameObjects.Container, p: ComicPanel): void {
-    if (p.caption) {
-      const t = wrapCJK(this.add.text(8, 6, p.caption, { fontFamily: 'monospace', fontSize: '9px', color: '#1a1408' }).setResolution(4), CELL_W - 40);
-      const box = this.add.rectangle(3, 3, t.width + 10, t.height + 6, 0xf5e08a).setOrigin(0).setStrokeStyle(1, 0x000000);
-      c.add([box, t]);
-    }
-    if (p.sfx) {
-      const s = pixelText(this, CELL_W - 12, CELL_H - 14, p.sfx, 16, '#ffd24a').setOrigin(1, 1).setStroke('#000000', 4).setAngle(-8);
-      c.add(s);
-    }
-  }
-
-  /** 開場：第 1、2 格依序滑進來，接著第 3 格（動作格＋QTE）。點一下可以跳過等待 */
+  /**
+   * 招牌事件的分格演出：第 1、2 格交代狀況 → 動作格用 wipe 揭開，QTE 在這格裡進行
+   * → 結果格依評等換圖砸進來。點一下快轉，結果格點一下繼續。
+   */
   private comicIntro(cm: ComicDef): void {
-    // 漫畫頁的底：深色紙＋網點
-    this.add.rectangle(0, 0, GAME_WIDTH, GAME_HEIGHT, 0x0c0a08, 0.92).setOrigin(0).setDepth(50);
-    const dots = this.add.graphics().setDepth(51);
-    dots.fillStyle(0x3a3228, 0.35);
-    for (let y = 0; y < GAME_HEIGHT; y += 6) for (let x = (y / 6) % 2 ? 3 : 0; x < GAME_WIDTH; x += 6) dots.fillRect(x, y, 1, 1);
-    this.panel(0, 0, 's1', cm.setup[0], 'left', 0);
-    this.panel(1, 0, 's2', cm.setup[1], 'right', 700);
-    // 動作格：第 2 格放大裁切、壓暗，QTE 疊在上面
-    const act = this.panel(0, 1, 's2', null, 'up', 1400, false);
-    const img = this.add.image(CELL_W / 2, CELL_H / 2, ensureComicPanel(this, cm.id, 's2', this.data0.comic!.zone)).setScale(SCALE * 1.6);
-    const mask = this.make.graphics({}, false);
-    act.add(img);
-    act.add(this.add.rectangle(0, 0, CELL_W, CELL_H, 0x000000, 0.62).setOrigin(0));
-    const t = wrapCJK(this.add.text(8, 6, cm.action, { fontFamily: 'monospace', fontSize: '9px', color: '#1a1408' }).setResolution(4), CELL_W - 24);
-    act.add([this.add.rectangle(3, 3, t.width + 10, t.height + 6, 0xffd24a).setOrigin(0).setStrokeStyle(1, 0x000000), t]);
-    // 裁切：放大的圖不要跑出格子
-    mask.fillStyle(0xffffff).fillRect(GX[0], GY[1], CELL_W, CELL_H);
-    img.setMask(mask.createGeometryMask());
-    // 結果格先放一個空框
-    const empty = this.add.rectangle(GX[1] - 3, GY[1] - 3, CELL_W + 6, CELL_H + 6, 0x000000, 0.5).setOrigin(0).setDepth(55);
-    empty.setStrokeStyle(1, 0x3a3228);
-    pixelText(this, GX[1] + CELL_W / 2, GY[1] + CELL_H / 2, '？', 22, '#3a3228').setOrigin(0.5).setDepth(56);
-    const start = () => {
-      if (this.ready) return;
-      this.ready = true;
-      for (const o of this.children.list) this.tweens.killTweensOf(o);
-      this.snapPanels();
-      this.setWidgetsAlpha(1);
+    const zone = this.data0.comic!.zone;
+    const art = (slot: string) => `qte/${cm.id}/${slot}`;
+    const res = (grade: QteGrade): Beat[] => {
+      const r = cm.result[grade];
+      const g = GRADE_LABEL[grade];
+      const big = grade !== 'ok';
+      return [
+        {
+          type: 'panel',
+          id: 'result',
+          art: art(grade),
+          rect: COMIC_RECT.result,
+          tilt: grade === 'fail' ? -2.5 : 1.5,
+          enter: big ? 'slam' : 'slide-up',
+          fx: grade === 'fail' ? ['red', 'shake'] : grade === 'great' ? ['speed'] : [],
+          cam: { from: { zoom: 1.2 }, to: { zoom: 1 }, dur: 900 },
+          texts: r.caption ? [{ text: r.caption, x: 8, y: 8, w: COMIC_RECT.result.w - 30 }] : [],
+          sfx: [
+            ...(r.sfx ? [{ text: r.sfx, x: COMIC_RECT.result.w - 50, y: COMIC_RECT.result.h - 26, size: 16 }] : []),
+            { text: g.text, x: COMIC_RECT.result.w / 2, y: COMIC_RECT.result.h / 2 + 8, size: 22, color: g.color, angle: -10, delay: 260 },
+          ],
+          hold: 'tap',
+        },
+      ];
     };
-    this.time.delayedCall(1750, start);
-    // 開場時點一下：直接跳到 QTE（不會算成一次按壓）
-    this.input.once('pointerdown', () => start());
-    this.input.keyboard?.once('keydown', () => start());
-  }
-
-  /** 跳過開場時把三格擺回定位 */
-  private snapPanels(): void {
-    const cells = this.children.list.filter((o) => o instanceof Phaser.GameObjects.Container && (o as Phaser.GameObjects.Container).depth === 60) as Phaser.GameObjects.Container[];
-    const spots = [
-      [GX[0], GY[0]],
-      [GX[1], GY[0]],
-      [GX[0], GY[1]],
-    ];
-    cells.slice(0, 3).forEach((c, i) => c.setPosition(spots[i][0], spots[i][1]).setAlpha(1));
-  }
-
-  /** 結果格：依評等換圖、蓋上評等章，點一下繼續 */
-  private comicResult(grade: QteGrade): void {
-    const cm = this.comic!;
-    this.panel(1, 1, grade, cm.result[grade], 'right', 0);
-    const g = GRADE_LABEL[grade];
-    const stamp = pixelText(this, GX[1] + CELL_W / 2, GY[1] + CELL_H / 2, g.text, 22, g.color).setOrigin(0.5).setStroke('#000000', 5).setDepth(120).setAngle(-10);
-    stamp.setScale(2.2).setAlpha(0);
-    this.tweens.add({ targets: stamp, scale: 1, alpha: 1, delay: 260, duration: 180, ease: 'Back.easeOut', onComplete: () => this.cameras.main.shake(120, grade === 'fail' ? 0.01 : 0.004) });
-    this.tweens.add({ targets: stamp, alpha: 0, delay: 1300, duration: 300 });
-    const hint = pixelText(this, GAME_WIDTH / 2, GAME_HEIGHT - 10, '點一下繼續', 8, '#c8b88a').setOrigin(0.5, 1).setDepth(120).setAlpha(0);
-    this.time.delayedCall(700, () => {
-      hint.setAlpha(1);
-      this.tweens.add({ targets: hint, alpha: 0.35, yoyo: true, repeat: -1, duration: 500 });
-      const go = () => this.close(grade);
-      this.input.once('pointerdown', go);
-      this.input.keyboard?.once('keydown', go);
+    const script: ComicScript = {
+      id: `qte_${cm.id}`,
+      endTap: false,
+      beats: [
+        { type: 'panel', id: 's1', art: art('s1'), rect: COMIC_RECT.s1, tilt: -1.2, enter: 'slide-left', texts: [{ text: cm.setup[0].caption, x: 8, y: 8 }], sfx: cm.setup[0].sfx ? [{ text: cm.setup[0].sfx, x: COMIC_RECT.s1.w - 50, y: COMIC_RECT.s1.h - 24 }] : [], hold: 800 },
+        { type: 'panel', id: 's2', art: art('s2'), rect: COMIC_RECT.s2, tilt: 1, enter: 'slide-right', cam: { from: { zoom: 1 }, to: { zoom: 1.15 }, dur: 2000 }, texts: [{ text: cm.setup[1].caption, x: 8, y: 8 }], sfx: cm.setup[1].sfx ? [{ text: cm.setup[1].sfx, x: COMIC_RECT.s2.w - 50, y: COMIC_RECT.s2.h - 24 }] : [], hold: 800 },
+        // 動作格：第 2 格放大裁切、壓暗，QTE 疊在上面
+        { type: 'panel', id: 'act', art: art('s2'), rect: COMIC_RECT.act, enter: 'wipe-right', shade: 0.6, fx: ['speed'], cam: { from: { zoom: 1.7, x: 0.55, y: 0.45 } }, texts: [{ text: cm.action, x: 6, y: 6, w: COMIC_RECT.act.w - 30 }], hold: 1 },
+        { type: 'interact', id: 'qte', panel: 'act' },
+        { type: 'branch', cases: { great: res('great'), ok: res('ok'), fail: res('fail') } },
+      ],
+    };
+    const seq = new ComicSequencer(this, script, {
+      zone,
+      bgAlpha: 0.92,
+      interact: () =>
+        new Promise<string>((resolve) => {
+          this.resolveQte = resolve;
+          this.ready = true;
+          this.setWidgetsAlpha(1);
+        }),
     });
+    seq.run().then(() => this.close(this.grade));
   }
 
   update(_t: number, deltaMs: number): void {
@@ -398,7 +360,8 @@ export class QteScene extends Phaser.Scene {
         const go = o as Phaser.GameObjects.GameObject & { depth: number };
         if (go.depth >= 100) this.tweens.add({ targets: go, alpha: 0, duration: 200 });
       }
-      this.time.delayedCall(220, () => this.comicResult(grade));
+      this.grade = grade;
+      this.time.delayedCall(220, () => this.resolveQte?.(grade));
       return;
     }
     const g = GRADE_LABEL[grade];

@@ -1,14 +1,14 @@
 import Phaser from 'phaser';
 import { GAME_HEIGHT, GAME_WIDTH } from '../config';
 import { AudioManager } from '../audio/AudioManager';
-import { illustrationFor } from '../art/IllustrationArt';
 import { getZone } from '../data/explore';
-import { PROLOGUE_OUTRO, PROLOGUE_REWARD, PROLOGUE_STAGES, PROLOGUE_TITLE } from '../data/prologue';
+import { PROLOGUE_OUTRO, PROLOGUE_REWARD, PROLOGUE_STAGES } from '../data/prologue';
 import { Expedition } from '../explore/Expedition';
 import { GameState } from '../state/GameState';
 import { pixelText } from '../utils/text';
 import type { ExploreFieldData, FieldResult } from './ExploreFieldScene';
-import type { StoryData } from './StoryScene';
+import { playComic, type ComicSceneData } from './ComicScene';
+import { storyComic } from '../comic/storyComic';
 
 export interface PrologueData {
   /** 從第幾層開始（測試用；預設 0 = 頂樓，會先播開場） */
@@ -18,7 +18,7 @@ export interface PrologueData {
 /**
  * 序章＝第一夜：阿凱在學校頂樓醒來，一層一層往下逃出學校。
  * 每一層是一個 ExploreFieldScene 小關卡（單軸、只能近戰），這個場景負責：
- * 開場卡 → 每層的樓層轉場 → 打完叫醒、下一層 → 倒下就重來這一層 → 逃出校門後的收尾與第二章開場 → 強制出發探索。
+ * 開場漫畫演出 → 每層的樓層轉場 → 打完叫醒、下一層 → 倒下就重來這一層 → 逃出校門後的收尾與第二章開場 → 強制出發探索。
  * 內容在 src/data/prologue.ts，說明見 docs/PROLOGUE.md。
  */
 export class PrologueScene extends Phaser.Scene {
@@ -37,14 +37,8 @@ export class PrologueScene extends Phaser.Scene {
     // 序章借用探索的小關卡：一趟沒有同行隊員的「市立高中」
     Expedition.current = new Expedition(getZone('school')!, []);
     if (this.index === 0) {
-      const story: StoryData = {
-        ...PROLOGUE_TITLE,
-        art: illustrationFor('school'),
-        hero: 'student',
-        onClose: () => this.floorIntro(),
-      };
-      this.scene.launch('Story', story);
-      this.scene.bringToTop('Story');
+      // 開場：漫畫分格演出（src/data/cinematics.ts 的 prologue_intro）
+      playComic(this, { script: 'prologue_intro', zone: 'school', onDone: () => this.floorIntro() });
     } else this.floorIntro();
   }
 
@@ -118,14 +112,10 @@ export class PrologueScene extends Phaser.Scene {
     gs.data.route = { node: 'school_gate', hours: 0 };
     gs.startNewDay();
     gs.save();
-    const outro: StoryData = {
-      ...PROLOGUE_OUTRO,
-      art: illustrationFor('school'),
-      hero: 'student',
-      onClose: () => this.nextChapter(),
-    };
-    this.scene.launch('Story', outro);
-    this.scene.bringToTop('Story');
+    playComic(this, {
+      script: storyComic({ id: 'prologue_outro', ...PROLOGUE_OUTRO, zone: 'school', hero: 'student' }),
+      onDone: () => this.nextChapter(),
+    });
   }
 
   /** 接著播第二章的開場，播完出發 */
@@ -138,20 +128,20 @@ export class PrologueScene extends Phaser.Scene {
       });
     };
     if (!ch) return leave();
-    const story: StoryData = {
-      title: ch.title,
-      lines: ch.intro,
-      art: illustrationFor(ch.zone),
-      objective: `${ch.objective}（${getZone(ch.zone)?.name ?? ''}・城市地圖上的★）`,
-      onClose: () => {
+    const data: ComicSceneData = {
+      script: storyComic({
+        id: `chapter_${ch.id}`,
+        title: ch.title,
+        lines: ch.intro,
+        zone: ch.zone,
+        objective: `${ch.objective}（${getZone(ch.zone)?.name ?? ''}・城市地圖上的★）`,
+      }),
+      onDone: () => {
         GameState.markIntroSeen();
         GameState.save();
         leave();
       },
     };
-    this.time.delayedCall(150, () => {
-      this.scene.launch('Story', story);
-      this.scene.bringToTop('Story');
-    });
+    this.time.delayedCall(150, () => playComic(this, data));
   }
 }
