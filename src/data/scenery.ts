@@ -6,6 +6,7 @@
  */
 
 import type { TerrainDef } from '../scenery/Terrain';
+import type { BarricadeStyle } from '../art/ProceduralArt';
 
 export type Setting = 'ext' | 'int';
 
@@ -573,6 +574,8 @@ export interface OutpostMapDef {
   keepClear?: [number, number][];
   /** 地形：立體障礙物、減速地面、油漬（src/scenery/Terrain.ts） */
   terrain?: TerrainDef[];
+  /** 路障用當地的東西臨時堆起來（垃圾桶、課桌椅、輪胎…）；不填 = 木板路障 */
+  barricade?: BarricadeStyle;
 }
 
 export const OUTPOST_MAPS: OutpostMapDef[] = [
@@ -582,6 +585,7 @@ export const OUTPOST_MAPS: OutpostMapDef[] = [
     blurb: '十字路口的五金行，左右都是倒塌的店面。',
     perks: ['倒塌的騎樓把路切成之字形', '路口積水拖慢霧屍', '廢棄車輛可觸發警報引怪'],
     theme: 'street',
+    barricade: 'shelves',
     terrain: [
       { kind: 'block', style: 'rubble', x0: 540, x1: 600, y0: 226, y1: 270, height: 30 },
       { kind: 'block', style: 'concrete', x0: 770, x1: 840, y0: 302, y1: 346, height: 26 },
@@ -606,6 +610,7 @@ export const OUTPOST_MAPS: OutpostMapDef[] = [
     perks: ['單軸雙向：公路兩頭同時來霧屍', '油漬會被爆炸點燃，整片燒起來', '加油機與油桶：連鎖爆炸'],
     theme: 'gasstation',
     facade: 'gascenter',
+    barricade: 'tires',
     pieces: [
       { prop: 'pump', x: 300, lane: 'back' },
       { prop: 'pump', x: 420, lane: 'back' },
@@ -635,6 +640,7 @@ export const OUTPOST_MAPS: OutpostMapDef[] = [
     blurb: '圍牆內的操場，校車還停在門口，教室裡留著學童的書包。',
     perks: ['校門窄口：霧屍只能從中間擠進來', '沙坑讓霧屍陷住', '物資箱較多'],
     theme: 'school',
+    barricade: 'desks',
     terrain: [
       { kind: 'block', style: 'brick', x0: 600, x1: 640, y0: 226, y1: 266, height: 26 },
       { kind: 'block', style: 'brick', x0: 600, x1: 640, y0: 314, y1: 346, height: 26 },
@@ -657,6 +663,7 @@ export const OUTPOST_MAPS: OutpostMapDef[] = [
     blurb: '兩棟樓中間的窄巷，盡頭是一扇拉下一半的鐵捲門。只有一個入口，霧屍只能排成一列擠進來。',
     perks: ['單軸：只有一個入口，好守', '霧屍量多、跑得快，打起來爽快', '巷口積水拖慢霧屍'],
     theme: 'street',
+    barricade: 'bins',
     terrain: [{ kind: 'water', x0: 560, x1: 660, y0: 276, y1: 304 }],
     facade: 'alley',
     pieces: [
@@ -679,6 +686,7 @@ OUTPOST_MAPS.push({
   perks: ['雙面防守：左右各一道路障', '隊員分配到兩側，主角居中支援', '停車場花台把路分成上下兩條'],
   theme: 'street',
   facade: 'islandshop',
+  barricade: 'crates',
   pieces: [
     { prop: 'car_white', x: 140, lane: 300, frame: 1, kind: 'cover' },
     { prop: 'lamppost', x: 200, lane: 'wall' },

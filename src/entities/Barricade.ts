@@ -15,8 +15,9 @@ export class Barricade {
 
   /**
    * dir：霧屍從哪一側來（1 = 右邊，預設；-1 = 左邊，雙面據點的左側路障）。
+   * texture：路障的樣子（各據點用當地的東西堆，見 ProceduralArt 的 BarricadeStyle）。
    */
-  constructor(private scene: Phaser.Scene, x: number, maxHp: number, readonly dir: 1 | -1 = 1) {
+  constructor(private scene: Phaser.Scene, x: number, maxHp: number, readonly dir: 1 | -1 = 1, texture = 'barricade') {
     this.x = x;
     this.maxHp = maxHp;
     this.hp = maxHp;
@@ -24,7 +25,7 @@ export class Barricade {
     for (let y = LANE_TOP - 4; y <= LANE_BOTTOM + 4; y += step) {
       // 越遠（y 越小）的段稍微往外上偏一點，做出透視斜線
       const img = scene.add
-        .image(x + dir * (y - LANE_BOTTOM) * 0.08, y, 'barricade', 0)
+        .image(x + dir * (y - LANE_BOTTOM) * 0.08, y, scene.textures.exists(texture) ? texture : 'barricade', 0)
         .setOrigin(0.5, 1)
         .setDepth(depthForY(y))
         .setFlipX(dir < 0);

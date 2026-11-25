@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 import { createWeaponTextures, stripArms } from '../art/WeaponArt';
 import { PLACEHOLDER_COLORS } from '../config';
 import { ENEMIES } from '../data/enemies';
-import { createBarricadeTexture, registerHeadFrames } from '../art/ProceduralArt';
+import { createBarricadeStyles, createBarricadeTexture, registerHeadFrames } from '../art/ProceduralArt';
 import { createBuildingTextures } from '../art/BuildingArt';
 import { createGearTexture, zombieBaseOf } from '../art/ZombieComposer';
 import { ZOMBIE_SHEETS } from '../art/sprites';
@@ -66,6 +66,8 @@ export class BootScene extends Phaser.Scene {
   create(): void {
     createFxTextures(this);
     createBarricadeTexture(this);
+    // 各據點的在地化路障（垃圾桶、課桌椅、輪胎堆…）
+    createBarricadeStyles(this);
     createBuildingTextures(this);
     // 場景道具（車、油桶、貨架、門、燈…），見 src/art/PropArt.ts
     createPropTextures(this);

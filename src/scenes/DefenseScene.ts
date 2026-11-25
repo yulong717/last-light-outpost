@@ -1,5 +1,6 @@
 import { illustrationFor } from '../art/IllustrationArt';
 import { heroRigColors } from '../art/HeroArt';
+import { barricadeKey } from '../art/ProceduralArt';
 import Phaser from 'phaser';
 import {
   GAME_HEIGHT,
@@ -231,8 +232,10 @@ export class DefenseScene extends Phaser.Scene {
     const st = GameState.data;
     const barXR = this.dual ? DUAL.center + DUAL.barricadeOff : BARRICADE_X;
     const barXL = DUAL.center - DUAL.barricadeOff;
-    this.barricade = new Barricade(this, barXR, st.barricadeMaxHp);
-    const barricadeL = this.dual ? new Barricade(this, barXL, st.barricadeMaxHp, -1) : undefined;
+    // 路障用當地的東西堆（巷子是垃圾桶、國小是課桌椅…）
+    const barTex = barricadeKey(map.barricade);
+    this.barricade = new Barricade(this, barXR, st.barricadeMaxHp, 1, barTex);
+    const barricadeL = this.dual ? new Barricade(this, barXL, st.barricadeMaxHp, -1, barTex) : undefined;
     this.fronts = [{ side: 1, barricade: this.barricade, barX: barXR, baseX: this.dual ? DUAL.center + DUAL.storeHalf : BASE_X }];
     if (barricadeL) this.fronts.push({ side: -1, barricade: barricadeL, barX: barXL, baseX: DUAL.center - DUAL.storeHalf });
     // 據點建築與路障耐久從 GameState 還原（跨夜保留）
@@ -594,7 +597,7 @@ export class DefenseScene extends Phaser.Scene {
       const t = this.sideTags[i];
       if (!t) return;
       t.setVisible(c.alive);
-      t.setText(this.companions.sideOf(c) < 0 ? '◀守左' : '守右▶').setPosition(c.footX, c.footY - 66);
+      t.setText(this.companions.sideOf(c) < 0 ? '◀守左' : '守右▶').setPosition(c.footX, c.footY - 66 - (i % 2) * 10);
     });
   }
 
