@@ -78,17 +78,8 @@ export const ROUTE_EDGES: [string, string, number][] = [
   ['police', 'checkpoint', 2],
 ];
 
-/** 併進據點的舊探索點（舊存檔的位置還認得） */
-const NODE_ALIAS: Record<string, string> = { gas: 'gasstation', downtown: 'street' };
-
-export function resolveNodeId(id: string): string {
-  return NODE_ALIAS[id] ?? id;
-}
-
 export function getNode(id: string | undefined): RouteNode | undefined {
-  if (id === undefined) return undefined;
-  const real = resolveNodeId(id);
-  return ROUTE_NODES.find((n) => n.id === real);
+  return ROUTE_NODES.find((n) => n.id === id);
 }
 
 /** 這裡能不能搜刮（探索點，或兼探索點的據點） */

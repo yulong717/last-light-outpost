@@ -65,8 +65,6 @@
 - **廢棄加油站**：原本的探索點「廢棄加油站」＋公路加油站的守城地圖（`gasstation`）。
 - **鬧區・五金行**：原本的探索點「鬧區」＋街口五金行的守城地圖（`street`）。
 
-舊存檔停在 `gas`／`downtown` 會自動換成新的節點（`route.ts` 的 `NODE_ALIAS`）。
-
 ## 在地化路障
 
 每個據點的路障用當地找得到的東西臨時堆（`OutpostMapDef.barricade`，貼圖在 `ProceduralArt.createBarricadeStyles`，同樣 3 格損壞階段）：

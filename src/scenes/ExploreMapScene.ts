@@ -5,7 +5,7 @@ import { ensureCrewTexture } from '../art/CrewArt';
 import { ensureCityMap, ensureZoneIcons, ZONE_ICON_KEY, zoneIconFrame } from '../art/MapArt';
 import { COMPANION_ROLES, crewReady, type CrewMember } from '../data/companions';
 import { EXPLORE_TIME, INTEL, SUPPLIES, getZone, type SupplyId } from '../data/explore';
-import { DAY_HOURS, ROUTE_EDGES, ROUTE_NODES, canExplore, clockText, exploreHours, getNode, nearestOutpost, resolveNodeId, travelHours, type RouteNode } from '../data/route';
+import { DAY_HOURS, ROUTE_EDGES, ROUTE_NODES, canExplore, clockText, exploreHours, getNode, nearestOutpost, travelHours, type RouteNode } from '../data/route';
 import { getOutpostMap } from '../data/scenery';
 import { Expedition } from '../explore/Expedition';
 import { stars, uiButton, uiPanel, uiTopBar } from '../explore/ui';
@@ -49,9 +49,6 @@ export class ExploreMapScene extends Phaser.Scene {
     const st = GameState.data;
     // 序章之前的舊存檔：從據點出發
     st.route ??= { node: 'street', hours: DAY_HOURS, lastOutpost: 'street' };
-    // 舊存檔停在已經併進據點的探索點：換成新的節點
-    st.route.node = resolveNodeId(st.route.node);
-    if (st.route.lastOutpost) st.route.lastOutpost = resolveNodeId(st.route.lastOutpost);
     // 預設帶上能出戰的前兩位
     this.squad = st.crew.filter((c) => crewReady(c) && !c.standby).slice(0, EXPLORE_TIME.maxSquad).map((c) => c.id);
 
